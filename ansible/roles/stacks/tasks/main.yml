@@ -7,6 +7,17 @@
     mode: "0750"
   loop: ["{{ stacks_root }}", "{{ appdata_root }}"]
 
+# Bind-mount sources that a container running as the app user must write to. Docker would
+# otherwise create them owned by root. appdata_owned_dirs: [name, ...] under appdata_root.
+- name: App-owned appdata folders
+  ansible.builtin.file:
+    path: "{{ appdata_root }}/{{ item }}"
+    state: directory
+    owner: "{{ app_uid }}"
+    group: "{{ app_gid }}"
+    mode: "0750"
+  loop: "{{ appdata_owned_dirs | default([]) }}"
+
 - name: age key folder for root
   ansible.builtin.file:
     path: /root/.config/sops/age

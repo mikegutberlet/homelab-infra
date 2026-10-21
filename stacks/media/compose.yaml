@@ -123,7 +123,7 @@ services:
 
   recyclarr:
     <<: *common
-    image: ghcr.io/recyclarr/recyclarr:7
+    image: ghcr.io/recyclarr/recyclarr:8
     user: ${PUID}:${PGID}
     environment:
       TZ: ${TZ}
@@ -131,7 +131,10 @@ services:
       SONARR_API_KEY: ${SONARR_API_KEY}
       RADARR_API_KEY: ${RADARR_API_KEY}
     volumes:
-      - ./recyclarr:/config
+      # Writable state (logs, cache) as uid 3000. The config comes from the repo, read-only, as a
+      # folder: a single-file bind mount keeps the old file after a redeploy replaces it.
+      - /opt/appdata/recyclarr:/config
+      - ./recyclarr:/config/configs:ro
 
   jellyseerr:
     <<: *common
