@@ -1,0 +1,44 @@
+- name: Docker apt key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/debian/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Docker apt repo
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+    filename: docker
+
+- name: Docker engine and Compose plugin
+  ansible.builtin.apt:
+    name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
+    update_cache: true
+
+- name: Docker daemon settings (log rotation, live restore)
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "local",
+        "log-opts": {"max-size": "20m", "max-file": "3"},
+        "live-restore": true
+      }
+    mode: "0644"
+  register: daemon_json
+
+- name: Restart Docker when its settings change
+  ansible.builtin.service:
+    name: docker
+    state: restarted
+    enabled: true
+  when: daemon_json.changed
+
+- name: SOPS and age for decrypting stack secrets
+  ansible.builtin.apt:
+    name: [age]
+
+- name: sops binary
+  ansible.builtin.get_url:
+    url: https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64
+    dest: /usr/local/bin/sops
+    mode: "0755"

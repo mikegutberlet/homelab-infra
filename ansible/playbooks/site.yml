@@ -1,0 +1,21 @@
+- name: Base OS, Docker and NFS for every app VM
+  hosts: docker_vms
+  roles:
+    - { role: base, tags: [base] }
+    - { role: docker, tags: [docker] }
+    - { role: nfs, tags: [nfs] }
+    - { role: backup, tags: [backup] }
+    - { role: lanfw, tags: [lanfw] }
+
+- name: GPU VM drivers
+  hosts: docker_vms
+  roles:
+    - role: gpu
+      when: igpu | default(false)
+      tags: [gpu]
+
+# Run without this play until a VM's secrets exist: --skip-tags stacks
+- name: Deploy each VM's Compose stacks
+  hosts: docker_vms
+  roles:
+    - { role: stacks, tags: [stacks] }

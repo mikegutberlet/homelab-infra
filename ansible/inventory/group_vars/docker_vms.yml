@@ -1,0 +1,21 @@
+# Every app runs as the "storage" user, which already owns most of the library on
+# TrueNAS (uid 3000). The old setup split SABnzbd (uid 1000) from the Arr apps
+# (uid 3000), which broke imports from August until 2026-10-21.
+app_user: storage
+app_uid: 3000
+app_gid: 3000 # storage group on TrueNAS is gid 3000 (checked 2026-10-21)
+
+stacks_root: /opt/stacks
+appdata_root: /opt/appdata # local disk; never on NFS (SQLite/Postgres corrupt there)
+
+nfs_shares:
+  nas:
+    src: "192.168.1.209:/mnt/DeepData/NAS"
+    # Same path as the old Servarr VM, so migrated Sonarr/Radarr root folders keep working.
+    path: /mnt/nfs
+    opts: "nfsvers=4.2,hard,noatime,_netdev,x-systemd.automount,x-systemd.mount-timeout=30"
+
+timezone: America/Los_Angeles # same as the Proxmox hosts and TrueNAS
+
+# lanfw: interface the LAN arrives on (Debian cloud image).
+lanfw_iface: eth0

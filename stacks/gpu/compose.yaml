@@ -1,0 +1,151 @@
+# gpu VM (RicksShip) with the Iris Pro 580 passed through for Quick Sync (/dev/dri).
+
+x-common: &common
+  restart: unless-stopped
+  labels:
+    autoheal: "true"
+
+x-lsio-env: &lsio-env
+  PUID: ${PUID}
+  PGID: ${PGID}
+  TZ: ${TZ}
+
+services:
+  plex:
+    <<: *common
+    image: lscr.io/linuxserver/plex:latest
+    network_mode: host # port 32400 plus discovery
+    environment:
+      <<: *lsio-env
+      VERSION: docker
+      PLEX_CLAIM: ${PLEX_CLAIM}
+    devices: [/dev/dri:/dev/dri]
+    volumes:
+      - /opt/appdata/plex:/config
+      - /opt/appdata/transcode/plex:/transcode
+      - /mnt/nfs/Media:/mnt/nfs/Media:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:32400/identity"]
+      interval: 60s
+      retries: 3
+      start_period: 120s
+
+  emby:
+    <<: *common
+    image: lscr.io/linuxserver/emby:latest
+    environment: *lsio-env
+    ports: ["8096:8096"]
+    devices: [/dev/dri:/dev/dri]
+    volumes:
+      - /opt/appdata/emby:/config
+      - /opt/appdata/transcode/emby:/transcode
+      - /mnt/nfs/Media:/mnt/nfs/Media:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8096/emby/System/Ping"]
+      interval: 60s
+      retries: 3
+      start_period: 120s
+
+  ersatztv:
+    <<: *common
+    image: jasongdove/ersatztv:latest-vaapi
+    environment:
+      TZ: ${TZ}
+    ports: ["8409:8409"]
+    devices: [/dev/dri:/dev/dri]
+    volumes:
+      - /opt/appdata/ersatztv:/root/.local/share/ersatztv
+      - /mnt/nfs/Media:/mnt/nfs/Media:ro
+
+  # Immich: upstream layout. Its own Postgres because it needs a pinned vector extension.
+  immich-server:
+    <<: *common
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION}
+    environment: &immich-env
+      TZ: ${TZ}
+      DB_HOSTNAME: immich-db
+      DB_USERNAME: immich
+      DB_PASSWORD: ${IMMICH_DB_PASSWORD}
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: immich-redis
+    ports: ["2283:2283"]
+    devices: [/dev/dri:/dev/dri]
+    volumes:
+      # TODO(Goobs): existing Immich data lives in NAS/Media/Immich; confirm before reusing it.
+      - /mnt/nfs/Media/Immich:/usr/src/app/upload
+      - /mnt/nfs/Photos:/mnt/photos:ro # existing photos as a read-only external library
+    depends_on:
+      immich-db: {condition: service_healthy}
+      immich-redis: {condition: service_healthy}
+
+  immich-machine-learning:
+    <<: *common
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION}-openvino
+    devices: [/dev/dri:/dev/dri]
+    volumes:
+      - /opt/appdata/immich/model-cache:/cache
+
+  immich-redis:
+    <<: *common
+    image: valkey/valkey:8-alpine
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 30s
+
+  immich-db:
+    <<: *common
+    # TODO: match the tag in the docker-compose.yml of the Immich release being deployed.
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+    environment:
+      POSTGRES_USER: immich
+      POSTGRES_PASSWORD: ${IMMICH_DB_PASSWORD}
+      POSTGRES_DB: immich
+      POSTGRES_INITDB_ARGS: --data-checksums
+    shm_size: 128mb
+    volumes:
+      - /opt/appdata/immich/db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U immich"]
+      interval: 30s
+      retries: 5
+
+  tdarr:
+    <<: *common
+    image: ghcr.io/haveagitgat/tdarr:latest
+    environment:
+      <<: *lsio-env
+      serverIP: 0.0.0.0
+      serverPort: 8266
+      webUIPort: 8265
+      internalNode: "true"
+      inContainer: "true"
+      nodeName: gpu-vm
+    ports: ["8265:8265", "8266:8266"]
+    devices: [/dev/dri:/dev/dri]
+    volumes:
+      - /opt/appdata/tdarr/server:/app/server
+      - /opt/appdata/tdarr/configs:/app/configs
+      - /opt/appdata/tdarr/logs:/app/logs
+      - /opt/appdata/transcode/tdarr:/temp # local disk, never NFS
+      - /mnt/nfs/Media:/mnt/nfs/Media
+
+  # Unmanic gets its own folders and an off-hours schedule so it never fights Tdarr.
+  unmanic:
+    <<: *common
+    image: josh5/unmanic:latest
+    environment: *lsio-env
+    ports: ["8888:8888"]
+    devices: [/dev/dri:/dev/dri]
+    volumes:
+      - /opt/appdata/unmanic:/config
+      - /opt/appdata/transcode/unmanic:/tmp/unmanic
+      - /mnt/nfs/Media/Music:/library/music # TODO(Goobs): which folders should Unmanic own?
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

@@ -1,0 +1,34 @@
+# LAN firewall for published container ports (DOCKER-USER). Host services (SSH, Plex on
+# host networking) aren't affected. Per host: lan_open_ports, edge_only_ports ("8096/tcp").
+- name: Firewall script
+  ansible.builtin.template:
+    src: lanfw.sh.j2
+    dest: /usr/local/sbin/lanfw
+    mode: "0750"
+  register: lanfw_script
+
+- name: Re-apply after every Docker start (Docker leaves DOCKER-USER alone, reboots don't)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/lanfw.service
+    content: |
+      [Unit]
+      Description=LAN firewall for published container ports
+      After=docker.service
+      PartOf=docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=true
+      ExecStart=/usr/local/sbin/lanfw
+
+      [Install]
+      WantedBy=docker.service
+    mode: "0644"
+  register: lanfw_unit
+
+- name: Enabled and applied
+  ansible.builtin.systemd:
+    name: lanfw.service
+    enabled: true
+    state: "{{ 'restarted' if (lanfw_script.changed or lanfw_unit.changed) else 'started' }}"
+    daemon_reload: true

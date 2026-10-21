@@ -1,0 +1,67 @@
+# ai VM (RicksShip). No local models yet: Ollama waits for the GTX 1660 Ti eGPU, so
+# Open WebUI and AnythingLLM point at a hosted API (keys in secrets.sops.env).
+
+x-common: &common
+  restart: unless-stopped
+  labels:
+    autoheal: "true"
+
+services:
+  open-webui:
+    <<: *common
+    image: ghcr.io/open-webui/open-webui:main
+    environment:
+      # Trusts this header for login, so port 3010 must only be reachable by Traefik: the lanfw
+      # role allows it from the edge VM (192.168.1.50) only (edge_only_ports on the ai host).
+      WEBUI_AUTH_TRUSTED_EMAIL_HEADER: X-authentik-email
+      OPENAI_API_BASE_URL: ${LLM_API_BASE_URL}
+      OPENAI_API_KEY: ${LLM_API_KEY}
+      ENABLE_OLLAMA_API: "false"
+      AUDIO_TTS_ENGINE: openai
+    ports: ["3010:8080"]
+    volumes:
+      - /opt/appdata/open-webui:/app/backend/data
+
+  anythingllm:
+    <<: *common
+    image: mintplexlabs/anythingllm:latest
+    cap_add: [SYS_ADMIN]
+    environment:
+      STORAGE_DIR: /app/server/storage
+      VECTOR_DB: pgvector
+      PGVECTOR_CONNECTION_STRING: postgresql://ai:${AI_DB_PASSWORD}@192.168.1.53:5432/ai
+    ports: ["3011:3001"]
+    volumes:
+      - /opt/appdata/anythingllm:/app/server/storage
+
+  # Text to speech over the Wyoming protocol (port 10200).
+  piper:
+    <<: *common
+    image: rhasspy/wyoming-piper:latest
+    command: --voice en_US-lessac-medium
+    ports: ["10200:10200"]
+    volumes:
+      - /opt/appdata/piper:/data
+
+  # LangChain + CrewAI as a long-running worker that n8n can call over HTTP.
+  worker:
+    <<: *common
+    build: ./worker
+    environment:
+      LLM_API_BASE_URL: ${LLM_API_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      PGVECTOR_URL: postgresql://ai:${AI_DB_PASSWORD}@192.168.1.53:5432/ai
+    ports: ["8100:8100"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health')"]
+      interval: 30s
+      retries: 3
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

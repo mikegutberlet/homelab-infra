@@ -1,0 +1,18 @@
+- name: Restart ssh
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+
+# Debian's watchdog.service stop step exits 1 on purpose (run_wd_keepalive=1) so that
+# OnFailure= starts wd_keepalive to keep feeding /dev/watchdog. A restart therefore always
+# "fails"; a plain start afterwards takes over again (Conflicts=wd_keepalive).
+- name: Restart watchdog
+  ansible.builtin.shell: |
+    systemctl restart watchdog.service || systemctl start watchdog.service
+    systemctl is-active watchdog.service
+  changed_when: true
+
+- name: Enable watchdog
+  ansible.builtin.service:
+    name: watchdog
+    enabled: true

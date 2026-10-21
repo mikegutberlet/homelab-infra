@@ -1,0 +1,58 @@
+# Nightly config backups to NAS/Backups/homelab/<host> (root-only folder on TrueNAS).
+# Only that subfolder is mounted here, at /mnt/backups, not the whole NAS export.
+- name: sqlite3 for consistent online copies
+  ansible.builtin.apt:
+    name: [sqlite3]
+
+- name: Mount the backup folder
+  ansible.posix.mount:
+    src: "192.168.1.209:/mnt/DeepData/NAS/Backups/homelab"
+    path: /mnt/backups
+    fstype: nfs
+    opts: "nfsvers=4.2,hard,noatime,_netdev,x-systemd.automount,x-systemd.mount-timeout=30"
+    state: mounted
+
+- name: Backup script
+  ansible.builtin.copy:
+    src: homelab-backup.sh
+    dest: /usr/local/sbin/homelab-backup
+    mode: "0750"
+
+- name: Backup service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/homelab-backup.service
+    content: |
+      [Unit]
+      Description=Homelab config backup to the NAS
+      After=docker.service network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/homelab-backup
+      Nice=10
+      IOSchedulingClass=idle
+    mode: "0644"
+
+- name: Backup timer (nightly, staggered per host)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/homelab-backup.timer
+    content: |
+      [Unit]
+      Description=Nightly homelab config backup
+
+      [Timer]
+      OnCalendar=*-*-* 03:30
+      RandomizedDelaySec=45min
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+    mode: "0644"
+
+- name: Timer enabled
+  ansible.builtin.systemd:
+    name: homelab-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

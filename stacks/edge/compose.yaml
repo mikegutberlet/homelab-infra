@@ -1,0 +1,161 @@
+# edge VM (RicksGarage): the only way into any app.
+# Request path: Tailscale device -> TSDProxy (app.<tailnet>.ts.net, TLS) -> Traefik -> Authentik -> app.
+
+x-common: &common
+  restart: unless-stopped
+  labels:
+    autoheal: "true"
+  environment:
+    TZ: ${TZ}
+
+services:
+  socket-proxy:
+    <<: *common
+    image: tecnativa/docker-socket-proxy:0.3.0
+    environment:
+      CONTAINERS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [socket]
+
+  traefik:
+    <<: *common
+    image: traefik:v3.3
+    command:
+      - --providers.docker.endpoint=tcp://socket-proxy:2375
+      - --providers.docker.exposedbydefault=false
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      # TSDProxy terminates TLS and forwards over plain HTTP. Trust its X-Forwarded-*
+      # headers (Docker's private range only; LAN clients keep their 192.168.1.x source),
+      # otherwise Authentik builds http:// URLs and browsers block them as mixed content.
+      - --entrypoints.web.forwardedHeaders.trustedIPs=172.16.0.0/12
+      - --ping=true
+      - --api.dashboard=true
+      - --accesslog=true
+    environment:
+      TZ: ${TZ}
+      TS_TAILNET: ${TS_TAILNET}
+    ports:
+      - "80:80"
+    volumes:
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+    networks: [socket, proxy]
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      retries: 3
+
+  authentik-db:
+    <<: *common
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+    volumes:
+      - /opt/appdata/authentik/db:/var/lib/postgresql/data
+    networks: [authentik]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik"]
+      interval: 30s
+      retries: 5
+
+  authentik-redis:
+    <<: *common
+    image: redis:7-alpine
+    networks: [authentik]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+
+  authentik-server:
+    <<: *common
+    image: ghcr.io/goauthentik/server:2025.8
+    command: server
+    environment: &authentik-env
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+    depends_on:
+      authentik-db: {condition: service_healthy}
+      authentik-redis: {condition: service_healthy}
+    networks: [authentik, proxy]
+
+  authentik-worker:
+    <<: *common
+    image: ghcr.io/goauthentik/server:2025.8
+    command: worker
+    environment: *authentik-env
+    depends_on:
+      authentik-db: {condition: service_healthy}
+      authentik-redis: {condition: service_healthy}
+    networks: [authentik]
+
+  # Gives every app its own <app>.<tailnet>.ts.net name with a Tailscale certificate.
+  tsdproxy:
+    <<: *common
+    image: almeidapaulopt/tsdproxy:1
+    environment:
+      TZ: ${TZ}
+    # TSDProxy 1.4 ignores TSDPROXY_AUTHKEY once tsdproxy.yaml defines a provider,
+    # so the key reaches it as a file (authKeyFile) instead.
+    secrets: [tsdproxy_authkey]
+    volumes:
+      - ./tsdproxy:/config
+      - /opt/appdata/tsdproxy:/data
+    networks: [proxy]
+
+  # Subnet router: phones and laptops on the Tailnet reach 192.168.1.0/24.
+  tailscale:
+    <<: *common
+    image: tailscale/tailscale:stable
+    hostname: lab-router
+    network_mode: host
+    cap_add: [NET_ADMIN, SYS_MODULE]
+    devices: [/dev/net/tun]
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_ROUTES: 192.168.1.0/24
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+    volumes:
+      - /opt/appdata/tailscale:/var/lib/tailscale
+
+  # Fallback way in if Tailscale is down. Keys only; one UDP port forwarded on the router.
+  wg-easy:
+    <<: *common
+    image: ghcr.io/wg-easy/wg-easy:15
+    cap_add: [NET_ADMIN, SYS_MODULE]
+    sysctls:
+      net.ipv4.ip_forward: 1
+      net.ipv4.conf.all.src_valid_mark: 1
+    ports:
+      - "51820:51820/udp"
+      - "51821:51821/tcp"
+    volumes:
+      - /opt/appdata/wg-easy:/etc/wireguard
+    networks: [proxy]
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+secrets:
+  tsdproxy_authkey:
+    environment: TS_AUTHKEY
+
+networks:
+  socket: {internal: true}
+  authentik: {internal: true}
+  proxy: {}

@@ -1,0 +1,25 @@
+# Hands RicksShip's Iris Pro 580 (00:02.0, alone in IOMMU group 0) to vfio-pci so the
+# gpu VM can use Quick Sync. Changes the host's boot config and needs a reboot, and these
+# NUCs hang on warm reboot, so run it only with Goobs next to RicksShip.
+- name: Reserve the iGPU for passthrough
+  hosts: ricksship
+  tasks:
+    # 8086:193b confirmed with `lspci -nn -s 00:02.0` on RicksShip (2026-10-21).
+    - name: Bind 8086:193b to vfio-pci
+      ansible.builtin.copy:
+        dest: /etc/modprobe.d/vfio-igpu.conf
+        content: |
+          options vfio-pci ids=8086:193b
+          softdep i915 pre: vfio-pci
+        mode: "0644"
+      register: vfio_conf
+
+    - name: Rebuild initramfs
+      ansible.builtin.command: update-initramfs -u -k all
+      when: vfio_conf.changed
+      changed_when: true
+
+    - name: Remind about the manual reboot
+      ansible.builtin.debug:
+        msg: "Shut down RicksShip's VMs, power it off, and have Goobs press the power button."
+      when: vfio_conf.changed

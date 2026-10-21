@@ -1,0 +1,9 @@
+# Mounts only; never creates, chowns or deletes anything on the share.
+- name: Mount TrueNAS shares with systemd automount
+  ansible.posix.mount:
+    src: "{{ nfs_shares[item].src }}"
+    path: "{{ nfs_shares[item].path }}"
+    fstype: nfs
+    opts: "{{ nfs_shares[item].opts }}"
+    state: mounted
+  loop: "{{ nfs_mounts | default([]) }}"
