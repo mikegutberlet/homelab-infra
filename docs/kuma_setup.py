@@ -88,7 +88,7 @@ def main():
             if gmail:
                 urgent = notification_id(
                     api, "Email now (critical)", type=NotificationType.SMTP,
-                    smtpHost="smtp.gmail.com", smtpPort=587, smtpSecure=False,
+                    smtpHost="smtp.gmail.com", smtpPort=465, smtpSecure=True,
                     smtpUsername=MAIL_FROM, smtpPassword=gmail,
                     smtpFrom=f"Homelab <{MAIL_FROM}>", smtpTo=MAIL_TO)
             existing = {m["name"] for m in api.get_monitors()}
@@ -108,8 +108,8 @@ def main():
                 api.add_monitor(**kw)
                 print(f"  added    {name}{'  (critical: email now)' if critical and urgent else ''}")
             if urgent:
-                api.test_notification(type=NotificationType.SMTP, smtpHost="smtp.gmail.com", smtpPort=587,
-                                      smtpSecure=False, smtpUsername=MAIL_FROM, smtpPassword=gmail,
+                api.test_notification(type=NotificationType.SMTP, smtpHost="smtp.gmail.com", smtpPort=465,
+                                      smtpSecure=True, smtpUsername=MAIL_FROM, smtpPassword=gmail,
                                       smtpFrom=f"Homelab <{MAIL_FROM}>", smtpTo=MAIL_TO)
                 print(f"Sent a test email to {MAIL_TO}.")
     except Exception as e:  # most likely: this library version doesn't speak Kuma 2's API
