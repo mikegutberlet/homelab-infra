@@ -207,7 +207,7 @@ services:
     environment:
       SCRUTINY_WEB_INFLUXDB_HOST: scrutiny-influx
       # Disk warnings go to the n8n daily digest (shoutrrr generic webhook, plain http).
-      SCRUTINY_NOTIFY_URLS: '["generic://n8n:5678/webhook/homelab-event/scrutiny?disabletls=yes&template=json"]'
+      SCRUTINY_NOTIFY_URLS: '["generic://n8n:5678/webhook/homelab/scrutiny?disabletls=yes&template=json"]'
     volumes:
       - /opt/appdata/scrutiny/config:/opt/scrutiny/config
     depends_on: [scrutiny-influx]
@@ -228,7 +228,7 @@ services:
       DIUN_WATCH_SCHEDULE: "0 */6 * * *"
       DIUN_PROVIDERS_DOCKER: "true"
       DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT: "true"
-      DIUN_NOTIF_WEBHOOK_ENDPOINT: http://n8n:5678/webhook/homelab-event/diun # daily digest (n8n)
+      DIUN_NOTIF_WEBHOOK_ENDPOINT: http://n8n:5678/webhook/homelab/diun # daily digest (n8n)
       DIUN_NOTIF_WEBHOOK_METHOD: POST
     volumes:
       - /opt/appdata/diun:/data

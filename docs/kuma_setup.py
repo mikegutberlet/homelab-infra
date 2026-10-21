@@ -19,7 +19,7 @@ APPS_VM = "goobs@192.168.1.53"
 LOCAL_PORT = 13002
 MAIL_FROM = "filingbin69@gmail.com"
 MAIL_TO = "mikegutberlet@gmail.com"
-DIGEST_WEBHOOK = "http://n8n:5678/webhook/homelab-event/kuma"  # Kuma and n8n share a network
+DIGEST_WEBHOOK = "http://n8n:5678/webhook/homelab/kuma"  # Kuma and n8n share a network
 
 # (name, url, critical, accepted status codes). Critical = immediate email; others = daily digest.
 MONITORS = [

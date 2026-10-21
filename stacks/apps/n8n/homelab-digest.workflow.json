@@ -2,23 +2,6 @@
   "name": "Homelab digest",
   "nodes": [
     {
-      "id": "b3386da3-1612-44f4-a943-29cbc8b1d6e7",
-      "name": "Event webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        0,
-        0
-      ],
-      "webhookId": "469b6542-e00f-444e-8cd3-796284642024",
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "homelab-event/:source",
-        "responseMode": "onReceived",
-        "options": {}
-      }
-    },
-    {
       "id": "5d97e349-4669-4000-bb77-b8a0358cdb1a",
       "name": "Store event",
       "type": "n8n-nodes-base.code",
@@ -28,7 +11,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Store one homelab event for the 08:00 digest. POST /webhook/homelab-event/<diun|kuma|backup|scrutiny>\nconst sd = $getWorkflowStaticData('global');\nsd.events = sd.events || [];\nconst q = $json.query || {};\nconst b = $json.body || {};\nconst source = ($json.params && $json.params.source) || q.source || 'other';\nlet line;\nif (source === 'diun') {\n  line = `Image update: ${b.image || ''} (${b.status || 'new'}) on ${b.hostname || 'unknown host'}`;\n} else if (source === 'kuma') {\n  const st = b.heartbeat ? (b.heartbeat.status === 0 ? 'DOWN' : b.heartbeat.status === 1 ? 'UP' : '') : '';\n  line = `${(b.monitor && b.monitor.name) || 'monitor'} ${st}: ${b.msg || ''}`.trim();\n} else {\n  line = b.message || b.title || JSON.stringify(b).slice(0, 300);\n}\nsd.events.push({ t: new Date().toISOString(), source, line });\nif (sd.events.length > 500) sd.events = sd.events.slice(-500);\nreturn [{ json: { stored: true } }];\n"
+        "jsCode": "// Store one homelab event for the 08:00 digest. POST /webhook/homelab/<diun|kuma|scrutiny|backup|other>;\n// the source is the name of the webhook node that fired (fixed paths: n8n prefixes\n// paths that contain :params with the webhook id).\nconst sd = $getWorkflowStaticData('global');\nsd.events = sd.events || [];\nconst q = $json.query || {};\nconst b = $json.body || {};\nconst source = $prevNode.name || 'other';\nlet line;\nif (source === 'diun') {\n  line = `Image update: ${b.image || ''} (${b.status || 'new'}) on ${b.hostname || 'unknown host'}`;\n} else if (source === 'kuma') {\n  const st = b.heartbeat ? (b.heartbeat.status === 0 ? 'DOWN' : b.heartbeat.status === 1 ? 'UP' : '') : '';\n  line = `${(b.monitor && b.monitor.name) || 'monitor'} ${st}: ${b.msg || ''}`.trim();\n} else {\n  line = b.message || b.title || JSON.stringify(b).slice(0, 300);\n}\nsd.events.push({ t: new Date().toISOString(), source, line });\nif (sd.events.length > 500) sd.events = sd.events.slice(-500);\nreturn [{ json: { stored: true } }];\n"
       }
     },
     {
@@ -81,20 +64,94 @@
         "text": "={{ $json.text }}",
         "options": {}
       }
+    },
+    {
+      "id": "934fa28f-1b5a-4129-94c6-d897282ef380",
+      "name": "diun",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -200
+      ],
+      "webhookId": "c25000f9-004d-4b5b-ad04-4e34e2958c02",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/diun",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "4cdf6647-08a4-4d5c-a301-b0dc82ca8c6b",
+      "name": "kuma",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -110
+      ],
+      "webhookId": "e158cf96-8c67-4963-b657-e6a547fa44b1",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/kuma",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "87949820-334b-42cd-841b-9c762aac7bc8",
+      "name": "scrutiny",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -20
+      ],
+      "webhookId": "af3566f7-29bf-4af8-8ae6-4543e5e90684",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/scrutiny",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "5f8def46-d7ee-4709-b3d0-c957923ccbb0",
+      "name": "backup",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        70
+      ],
+      "webhookId": "3941dd4a-3540-4669-bd18-9ecc23a3f2bd",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/backup",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "9c5193df-5412-4a04-843b-acbf1f009cce",
+      "name": "other",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        160
+      ],
+      "webhookId": "8823ffc7-33e4-4706-a7aa-fd30ab53fdc2",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/other",
+        "responseMode": "onReceived",
+        "options": {}
+      }
     }
   ],
   "connections": {
-    "Event webhook": {
-      "main": [
-        [
-          {
-            "node": "Store event",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Every day 08:00": {
       "main": [
         [
@@ -111,6 +168,61 @@
         [
           {
             "node": "Email digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "diun": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "kuma": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "scrutiny": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "backup": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "other": {
+      "main": [
+        [
+          {
+            "node": "Store event",
             "type": "main",
             "index": 0
           }
