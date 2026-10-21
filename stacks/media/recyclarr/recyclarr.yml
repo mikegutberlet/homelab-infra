@@ -29,3 +29,11 @@ radarr:
         name: Anything Not terrible
         reset_unmatched_scores:
           enabled: true
+    custom_formats:
+      # Tdarr re-encodes H.264 movies to HEVC (2026-10-21), so the TRaSH "x265 (HD)" penalty
+      # (-10000) would make Radarr try to replace those files. Score it 0 instead.
+      - trash_ids:
+          - dc98083864ea246d05a42df0d05f81cc # x265 (HD)
+        assign_scores_to:
+          - name: Anything Not terrible
+            score: 0
