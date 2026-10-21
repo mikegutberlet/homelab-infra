@@ -1,5 +1,5 @@
 # ai VM (RicksShip). No local models yet: Ollama waits for the GTX 1660 Ti eGPU, so
-# Open WebUI and AnythingLLM point at a hosted API (keys in secrets.sops.env).
+# Open WebUI and AnythingLLM use Google Gemini (key in secrets.sops.env).
 
 x-common: &common
   restart: unless-stopped
@@ -17,7 +17,7 @@ services:
       OPENAI_API_BASE_URL: ${LLM_API_BASE_URL}
       OPENAI_API_KEY: ${LLM_API_KEY}
       ENABLE_OLLAMA_API: "false"
-      AUDIO_TTS_ENGINE: openai
+      DEFAULT_MODELS: models/gemini-flash-latest # Gemini (OpenAI-compatible endpoint); alias for the current Flash
     ports: ["3010:8080"]
     volumes:
       - /opt/appdata/open-webui:/app/backend/data
@@ -28,6 +28,9 @@ services:
     cap_add: [SYS_ADMIN]
     environment:
       STORAGE_DIR: /app/server/storage
+      LLM_PROVIDER: gemini
+      GEMINI_API_KEY: ${LLM_API_KEY}
+      GEMINI_LLM_MODEL_PREF: gemini-flash-latest # gemini-2.5-flash is closed to new accounts
       VECTOR_DB: pgvector
       PGVECTOR_CONNECTION_STRING: postgresql://ai:${AI_DB_PASSWORD}@192.168.1.53:5432/ai
     ports: ["3011:3001"]
