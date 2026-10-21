@@ -11,7 +11,9 @@ services:
     <<: *common
     image: ghcr.io/open-webui/open-webui:main
     environment:
-      WEBUI_AUTH_TRUSTED_EMAIL_HEADER: X-authentik-email # Authentik login carries through
+      # Trusts this header for login, so port 3010 must only be reachable by Traefik: the lanfw
+      # role allows it from the edge VM (192.168.1.50) only (edge_only_ports on the ai host).
+      WEBUI_AUTH_TRUSTED_EMAIL_HEADER: X-authentik-email
       OPENAI_API_BASE_URL: ${LLM_API_BASE_URL}
       OPENAI_API_KEY: ${LLM_API_KEY}
       ENABLE_OLLAMA_API: "false"

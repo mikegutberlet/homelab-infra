@@ -16,3 +16,6 @@ nfs_shares:
     opts: "nfsvers=4.2,hard,noatime,_netdev,x-systemd.automount,x-systemd.mount-timeout=30"
 
 timezone: America/Los_Angeles # same as the Proxmox hosts and TrueNAS
+
+# lanfw: interface the LAN arrives on (Debian cloud image).
+lanfw_iface: eth0
