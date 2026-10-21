@@ -3,7 +3,7 @@
 # (uid 3000), which broke imports from August until 2026-10-21.
 app_user: storage
 app_uid: 3000
-app_gid: 3000 # TODO(Goobs): confirm the storage group's gid on TrueNAS
+app_gid: 3000 # storage group on TrueNAS is gid 3000 (checked 2026-10-21)
 
 stacks_root: /opt/stacks
 appdata_root: /opt/appdata # local disk; never on NFS (SQLite/Postgres corrupt there)
@@ -15,4 +15,4 @@ nfs_shares:
     path: /mnt/nfs
     opts: "nfsvers=4.2,hard,noatime,_netdev,x-systemd.automount,x-systemd.mount-timeout=30"
 
-timezone: America/New_York # TODO(Goobs): confirm
+timezone: America/Los_Angeles # same as the Proxmox hosts and TrueNAS

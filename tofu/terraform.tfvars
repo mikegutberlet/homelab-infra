@@ -1,4 +1,4 @@
-# TODO(Goobs): confirm these IPs are outside the router's DHCP range before the first apply.
+# 192.168.1.50-.54 approved by Goobs for these VMs (2026-10-21); none answered ping beforehand.
 ssh_public_keys = [
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOW8hZY715awim22lxBudezY7UPcl6Uo83oULh9J0cO4 homelab-inventory@goobss-macbook-pro",
 ]
