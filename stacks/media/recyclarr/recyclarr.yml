@@ -1,8 +1,10 @@
 # yaml-language-server: $schema=https://schemas.recyclarr.dev/v8/config-schema.json
 # TRaSH Guides quality profiles and custom formats, synced daily (Recyclarr 8).
-# Same profiles as the TRaSH "web-1080p" (Sonarr) and "hd-bluray-web" (Radarr) templates;
-# a profile's default custom-format groups come with it. Adjust after migrating the
-# existing Sonarr/Radarr settings.
+# The TRaSH profiles are applied to Goobs's existing profiles by name (chosen 2026-10-21),
+# so series/movies keep the profile they already use. Same profiles as the TRaSH
+# "web-1080p" (Sonarr) and "hd-bluray-web" (Radarr) templates; a profile's default
+# custom-format groups come with it.
+# Note: WEB-1080p tops out at 1080p, so "HD and Ultra" no longer asks for 2160p.
 sonarr:
   sonarr: # v8: instance names must be unique across Sonarr and Radarr
     base_url: http://sonarr:8989
@@ -11,6 +13,7 @@ sonarr:
       type: series
     quality_profiles:
       - trash_id: 72dae194fc92bf828f32cde7744e51a1 # WEB-1080p
+        name: HD and Ultra
         reset_unmatched_scores:
           enabled: true
 
@@ -22,5 +25,6 @@ radarr:
       type: movie
     quality_profiles:
       - trash_id: d1d67249d3890e49bc12e275d989a7e9 # HD Bluray + WEB
+        name: Anything Not terrible
         reset_unmatched_scores:
           enabled: true
