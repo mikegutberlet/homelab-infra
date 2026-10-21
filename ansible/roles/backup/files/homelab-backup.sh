@@ -67,4 +67,10 @@ log "backup $DEST: $(du -sh "$DEST" | cut -f1)"
 # Retention: only this script's own YYYY-MM-DD folders, older than KEEP_DAYS.
 find "$BASE" -mindepth 1 -maxdepth 1 -type d -regex '.*/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' \
   -mtime +"$KEEP_DAYS" -print -exec rm -rf {} + | sed 's/^/pruned /'
+# Failures go to the n8n daily digest on the apps VM.
+if [ $rc -ne 0 ]; then
+  curl -s -m 10 -X POST -H 'Content-Type: application/json' \
+    -d "{\"message\": \"Backup on $(hostname) finished with errors on $(date +%F); see journalctl -u homelab-backup\"}" \
+    http://192.168.1.53:5678/webhook/homelab-event/backup >/dev/null || true
+fi
 exit $rc
