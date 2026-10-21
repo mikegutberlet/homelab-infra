@@ -77,7 +77,7 @@ services:
 
   paperless:
     <<: *common
-    image: ghcr.io/paperless-ngx/paperless-ngx:2
+    image: ghcr.io/paperless-ngx/paperless-ngx:2.20 # no floating ":2" tag is published
     environment:
       USERMAP_UID: ${PUID}
       USERMAP_GID: ${PGID}
