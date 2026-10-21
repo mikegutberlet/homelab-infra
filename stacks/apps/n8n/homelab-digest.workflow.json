@@ -1,0 +1,237 @@
+{
+  "name": "Homelab digest",
+  "nodes": [
+    {
+      "id": "5d97e349-4669-4000-bb77-b8a0358cdb1a",
+      "name": "Store event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Store one homelab event for the 08:00 digest. POST /webhook/homelab/<diun|kuma|scrutiny|backup|other>;\n// the source is the name of the webhook node that fired (fixed paths: n8n prefixes\n// paths that contain :params with the webhook id).\nconst sd = $getWorkflowStaticData('global');\nsd.events = sd.events || [];\nconst q = $json.query || {};\nconst b = $json.body || {};\nconst source = $prevNode.name || 'other';\nlet line;\nif (source === 'diun') {\n  line = `Image update: ${b.image || ''} (${b.status || 'new'}) on ${b.hostname || 'unknown host'}`;\n} else if (source === 'kuma') {\n  const st = b.heartbeat ? (b.heartbeat.status === 0 ? 'DOWN' : b.heartbeat.status === 1 ? 'UP' : '') : '';\n  line = `${(b.monitor && b.monitor.name) || 'monitor'} ${st}: ${b.msg || ''}`.trim();\n} else {\n  line = b.message || b.title || JSON.stringify(b).slice(0, 300);\n}\nsd.events.push({ t: new Date().toISOString(), source, line });\nif (sd.events.length > 500) sd.events = sd.events.slice(-500);\nreturn [{ json: { stored: true } }];\n"
+      }
+    },
+    {
+      "id": "184c6b92-ad18-4ef7-98d5-786e9fd45f4a",
+      "name": "Every day 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        240
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "890aba1e-14e9-46aa-bc4a-07c76d207416",
+      "name": "Build digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        240
+      ],
+      "parameters": {
+        "jsCode": "// Daily digest: everything collected since yesterday, then clear.\nconst sd = $getWorkflowStaticData('global');\nconst ev = sd.events || [];\nsd.events = [];\nconst day = new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium' });\nif (ev.length === 0) {\n  return [{ json: { subject: `Homelab digest ${day}: nothing to report`, text: 'No app outages, image updates, disk warnings or backup failures in the last 24 hours.' } }];\n}\nconst names = { kuma: 'App status (non-critical)', diun: 'Image updates available', scrutiny: 'Disk health', backup: 'Backups', other: 'Other' };\nconst groups = {};\nfor (const e of ev) (groups[e.source] = groups[e.source] || []).push(e);\nlet text = '';\nfor (const [src, items] of Object.entries(groups)) {\n  text += `${names[src] || src} (${items.length})\\n`;\n  for (const e of items) {\n    const t = new Date(e.t).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });\n    text += `  - ${t}  ${e.line}\\n`;\n  }\n  text += '\\n';\n}\nreturn [{ json: { subject: `Homelab digest ${day}: ${ev.length} item(s)`, text } }];\n"
+      }
+    },
+    {
+      "id": "6ad24bb0-5558-42a7-8a21-54bb94a44a55",
+      "name": "Email digest",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        520,
+        240
+      ],
+      "parameters": {
+        "fromEmail": "Homelab <filingbin69@gmail.com>",
+        "toEmail": "mikegutberlet@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "934fa28f-1b5a-4129-94c6-d897282ef380",
+      "name": "diun",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -200
+      ],
+      "webhookId": "c25000f9-004d-4b5b-ad04-4e34e2958c02",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/diun",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "4cdf6647-08a4-4d5c-a301-b0dc82ca8c6b",
+      "name": "kuma",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -110
+      ],
+      "webhookId": "e158cf96-8c67-4963-b657-e6a547fa44b1",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/kuma",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "87949820-334b-42cd-841b-9c762aac7bc8",
+      "name": "scrutiny",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -20
+      ],
+      "webhookId": "af3566f7-29bf-4af8-8ae6-4543e5e90684",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/scrutiny",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "5f8def46-d7ee-4709-b3d0-c957923ccbb0",
+      "name": "backup",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        70
+      ],
+      "webhookId": "3941dd4a-3540-4669-bd18-9ecc23a3f2bd",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/backup",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "9c5193df-5412-4a04-843b-acbf1f009cce",
+      "name": "other",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        160
+      ],
+      "webhookId": "8823ffc7-33e4-4706-a7aa-fd30ab53fdc2",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/other",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Every day 08:00": {
+      "main": [
+        [
+          {
+            "node": "Build digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build digest": {
+      "main": [
+        [
+          {
+            "node": "Email digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "diun": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "kuma": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "scrutiny": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "backup": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "other": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Los_Angeles"
+  }
+}

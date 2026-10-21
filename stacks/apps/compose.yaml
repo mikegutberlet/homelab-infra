@@ -45,7 +45,9 @@ services:
       POSTGRES_USER: nextcloud
       POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
       REDIS_HOST: redis
-      NEXTCLOUD_TRUSTED_DOMAINS: cloud.${TS_TAILNET}
+      # The LAN IP is trusted too, for Uptime Kuma/Homepage health checks (only applies on a fresh
+      # install; the running instance got it via occ config:system:set on 2026-10-21).
+      NEXTCLOUD_TRUSTED_DOMAINS: cloud.${TS_TAILNET} 192.168.1.53
       TRUSTED_PROXIES: 192.168.1.50
       OVERWRITEPROTOCOL: https
     volumes:
@@ -206,6 +208,8 @@ services:
     ports: ["8087:8080"]
     environment:
       SCRUTINY_WEB_INFLUXDB_HOST: scrutiny-influx
+      # Disk warnings go to the n8n daily digest (shoutrrr generic webhook, plain http).
+      SCRUTINY_NOTIFY_URLS: '["generic://n8n:5678/webhook/homelab/scrutiny?disabletls=yes&template=json"]'
     volumes:
       - /opt/appdata/scrutiny/config:/opt/scrutiny/config
     depends_on: [scrutiny-influx]
@@ -226,7 +230,7 @@ services:
       DIUN_WATCH_SCHEDULE: "0 */6 * * *"
       DIUN_PROVIDERS_DOCKER: "true"
       DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT: "true"
-      DIUN_NOTIF_WEBHOOK_ENDPOINT: http://n8n:5678/webhook/diun
+      DIUN_NOTIF_WEBHOOK_ENDPOINT: http://n8n:5678/webhook/homelab/diun # daily digest (n8n)
       DIUN_NOTIF_WEBHOOK_METHOD: POST
     volumes:
       - /opt/appdata/diun:/data
