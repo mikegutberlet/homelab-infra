@@ -202,7 +202,7 @@ services:
   # Scrutiny hub; collectors run on both Proxmox hosts, which can read the disks' SMART data.
   scrutiny:
     <<: *common
-    image: ghcr.io/analogj/scrutiny:master-web
+    image: ghcr.io/analogj/scrutiny:v0.9.5-web # same release as the host collectors (proxmox-scrutiny.yml)
     ports: ["8087:8080"]
     environment:
       SCRUTINY_WEB_INFLUXDB_HOST: scrutiny-influx

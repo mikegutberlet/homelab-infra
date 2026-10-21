@@ -1,0 +1,41 @@
+# Scrutiny SMART collectors on both Proxmox hosts. The hosts are the only place that can read
+# the disks' SMART data (TrueNAS sees virtual disks). Read-only: smartctl, no reboot.
+# Reports to the Scrutiny hub on the apps VM (lanfw allows these two hosts on 8087).
+- name: Scrutiny collectors
+  hosts: proxmox
+  vars:
+    collector_version: v0.9.5
+    # No checksum file is published; this is the hash of the binary downloaded 2026-10-21.
+    collector_sha256: a7745fe3d4282857be07089298a4fa29b1f34e50fc7cc1c054b2945dd9edc320
+  tasks:
+    - name: Collector binary
+      ansible.builtin.get_url:
+        url: "https://github.com/AnalogJ/scrutiny/releases/download/{{ collector_version }}/scrutiny-collector-metrics-linux-amd64"
+        dest: /usr/local/bin/scrutiny-collector-metrics
+        checksum: "sha256:{{ collector_sha256 }}"
+        mode: "0755"
+
+    - name: Config folder
+      ansible.builtin.file:
+        path: /etc/scrutiny
+        state: directory
+        mode: "0755"
+
+    - name: Collector config
+      ansible.builtin.copy:
+        dest: /etc/scrutiny/collector.yaml
+        content: |
+          version: 1
+          host:
+            id: "{{ inventory_hostname }}"
+          api:
+            endpoint: "http://192.168.1.53:8087"
+        mode: "0644"
+
+    - name: Daily run
+      ansible.builtin.copy:
+        dest: /etc/cron.d/scrutiny-collector
+        content: |
+          # Scrutiny SMART collector (homelab-infra, playbooks/proxmox-scrutiny.yml)
+          15 4 * * * root /usr/local/bin/scrutiny-collector-metrics run --config /etc/scrutiny/collector.yaml >/var/log/scrutiny-collector.log 2>&1
+        mode: "0644"

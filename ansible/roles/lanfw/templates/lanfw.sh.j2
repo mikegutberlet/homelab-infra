@@ -13,6 +13,9 @@ iptables -A $C -i {{ lanfw_iface }} -p {{ p.split('/')[1] | default('tcp') }} -m
 iptables -A $C -i {{ lanfw_iface }} -p {{ p.split('/')[1] | default('tcp') }} -m conntrack --ctorigdstport {{ p.split('/')[0] }} --ctdir ORIGINAL -j DROP
 {% endfor %}
 iptables -A $C -i {{ lanfw_iface }} -m iprange --src-range 192.168.1.50-192.168.1.54 -j RETURN
+{% for r in lanfw_extra_allow | default([]) %}
+iptables -A $C -i {{ lanfw_iface }} -s {{ r.src }} -p tcp -m conntrack --ctorigdstport {{ r.port }} --ctdir ORIGINAL -j RETURN
+{% endfor %}
 {% for p in lan_open_ports | default([]) %}
 iptables -A $C -i {{ lanfw_iface }} -p {{ p.split('/')[1] | default('tcp') }} -m conntrack --ctorigdstport {{ p.split('/')[0] }} --ctdir ORIGINAL -j RETURN
 {% endfor %}
