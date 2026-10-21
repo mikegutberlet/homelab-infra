@@ -124,7 +124,6 @@ services:
   n8n:
     <<: *common
     image: docker.n8n.io/n8nio/n8n:latest
-    user: ${PUID}:${PGID} # its data folder is created owned by storage (appdata_owned_dirs)
     environment:
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
@@ -136,12 +135,10 @@ services:
       N8N_PROTOCOL: https
       WEBHOOK_URL: https://n8n.${TS_TAILNET}/
       GENERIC_TIMEZONE: ${TZ}
-      # Running as 3000, only the mounted /home/node/.n8n is writable: config goes there
-      # (N8N_USER_FOLDER) and so does the cache ($HOME/.cache).
-      N8N_USER_FOLDER: /home/node
-      HOME: /home/node/.n8n
     ports: ["5678:5678"]
     volumes:
+      # Runs as the image's own "node" user (1000): parts of n8n ignore HOME and write
+      # /home/node/.cache, so another uid fails. Data folder is 1000:1000 (appdata_dir_owners).
       - /opt/appdata/n8n:/home/node/.n8n
     depends_on:
       postgres: {condition: service_healthy}
@@ -156,6 +153,12 @@ services:
       DATABASE_USERNAME: huginn
       DATABASE_PASSWORD: ${HUGINN_DB_PASSWORD}
       APP_SECRET_TOKEN: ${HUGINN_SECRET_TOKEN}
+      # Postgres' init.sh already creates the database; the huginn user can't CREATE DATABASE.
+      DO_NOT_CREATE_DATABASE: "true"
+      # First-start seed creates this admin instead of the default admin/password.
+      SEED_USERNAME: admin
+      SEED_PASSWORD: ${HUGINN_ADMIN_PASSWORD}
+      SEED_EMAIL: admin@huginn.invalid
       TIMEZONE: ${TZ}
     ports: ["3000:3000"]
     depends_on:
@@ -190,7 +193,7 @@ services:
 
   uptime-kuma:
     <<: *common
-    image: louislam/uptime-kuma:1
+    image: louislam/uptime-kuma:2 # 1.x is unsupported; v2 migrates the v1 kuma.db on first start
     ports: ["3002:3001"]
     volumes:
       - /opt/appdata/uptime-kuma:/app/data

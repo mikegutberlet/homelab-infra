@@ -18,6 +18,16 @@
     mode: "0750"
   loop: "{{ appdata_owned_dirs | default([]) }}"
 
+# For images that must run as their own uid: appdata_dir_owners: {name: uid}
+- name: Appdata folders owned by a specific uid
+  ansible.builtin.file:
+    path: "{{ appdata_root }}/{{ item.key }}"
+    state: directory
+    owner: "{{ item.value }}"
+    group: "{{ item.value }}"
+    mode: "0750"
+  loop: "{{ appdata_dir_owners | default({}) | dict2items }}"
+
 - name: age key folder for root
   ansible.builtin.file:
     path: /root/.config/sops/age
