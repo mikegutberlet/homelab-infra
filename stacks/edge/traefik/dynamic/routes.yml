@@ -137,6 +137,11 @@ http:
       entryPoints: [web]
       service: dockge
       middlewares: [authentik]
+    tautulli:
+      rule: Host(`tautulli.{{ env "TS_TAILNET" }}`)
+      entryPoints: [web]
+      service: tautulli
+      middlewares: [authentik]
     chat:
       rule: Host(`chat.{{ env "TS_TAILNET" }}`)
       entryPoints: [web]
@@ -265,6 +270,10 @@ http:
       loadBalancer:
         servers:
           - url: http://192.168.1.53:5001
+    tautulli:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.53:8181
     chat:
       loadBalancer:
         servers:

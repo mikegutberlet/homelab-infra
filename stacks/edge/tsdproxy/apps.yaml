@@ -81,6 +81,9 @@ olivetin:
 dockge:
   url: http://traefik:80
 
+tautulli:
+  url: http://traefik:80
+
 chat:
   url: http://traefik:80
 

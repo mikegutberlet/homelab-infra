@@ -50,7 +50,8 @@ services:
       OVERWRITEPROTOCOL: https
     volumes:
       - /opt/appdata/nextcloud/html:/var/www/html
-      # TODO(Goobs): existing Nextcloud data is in NAS/Media/NextCloud; confirm before reusing it.
+      # NAS/Media/NextCloud is owned by www-data (33:33, 0770) on TrueNAS since 2026-10-21;
+      # Nextcloud refuses a data dir that other users can read.
       - /mnt/nfs/Media/NextCloud:/var/www/html/data
     depends_on:
       postgres: {condition: service_healthy}
@@ -94,8 +95,10 @@ services:
     ports: ["8000:8000"]
     volumes:
       - /opt/appdata/paperless/data:/usr/src/paperless/data
-      - /mnt/nfs/Documents/paperless/media:/usr/src/paperless/media
-      - /mnt/nfs/Documents/paperless/consume:/usr/src/paperless/consume
+      # NAS/Documents/Paperless/{consume,media,export}, 3000:3000 (created 2026-10-21).
+      - /mnt/nfs/Documents/Paperless/media:/usr/src/paperless/media
+      - /mnt/nfs/Documents/Paperless/consume:/usr/src/paperless/consume
+      - /mnt/nfs/Documents/Paperless/export:/usr/src/paperless/export
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -121,6 +124,7 @@ services:
   n8n:
     <<: *common
     image: docker.n8n.io/n8nio/n8n:latest
+    user: ${PUID}:${PGID} # its data folder is created owned by storage (appdata_owned_dirs)
     environment:
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
@@ -132,6 +136,10 @@ services:
       N8N_PROTOCOL: https
       WEBHOOK_URL: https://n8n.${TS_TAILNET}/
       GENERIC_TIMEZONE: ${TZ}
+      # Running as 3000, only the mounted /home/node/.n8n is writable: config goes there
+      # (N8N_USER_FOLDER) and so does the cache ($HOME/.cache).
+      N8N_USER_FOLDER: /home/node
+      HOME: /home/node/.n8n
     ports: ["5678:5678"]
     volumes:
       - /opt/appdata/n8n:/home/node/.n8n
@@ -152,6 +160,23 @@ services:
     ports: ["3000:3000"]
     depends_on:
       postgres: {condition: service_healthy}
+
+  # Plex statistics (moved from the old Plex VM's snap, 2026-10-21).
+  tautulli:
+    <<: *common
+    image: lscr.io/linuxserver/tautulli:latest
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    ports: ["8181:8181"]
+    volumes:
+      - /opt/appdata/tautulli:/config
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8181/status"]
+      interval: 60s
+      retries: 3
+      start_period: 60s
 
   # --- ops tools ---
   homepage:

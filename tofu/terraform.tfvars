@@ -47,7 +47,6 @@ vms = {
     ip        = "192.168.1.53/24"
     cores     = 4
     memory_mb = 10240
-    start     = false # until the old Plex VM (26 GB) is retired
     disk_gb   = 96
     datastore = "RicksShipXFS"
     tags      = ["apps", "docker"]
