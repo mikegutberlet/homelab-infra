@@ -79,7 +79,7 @@ services:
       <<: *arr-health
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/api?mode=version"]
 
-  # All torrent traffic leaves through PIA over WireGuard; if the tunnel drops,
+  # All torrent traffic leaves through PIA (OpenVPN); if the tunnel drops,
   # qBittorrent has no network at all (kill switch).
   gluetun:
     <<: *common
@@ -93,7 +93,14 @@ services:
       OPENVPN_USER: ${PIA_USER}
       OPENVPN_PASSWORD: ${PIA_PASSWORD}
       SERVER_REGIONS: ${PIA_REGION}
+      PORT_FORWARD_ONLY: "on" # PIA has no port forwarding in US regions
       VPN_PORT_FORWARDING: "on"
+      # Hand the forwarded port to qBittorrent (same network namespace, so localhost;
+      # qBittorrent skips its login for localhost clients).
+      VPN_PORT_FORWARDING_UP_COMMAND: >-
+        /bin/sh -c 'wget -qO- --retry-connrefused --tries=20
+        --post-data "json={\"listen_port\":{{PORTS}},\"random_port\":false,\"upnp\":false}"
+        http://127.0.0.1:8085/api/v2/app/setPreferences'
     ports: ["8085:8085"]
     volumes:
       - /opt/appdata/gluetun:/gluetun
@@ -163,7 +170,7 @@ services:
 
   audiobookshelf:
     <<: *common
-    image: ghcr.io/advplyr/audiobookshelf:2
+    image: ghcr.io/advplyr/audiobookshelf:2.37.1 # no floating ":2" tag is published
     environment:
       TZ: ${TZ}
     ports: ["13378:80"]

@@ -28,6 +28,10 @@ services:
       - --providers.file.directory=/etc/traefik/dynamic
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
+      # TSDProxy terminates TLS and forwards over plain HTTP. Trust its X-Forwarded-*
+      # headers (Docker's private range only; LAN clients keep their 192.168.1.x source),
+      # otherwise Authentik builds http:// URLs and browsers block them as mixed content.
+      - --entrypoints.web.forwardedHeaders.trustedIPs=172.16.0.0/12
       - --ping=true
       - --api.dashboard=true
       - --accesslog=true
