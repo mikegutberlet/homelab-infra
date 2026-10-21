@@ -4,6 +4,7 @@
     - { role: base, tags: [base] }
     - { role: docker, tags: [docker] }
     - { role: nfs, tags: [nfs] }
+    - { role: backup, tags: [backup] }
 
 - name: GPU VM drivers
   hosts: docker_vms
