@@ -1,9 +1,33 @@
-# Filled in after the first deploy, once each app's API key exists.
-- Media:
-    - Plex: {href: "https://plex.{{HOMEPAGE_VAR_TAILNET}}", icon: plex.png}
-    - Emby: {href: "https://emby.{{HOMEPAGE_VAR_TAILNET}}", icon: emby.png}
-    - Requests: {href: "https://requests.{{HOMEPAGE_VAR_TAILNET}}", icon: jellyseerr.png}
+# Links go through Tailscale (https://<app>.<tailnet>); siteMonitor checks the LAN address from
+# the apps VM, which the lanfw firewall allows. Widgets with API keys can be added later.
+- Watch:
+    - Plex: {href: "https://plex.{{HOMEPAGE_VAR_TAILNET}}/web", icon: plex.png, siteMonitor: "http://192.168.1.52:32400/identity"}
+    - Emby: {href: "https://emby.{{HOMEPAGE_VAR_TAILNET}}", icon: emby.png, siteMonitor: "http://192.168.1.52:8096/emby/System/Ping"}
+    - Requests: {href: "https://requests.{{HOMEPAGE_VAR_TAILNET}}", icon: jellyseerr.png, siteMonitor: "http://192.168.1.51:5055/api/v1/status"}
+    - Audiobooks: {href: "https://audiobooks.{{HOMEPAGE_VAR_TAILNET}}", icon: audiobookshelf.png, siteMonitor: "http://192.168.1.51:13378/healthcheck"}
+    - Storyteller: {href: "https://storyteller.{{HOMEPAGE_VAR_TAILNET}}", icon: mdi-book-open-page-variant, siteMonitor: "http://192.168.1.51:8001/"}
+    - RomM: {href: "https://romm.{{HOMEPAGE_VAR_TAILNET}}", icon: romm.png, siteMonitor: "http://192.168.1.51:8095/"}
+    - MeTube: {href: "https://metube.{{HOMEPAGE_VAR_TAILNET}}", icon: metube.png, siteMonitor: "http://192.168.1.51:8081/"}
+- Downloads:
+    - Sonarr: {href: "https://sonarr.{{HOMEPAGE_VAR_TAILNET}}", icon: sonarr.png, siteMonitor: "http://192.168.1.51:8989/ping"}
+    - Radarr: {href: "https://radarr.{{HOMEPAGE_VAR_TAILNET}}", icon: radarr.png, siteMonitor: "http://192.168.1.51:7878/ping"}
+    - Prowlarr: {href: "https://prowlarr.{{HOMEPAGE_VAR_TAILNET}}", icon: prowlarr.png, siteMonitor: "http://192.168.1.51:9696/ping"}
+    - Bazarr: {href: "https://bazarr.{{HOMEPAGE_VAR_TAILNET}}", icon: bazarr.png, siteMonitor: "http://192.168.1.51:6767/"}
+    - SABnzbd: {href: "https://sabnzbd.{{HOMEPAGE_VAR_TAILNET}}", icon: sabnzbd.png, siteMonitor: "http://192.168.1.51:8080/"}
+    - qBittorrent: {href: "https://qbittorrent.{{HOMEPAGE_VAR_TAILNET}}", icon: qbittorrent.png, siteMonitor: "http://192.168.1.51:8085/"}
+    - Tautulli: {href: "https://tautulli.{{HOMEPAGE_VAR_TAILNET}}", icon: tautulli.png, siteMonitor: "http://192.168.1.53:8181/status"}
+- Apps:
+    - Nextcloud: {href: "https://cloud.{{HOMEPAGE_VAR_TAILNET}}", icon: nextcloud.png, siteMonitor: "http://192.168.1.53:8090/status.php"}
+    - Paperless: {href: "https://paperless.{{HOMEPAGE_VAR_TAILNET}}", icon: paperless-ngx.png, siteMonitor: "http://192.168.1.53:8000/"}
+    - Stirling PDF: {href: "https://pdf.{{HOMEPAGE_VAR_TAILNET}}", icon: stirling-pdf.png, siteMonitor: "http://192.168.1.53:8070/"}
+    - n8n: {href: "https://n8n.{{HOMEPAGE_VAR_TAILNET}}", icon: n8n.png, siteMonitor: "http://192.168.1.53:5678/healthz"}
+    - Huginn: {href: "https://huginn.{{HOMEPAGE_VAR_TAILNET}}", icon: huginn.png, siteMonitor: "http://192.168.1.53:3000/users/sign_in"}
 - Lab:
-    - Proxmox: {href: "https://192.168.1.137:8006", icon: proxmox.png}
+    - Status (Uptime Kuma): {href: "https://status.{{HOMEPAGE_VAR_TAILNET}}", icon: uptime-kuma.png, siteMonitor: "http://192.168.1.53:3002/"}
+    - Disks (Scrutiny): {href: "https://disks.{{HOMEPAGE_VAR_TAILNET}}", icon: scrutiny.png, siteMonitor: "http://192.168.1.53:8087/"}
+    - Dockge: {href: "https://dockge.{{HOMEPAGE_VAR_TAILNET}}", icon: dockge.png, siteMonitor: "http://192.168.1.53:5001/"}
+    - OliveTin: {href: "https://olivetin.{{HOMEPAGE_VAR_TAILNET}}", icon: olivetin.png}
+    - Authentik: {href: "https://auth.{{HOMEPAGE_VAR_TAILNET}}", icon: authentik.png}
+    - Proxmox RicksGarage: {href: "https://192.168.1.137:8006", icon: proxmox.png}
+    - Proxmox RicksShip: {href: "https://192.168.1.37:8006", icon: proxmox.png}
     - TrueNAS: {href: "https://192.168.1.209", icon: truenas.png}
-    - Status: {href: "https://status.{{HOMEPAGE_VAR_TAILNET}}", icon: uptime-kuma.png}

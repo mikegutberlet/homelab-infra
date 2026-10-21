@@ -187,6 +187,7 @@ services:
     image: ghcr.io/gethomepage/homepage:v1
     environment:
       HOMEPAGE_ALLOWED_HOSTS: home.${TS_TAILNET}
+      HOMEPAGE_VAR_TAILNET: ${TS_TAILNET} # used by homepage/services.yaml links
     ports: ["3001:3000"]
     volumes:
       - ./homepage:/app/config
