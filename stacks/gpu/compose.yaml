@@ -61,6 +61,10 @@ services:
   immich-server:
     <<: *common
     image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION}
+    # Runs as storage so uploads on the NAS are 3000:3000 (NFS squashes root); 44/104 = the
+    # VM's video/render groups for /dev/dri.
+    user: ${PUID}:${PGID}
+    group_add: ["44", "104"]
     environment: &immich-env
       TZ: ${TZ}
       DB_HOSTNAME: immich-db
@@ -71,9 +75,11 @@ services:
     ports: ["2283:2283"]
     devices: [/dev/dri:/dev/dri]
     volumes:
-      # TODO(Goobs): existing Immich data lives in NAS/Media/Immich; confirm before reusing it.
-      - /mnt/nfs/Media/Immich:/usr/src/app/upload
-      - /mnt/nfs/Photos:/mnt/photos:ro # existing photos as a read-only external library
+      # New uploads only, in a new folder (NAS/Photos/Immich-uploads, 3000:3000, created
+      # 2026-10-21). NAS/Media/Immich is an empty leftover skeleton and is left alone.
+      - /mnt/nfs/Photos/Immich-uploads:/usr/src/app/upload
+      # Existing photos as a read-only external library (add /mnt/photos in Immich).
+      - /mnt/nfs/Photos:/mnt/photos:ro
     depends_on:
       immich-db: {condition: service_healthy}
       immich-redis: {condition: service_healthy}
@@ -82,6 +88,13 @@ services:
     <<: *common
     image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION}-openvino
     devices: [/dev/dri:/dev/dri]
+    environment:
+      MACHINE_LEARNING_WORKERS: 1
+      MACHINE_LEARNING_MODEL_TTL: 300 # unload models after 5 idle minutes
+    deploy:
+      resources:
+        limits:
+          memory: 3G # the gpu VM has 10 GB shared with Plex/Emby transcodes
     volumes:
       - /opt/appdata/immich/model-cache:/cache
 
@@ -94,7 +107,7 @@ services:
 
   immich-db:
     <<: *common
-    # TODO: match the tag in the docker-compose.yml of the Immich release being deployed.
+    # Same as the official docker-compose.yml of Immich v3.3.5 (checked 2026-10-21).
     image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
     environment:
       POSTGRES_USER: immich
@@ -127,7 +140,8 @@ services:
       - /opt/appdata/tdarr/configs:/app/configs
       - /opt/appdata/tdarr/logs:/app/logs
       - /opt/appdata/transcode/tdarr:/temp # local disk, never NFS
-      - /mnt/nfs/Media:/mnt/nfs/Media
+      # Read-only until Goobs sets re-encoding rules (Tdarr replaces files in place).
+      - /mnt/nfs/Media:/mnt/nfs/Media:ro
 
   # Unmanic gets its own folders and an off-hours schedule so it never fights Tdarr.
   unmanic:
@@ -139,7 +153,8 @@ services:
     volumes:
       - /opt/appdata/unmanic:/config
       - /opt/appdata/transcode/unmanic:/tmp/unmanic
-      - /mnt/nfs/Media/Music:/library/music # TODO(Goobs): which folders should Unmanic own?
+      # Read-only until Goobs decides which folders Unmanic may re-encode.
+      - /mnt/nfs/Media:/library:ro
 
   autoheal:
     image: willfarrell/autoheal:1.2.0
