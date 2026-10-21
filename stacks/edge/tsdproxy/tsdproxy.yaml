@@ -1,11 +1,12 @@
-# TODO: verify keys against the TSDProxy v1 docs before first deploy.
+# Checked against TSDProxy 1.4.7 (2026-10-21): proxy lists live under "files:", and the
+# auth key comes from the compose secret below (the TSDPROXY_AUTHKEY env var is ignored).
 defaultProxyProvider: default
 tailscale:
   providers:
     default:
-      authKeyFile: ""
+      authKeyFile: /run/secrets/tsdproxy_authkey
   dataDir: /data/
-lists:
+files:
   apps:
     filename: /config/apps.yaml
     defaultProxyProvider: default

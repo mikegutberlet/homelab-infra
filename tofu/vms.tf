@@ -44,8 +44,8 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   machine       = "q35"
   bios          = "seabios"
-  on_boot       = true
-  started       = true
+  on_boot       = each.value.start
+  started       = each.value.start
   scsi_hardware = "virtio-scsi-single"
 
   startup {
@@ -65,6 +65,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   memory {
     dedicated = each.value.memory_mb
+    floating  = each.value.balloon_mb
   }
 
   disk {

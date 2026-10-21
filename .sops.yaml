@@ -3,4 +3,4 @@
 # public key below before encrypting anything.
 creation_rules:
   - path_regex: stacks/.*/secrets\.sops\.env$
-    age: age1REPLACE_WITH_PUBLIC_KEY
+    age: age1x622shlxk3letv5ra6qj23dut8mg2cvzlpjlad2vc5a2s2l0yueqknqtza

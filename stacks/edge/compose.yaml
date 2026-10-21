@@ -99,7 +99,9 @@ services:
     image: almeidapaulopt/tsdproxy:1
     environment:
       TZ: ${TZ}
-      TSDPROXY_AUTHKEY: ${TS_AUTHKEY}
+    # TSDProxy 1.4 ignores TSDPROXY_AUTHKEY once tsdproxy.yaml defines a provider,
+    # so the key reaches it as a file (authKeyFile) instead.
+    secrets: [tsdproxy_authkey]
     volumes:
       - ./tsdproxy:/config
       - /opt/appdata/tsdproxy:/data
@@ -144,6 +146,10 @@ services:
       AUTOHEAL_INTERVAL: 30
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+secrets:
+  tsdproxy_authkey:
+    environment: TS_AUTHKEY
 
 networks:
   socket: {internal: true}

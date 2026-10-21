@@ -16,15 +16,16 @@ vms = {
     tags      = ["edge", "docker"]
   }
   media = {
-    vm_id     = 202
-    node      = "RicksGarage"
-    ip        = "192.168.1.51/24"
-    cores     = 4
-    memory_mb = 6144
-    disk_gb   = 64
-    datastore = "local-lvm"
-    startup   = 4
-    tags      = ["media", "docker"]
+    vm_id      = 202
+    node       = "RicksGarage"
+    ip         = "192.168.1.51/24"
+    cores      = 4
+    memory_mb  = 6144
+    balloon_mb = 3072 # shares RicksGarage with TrueNAS (16 GB) and the old Servarr VM
+    disk_gb    = 64
+    datastore  = "local-lvm"
+    startup    = 4
+    tags       = ["media", "docker"]
   }
   gpu = {
     vm_id     = 203
@@ -34,8 +35,13 @@ vms = {
     memory_mb = 10240
     disk_gb   = 96
     datastore = "RicksShipXFS"
-    igpu      = true
-    tags      = ["gpu", "docker"]
+    # TEMPORARY (2026-10-21): no iGPU until the host is moved to vfio-pci and rebooted with
+    # someone at the power button (ansible/playbooks/proxmox-igpu.yml). Set back to true then.
+    # hostpci also needs root@pam: the tofu@pve token cannot set raw PCI devices.
+    igpu = false
+    # Left stopped: RicksShip has ~6 GB free next to the Plex VM (26 GB).
+    start = false
+    tags  = ["gpu", "docker"]
   }
   apps = {
     vm_id     = 204
@@ -43,6 +49,7 @@ vms = {
     ip        = "192.168.1.53/24"
     cores     = 4
     memory_mb = 10240
+    start     = false # until the old Plex VM (26 GB) is retired
     disk_gb   = 96
     datastore = "RicksShipXFS"
     tags      = ["apps", "docker"]

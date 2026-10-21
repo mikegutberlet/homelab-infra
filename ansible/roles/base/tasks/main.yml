@@ -1,6 +1,6 @@
 - name: Base packages
   ansible.builtin.apt:
-    name: [qemu-guest-agent, unattended-upgrades, fail2ban, nfs-common, curl, jq, htop]
+    name: [qemu-guest-agent, unattended-upgrades, fail2ban, nfs-common, curl, jq, htop, rsync]
     update_cache: true
 
 - name: Guest agent running (lets Proxmox shut the VM down cleanly)
@@ -46,6 +46,14 @@
       PermitRootLogin no
     mode: "0644"
   notify: Restart ssh
+
+- name: IP forwarding for the Tailscale subnet router
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: "1"
+    sysctl_file: /etc/sysctl.d/99-tailscale.conf
+  loop: [net.ipv4.ip_forward, net.ipv6.conf.all.forwarding]
+  when: "'edge' in (stacks | default([]))"
 
 - name: Security updates install themselves
   ansible.builtin.copy:

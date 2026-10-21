@@ -7,11 +7,28 @@
     mode: "0750"
   loop: ["{{ stacks_root }}", "{{ appdata_root }}"]
 
+- name: age key folder for root
+  ansible.builtin.file:
+    path: /root/.config/sops/age
+    state: directory
+    mode: "0700"
+
+- name: age private key from the Mac (decrypts secrets.sops.env on the VM)
+  ansible.builtin.copy:
+    src: "{{ lookup('env', 'HOME') }}/.config/sops/age/keys.txt"
+    dest: /root/.config/sops/age/keys.txt
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
 - name: Copy each stack's Compose files
   ansible.posix.synchronize:
     src: "{{ playbook_dir }}/../../stacks/{{ item }}/"
     dest: "{{ stacks_root }}/{{ item }}/"
     delete: false
+    owner: false # don't carry the Mac's uid/gid onto the VM
+    group: false
     rsync_opts: ["--exclude=*.sops.env"]
   loop: "{{ stacks }}"
 
@@ -29,9 +46,14 @@
   changed_when: true
   no_log: true
 
+# stack_services: {stack: [service, ...]} starts only those services, e.g. while
+# a stack's VPN or API credentials are still placeholders. Unset = whole stack.
 - name: Start or update each stack
   ansible.builtin.command:
-    cmd: docker compose up -d --remove-orphans --wait --wait-timeout 300
+    cmd: >-
+      docker compose up -d --wait --wait-timeout 300
+      {{ '' if (stack_services | default({}))[item] is defined else '--remove-orphans' }}
+      {{ (stack_services | default({}))[item] | default([]) | join(' ') }}
     chdir: "{{ stacks_root }}/{{ item }}"
   loop: "{{ stacks }}"
   changed_when: true
