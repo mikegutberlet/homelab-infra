@@ -147,7 +147,7 @@ def main():
             added, urgent = configure(api, gmail)
             print(f"{added} monitor(s) added.")
             if urgent:
-                api.test_notification(type=NotificationType.SMTP, smtpHost="smtp.gmail.com", smtpPort=465,
+                api.test_notification(name="Email now (critical)", type=NotificationType.SMTP, smtpHost="smtp.gmail.com", smtpPort=465,
                                       smtpSecure=True, smtpUsername=MAIL_FROM, smtpPassword=gmail,
                                       smtpFrom=f"Homelab <{MAIL_FROM}>", smtpTo=MAIL_TO)
                 print(f"Sent a test email to {MAIL_TO}.")

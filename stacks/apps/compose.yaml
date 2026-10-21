@@ -45,7 +45,9 @@ services:
       POSTGRES_USER: nextcloud
       POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
       REDIS_HOST: redis
-      NEXTCLOUD_TRUSTED_DOMAINS: cloud.${TS_TAILNET}
+      # The LAN IP is trusted too, for Uptime Kuma/Homepage health checks (only applies on a fresh
+      # install; the running instance got it via occ config:system:set on 2026-10-21).
+      NEXTCLOUD_TRUSTED_DOMAINS: cloud.${TS_TAILNET} 192.168.1.53
       TRUSTED_PROXIES: 192.168.1.50
       OVERWRITEPROTOCOL: https
     volumes:
