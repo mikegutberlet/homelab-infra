@@ -28,27 +28,27 @@ MONITORS = [
     ("Sonarr", "http://192.168.1.51:8989/ping", True, None),
     ("Radarr", "http://192.168.1.51:7878/ping", True, None),
     ("Prowlarr", "http://192.168.1.51:9696/ping", True, None),
-    ("SABnzbd", "http://192.168.1.51:8080/", True, ["200-399"]),
+    ("SABnzbd", "http://192.168.1.51:8080/", True, ["200-299", "300-399"]),
     # qBittorrent sits behind gluetun; any HTTP answer (even 403 without login) means both are up.
-    ("qBittorrent (via PIA)", "http://192.168.1.51:8085/api/v2/app/version", True, ["200-499"]),
+    ("qBittorrent (via PIA)", "http://192.168.1.51:8085/api/v2/app/version", True, ["200-299", "300-399", "400-499"]),
     ("Requests (Jellyseerr)", "http://192.168.1.51:5055/api/v1/status", True, None),
-    ("Bazarr", "http://192.168.1.51:6767/", False, ["200-399"]),
+    ("Bazarr", "http://192.168.1.51:6767/", False, ["200-299", "300-399"]),
     ("Audiobookshelf", "http://192.168.1.51:13378/healthcheck", False, None),
-    ("Storyteller", "http://192.168.1.51:8001/", False, ["200-399"]),
-    ("RomM", "http://192.168.1.51:8095/", False, ["200-399"]),
+    ("Storyteller", "http://192.168.1.51:8001/", False, ["200-299", "300-399"]),
+    ("RomM", "http://192.168.1.51:8095/", False, ["200-299", "300-399"]),
     ("MeTube", "http://192.168.1.51:8081/", False, None),
     ("Tautulli", "http://192.168.1.53:8181/status", False, None),
     ("Nextcloud", "http://192.168.1.53:8090/status.php", False, None),
-    ("Paperless", "http://192.168.1.53:8000/", False, ["200-399"]),
-    ("Stirling PDF", "http://192.168.1.53:8070/", False, ["200-399"]),
+    ("Paperless", "http://192.168.1.53:8000/", False, ["200-299", "300-399"]),
+    ("Stirling PDF", "http://192.168.1.53:8070/", False, ["200-299", "300-399"]),
     ("n8n", "http://192.168.1.53:5678/healthz", False, None),
     ("Huginn", "http://192.168.1.53:3000/users/sign_in", False, None),
-    ("Homepage", "http://192.168.1.53:3001/", False, ["200-499"]),
+    ("Homepage", "http://192.168.1.53:3001/", False, ["200-299", "300-399", "400-499"]),
     ("Scrutiny", "http://192.168.1.53:8087/api/health", False, None),
-    ("Dockge", "http://192.168.1.53:5001/", False, ["200-399"]),
+    ("Dockge", "http://192.168.1.53:5001/", False, ["200-299", "300-399"]),
     ("Edge (Traefik, TCP)", "192.168.1.50:80", False, None),  # Kuma isn't on the tailnet
     ("Piper (TCP)", "192.168.1.54:10200", False, None),
-    ("TrueNAS", "https://192.168.1.209/", False, ["200-399"]),
+    ("TrueNAS", "https://192.168.1.209/", False, ["200-299", "300-399"]),
     ("Proxmox RicksGarage", "https://192.168.1.137:8006/", False, None),
     ("Proxmox RicksShip", "https://192.168.1.37:8006/", False, None),
 ]
@@ -74,6 +74,68 @@ def notification_id(api, name, **settings):
     return api.add_notification(name=name, isDefault=False, applyExisting=False, **settings)["id"]
 
 
+def kuma2_compat(api):
+    """uptime-kuma-api 1.2 targets Kuma 1.x; Kuma 2 refuses new monitors with conditions = NULL."""
+    if getattr(api, "_kuma2_compat", False):
+        return
+    api._kuma2_compat = True
+    orig = api._call
+
+    def _call(event, data=None):
+        if event in ("add", "editMonitor") and isinstance(data, dict) and not data.get("conditions"):
+            data["conditions"] = "[]"
+        return orig(event, data)
+
+    api._call = _call
+
+
+def existing_monitor_names(api):
+    """Kuma 2 only sends incremental monitor updates, so this library's monitor list stays empty.
+    get_monitor(id) still works: walk the ids until 25 in a row are missing."""
+    names, misses, i = set(), 0, 1
+    while misses < 25 and i < 2000:
+        try:
+            names.add(api.get_monitor(i)["name"])
+            misses = 0
+        except Exception:
+            misses += 1
+        i += 1
+    return names
+
+
+def configure(api, gmail):
+    """Notifications + monitors. Idempotent: existing ones (same name) are left alone."""
+    kuma2_compat(api)
+    digest = notification_id(api, "n8n daily digest", type=NotificationType.WEBHOOK,
+                             webhookURL=DIGEST_WEBHOOK, webhookContentType="json")
+    urgent = None
+    if gmail:
+        urgent = notification_id(
+            api, "Email now (critical)", type=NotificationType.SMTP,
+            smtpHost="smtp.gmail.com", smtpPort=465, smtpSecure=True,
+            smtpUsername=MAIL_FROM, smtpPassword=gmail,
+            smtpFrom=f"Homelab <{MAIL_FROM}>", smtpTo=MAIL_TO)
+    existing = existing_monitor_names(api)
+    added = 0
+    for name, url, critical, codes in MONITORS:
+        if name in existing:
+            print(f"  exists   {name}")
+            continue
+        notify = [urgent] if (critical and urgent) else [digest]
+        kw = dict(name=name, interval=60, maxretries=2, notificationIDList=notify)
+        if url.startswith("http"):
+            kw.update(type=MonitorType.HTTP, url=url, ignoreTls=True)
+            if codes:
+                kw["accepted_statuscodes"] = codes
+        else:
+            host, port = url.rsplit(":", 1)
+            kw.update(type=MonitorType.PORT, hostname=host, port=int(port))
+        api.add_monitor(**kw)
+        added += 1
+        print(f"  added    {name}{'  (critical: email now)' if critical and urgent else ''}")
+    return added, urgent
+
+
 def main():
     user = input("Uptime Kuma username: ").strip()
     password = getpass.getpass("Uptime Kuma password: ")
@@ -82,42 +144,18 @@ def main():
     try:
         with UptimeKumaApi(f"http://127.0.0.1:{LOCAL_PORT}", timeout=30) as api:
             api.login(user, password)
-            digest = notification_id(api, "n8n daily digest", type=NotificationType.WEBHOOK,
-                                     webhookURL=DIGEST_WEBHOOK, webhookContentType="json")
-            urgent = None
-            if gmail:
-                urgent = notification_id(
-                    api, "Email now (critical)", type=NotificationType.SMTP,
-                    smtpHost="smtp.gmail.com", smtpPort=465, smtpSecure=True,
-                    smtpUsername=MAIL_FROM, smtpPassword=gmail,
-                    smtpFrom=f"Homelab <{MAIL_FROM}>", smtpTo=MAIL_TO)
-            existing = {m["name"] for m in api.get_monitors()}
-            for name, url, critical, codes in MONITORS:
-                if name in existing:
-                    print(f"  exists   {name}")
-                    continue
-                notify = [urgent] if (critical and urgent) else [digest]
-                kw = dict(name=name, interval=60, maxretries=2, notificationIDList=notify)
-                if url.startswith("http"):
-                    kw.update(type=MonitorType.HTTP, url=url, ignoreTls=True)
-                    if codes:
-                        kw["accepted_statuscodes"] = codes
-                else:
-                    host, port = url.rsplit(":", 1)
-                    kw.update(type=MonitorType.PORT, hostname=host, port=int(port))
-                api.add_monitor(**kw)
-                print(f"  added    {name}{'  (critical: email now)' if critical and urgent else ''}")
+            added, urgent = configure(api, gmail)
+            print(f"{added} monitor(s) added.")
             if urgent:
                 api.test_notification(type=NotificationType.SMTP, smtpHost="smtp.gmail.com", smtpPort=465,
                                       smtpSecure=True, smtpUsername=MAIL_FROM, smtpPassword=gmail,
                                       smtpFrom=f"Homelab <{MAIL_FROM}>", smtpTo=MAIL_TO)
                 print(f"Sent a test email to {MAIL_TO}.")
-    except Exception as e:  # most likely: this library version doesn't speak Kuma 2's API
-        sys.exit(f"Stopped: {e}\nIf this mentions an unknown field or a timeout, Kuma 2 needs the manual "
-                 "checklist instead (see docs/kuma_setup.py MONITORS).")
+    except Exception as e:
+        sys.exit(f"Stopped: {e}")
     finally:
         tunnel.terminate()
-    print("Done.")
+    print("Done. Safe to run again: existing monitors and notifications are skipped.")
 
 
 if __name__ == "__main__":
