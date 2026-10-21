@@ -134,7 +134,8 @@ resource "proxmox_virtual_environment_vm" "vm" {
   }
 
   lifecycle {
-    ignore_changes = [initialization]
+    # hostpci: the gpu VM's iGPU is attached by root (see terraform.tfvars).
+    ignore_changes = [initialization, hostpci]
   }
 }
 

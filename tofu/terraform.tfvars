@@ -35,13 +35,11 @@ vms = {
     memory_mb = 10240
     disk_gb   = 96
     datastore = "RicksShipXFS"
-    # TEMPORARY (2026-10-21): no iGPU until the host is moved to vfio-pci and rebooted with
-    # someone at the power button (ansible/playbooks/proxmox-igpu.yml). Set back to true then.
-    # hostpci also needs root@pam: the tofu@pve token cannot set raw PCI devices.
+    # The iGPU (00:02.0, vfio-pci on RicksShip since 2026-10-21) is attached by root with
+    # `qm set 203 --hostpci0 0000:00:02.0,pcie=1`: the tofu@pve token can't set raw PCI devices,
+    # and vms.tf ignores hostpci so tofu leaves it alone. Keep igpu = false here.
     igpu = false
-    # Left stopped: RicksShip has ~6 GB free next to the Plex VM (26 GB).
-    start = false
-    tags  = ["gpu", "docker"]
+    tags = ["gpu", "docker"]
   }
   apps = {
     vm_id     = 204

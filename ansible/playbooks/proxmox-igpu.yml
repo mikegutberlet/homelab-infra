@@ -4,7 +4,7 @@
 - name: Reserve the iGPU for passthrough
   hosts: ricksship
   tasks:
-    # TODO: confirm the ID with `lspci -nn -s 00:02.0` on RicksShip before running.
+    # 8086:193b confirmed with `lspci -nn -s 00:02.0` on RicksShip (2026-10-21).
     - name: Bind 8086:193b to vfio-pci
       ansible.builtin.copy:
         dest: /etc/modprobe.d/vfio-igpu.conf

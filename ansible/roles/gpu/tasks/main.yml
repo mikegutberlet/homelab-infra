@@ -1,7 +1,14 @@
+# The Debian cloud image only enables "main"; the iHD driver is in non-free.
+- name: Enable contrib, non-free and non-free-firmware
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list.d/debian.sources
+    regexp: "^Components: main$"
+    replace: "Components: main contrib non-free non-free-firmware"
+
 - name: Intel media driver for Quick Sync (Skylake uses iHD)
   ansible.builtin.apt:
     name: [intel-media-va-driver-non-free, vainfo]
-  # needs the non-free component; cloud images ship with it enabled in bookworm
+    update_cache: true
 
 - name: App user can open /dev/dri
   ansible.builtin.user:

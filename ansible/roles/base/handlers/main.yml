@@ -3,8 +3,13 @@
     name: ssh
     state: restarted
 
+# watchdog.service has OnFailure=/Conflicts=wd_keepalive: if its stop step fails during a
+# restart, wd_keepalive starts and cancels the start, leaving watchdog down.
 - name: Restart watchdog
+  ansible.builtin.shell: systemctl stop wd_keepalive.service; systemctl restart watchdog.service
+  changed_when: true
+
+- name: Enable watchdog
   ansible.builtin.service:
     name: watchdog
-    state: restarted
     enabled: true

@@ -4,7 +4,7 @@
 # so series/movies keep the profile they already use. Same profiles as the TRaSH
 # "web-1080p" (Sonarr) and "hd-bluray-web" (Radarr) templates; a profile's default
 # custom-format groups come with it.
-# Note: WEB-1080p tops out at 1080p, so "HD and Ultra" no longer asks for 2160p.
+# Both top out at 1080p (no 4K, by choice).
 sonarr:
   sonarr: # v8: instance names must be unique across Sonarr and Radarr
     base_url: http://sonarr:8989
@@ -13,7 +13,8 @@ sonarr:
       type: series
     quality_profiles:
       - trash_id: 72dae194fc92bf828f32cde7744e51a1 # WEB-1080p
-        name: HD and Ultra
+        # The profile 538 of 541 series use (the name really ends with a space).
+        name: "Anything Not Terrible "
         reset_unmatched_scores:
           enabled: true
 
