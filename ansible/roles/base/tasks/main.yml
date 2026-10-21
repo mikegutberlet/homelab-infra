@@ -1,0 +1,56 @@
+- name: Base packages
+  ansible.builtin.apt:
+    name: [qemu-guest-agent, unattended-upgrades, fail2ban, nfs-common, curl, jq, htop]
+    update_cache: true
+
+- name: Guest agent running (lets Proxmox shut the VM down cleanly)
+  ansible.builtin.service:
+    name: qemu-guest-agent
+    state: started
+    enabled: true
+
+- name: Watchdog daemon feeds the virtual i6300esb watchdog
+  ansible.builtin.apt:
+    name: watchdog
+
+- name: Point the watchdog daemon at the virtual device
+  ansible.builtin.lineinfile:
+    path: /etc/watchdog.conf
+    regexp: "^#?watchdog-device"
+    line: "watchdog-device = /dev/watchdog"
+  notify: Restart watchdog
+
+- name: Timezone
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+- name: App group
+  ansible.builtin.group:
+    name: "{{ app_user }}"
+    gid: "{{ app_gid }}"
+
+- name: App user, matching file ownership on TrueNAS
+  ansible.builtin.user:
+    name: "{{ app_user }}"
+    uid: "{{ app_uid }}"
+    group: "{{ app_user }}"
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: SSH keys only, no root login
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-hardening.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+    mode: "0644"
+  notify: Restart ssh
+
+- name: Security updates install themselves
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    mode: "0644"

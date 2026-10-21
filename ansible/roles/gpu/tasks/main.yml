@@ -1,0 +1,10 @@
+- name: Intel media driver for Quick Sync (Skylake uses iHD)
+  ansible.builtin.apt:
+    name: [intel-media-va-driver-non-free, vainfo]
+  # needs the non-free component; cloud images ship with it enabled in bookworm
+
+- name: App user can open /dev/dri
+  ansible.builtin.user:
+    name: "{{ app_user }}"
+    groups: [render, video]
+    append: true

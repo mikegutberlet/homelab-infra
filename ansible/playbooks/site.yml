@@ -1,0 +1,17 @@
+- name: Base OS, Docker and NFS for every app VM
+  hosts: docker_vms
+  roles:
+    - base
+    - docker
+    - nfs
+
+- name: GPU VM drivers
+  hosts: docker_vms
+  roles:
+    - role: gpu
+      when: igpu | default(false)
+
+- name: Deploy each VM's Compose stacks
+  hosts: docker_vms
+  roles:
+    - stacks

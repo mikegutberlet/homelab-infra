@@ -1,0 +1,232 @@
+# apps VM (RicksShip): personal cloud, documents, automation, and the ops tools.
+# Monitoring lives here, on the other host from TrueNAS and the edge VM, so it can
+# still alert when RicksGarage is down.
+
+x-common: &common
+  restart: unless-stopped
+  labels:
+    autoheal: "true"
+
+services:
+  # One Postgres for Nextcloud, Paperless, n8n and Huginn (and pgvector for the ai VM),
+  # each with its own database and user (postgres/init.sql).
+  postgres:
+    <<: *common
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      NEXTCLOUD_DB_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      PAPERLESS_DB_PASSWORD: ${PAPERLESS_DB_PASSWORD}
+      N8N_DB_PASSWORD: ${N8N_DB_PASSWORD}
+      HUGINN_DB_PASSWORD: ${HUGINN_DB_PASSWORD}
+      AI_DB_PASSWORD: ${AI_DB_PASSWORD}
+    ports: ["5432:5432"] # the ai VM uses pgvector; Proxmox firewall limits this to 192.168.1.54
+    volumes:
+      - /opt/appdata/postgres:/var/lib/postgresql/data
+      - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      retries: 5
+
+  redis:
+    <<: *common
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+
+  nextcloud:
+    <<: *common
+    image: nextcloud:31-fpm
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      REDIS_HOST: redis
+      NEXTCLOUD_TRUSTED_DOMAINS: cloud.${TS_TAILNET}
+      TRUSTED_PROXIES: 192.168.1.50
+      OVERWRITEPROTOCOL: https
+    volumes:
+      - /opt/appdata/nextcloud/html:/var/www/html
+      # TODO(Goobs): existing Nextcloud data is in NAS/Media/NextCloud; confirm before reusing it.
+      - /mnt/nfs/Media/NextCloud:/var/www/html/data
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  # Internal web server for Nextcloud only; Traefik on the edge VM is the reverse proxy.
+  nextcloud-web:
+    <<: *common
+    image: nginx:1.27-alpine
+    ports: ["8090:80"]
+    volumes:
+      - ./nextcloud/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /opt/appdata/nextcloud/html:/var/www/html:ro
+    depends_on: [nextcloud]
+
+  nextcloud-cron:
+    <<: *common
+    image: nextcloud:31-fpm
+    entrypoint: /cron.sh
+    volumes:
+      - /opt/appdata/nextcloud/html:/var/www/html
+      - /mnt/nfs/Media/NextCloud:/var/www/html/data
+    depends_on: [nextcloud]
+
+  paperless:
+    <<: *common
+    image: ghcr.io/paperless-ngx/paperless-ngx:2
+    environment:
+      USERMAP_UID: ${PUID}
+      USERMAP_GID: ${PGID}
+      PAPERLESS_TIME_ZONE: ${TZ}
+      PAPERLESS_REDIS: redis://redis:6379/1
+      PAPERLESS_DBHOST: postgres
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: ${PAPERLESS_DB_PASSWORD}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_URL: https://paperless.${TS_TAILNET}
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_ENDPOINT: http://tika:9998
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
+    ports: ["8000:8000"]
+    volumes:
+      - /opt/appdata/paperless/data:/usr/src/paperless/data
+      - /mnt/nfs/Documents/paperless/media:/usr/src/paperless/media
+      - /mnt/nfs/Documents/paperless/consume:/usr/src/paperless/consume
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  gotenberg:
+    <<: *common
+    image: gotenberg/gotenberg:8
+    command: ["gotenberg", "--chromium-disable-javascript=true", "--chromium-allow-list=file:///tmp/.*"]
+
+  tika:
+    <<: *common
+    image: apache/tika:latest
+
+  stirling-pdf:
+    <<: *common
+    image: stirlingtools/stirling-pdf:latest
+    environment:
+      DOCKER_ENABLE_SECURITY: "false" # Authentik handles login
+    ports: ["8070:8080"]
+    volumes:
+      - /opt/appdata/stirling-pdf:/configs
+
+  n8n:
+    <<: *common
+    image: docker.n8n.io/n8nio/n8n:latest
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_HOST: n8n.${TS_TAILNET}
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.${TS_TAILNET}/
+      GENERIC_TIMEZONE: ${TZ}
+    ports: ["5678:5678"]
+    volumes:
+      - /opt/appdata/n8n:/home/node/.n8n
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  huginn:
+    <<: *common
+    image: ghcr.io/huginn/huginn:latest
+    environment:
+      DATABASE_ADAPTER: postgresql
+      DATABASE_HOST: postgres
+      DATABASE_NAME: huginn
+      DATABASE_USERNAME: huginn
+      DATABASE_PASSWORD: ${HUGINN_DB_PASSWORD}
+      APP_SECRET_TOKEN: ${HUGINN_SECRET_TOKEN}
+      TIMEZONE: ${TZ}
+    ports: ["3000:3000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  # --- ops tools ---
+  homepage:
+    <<: *common
+    image: ghcr.io/gethomepage/homepage:v1
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: home.${TS_TAILNET}
+    ports: ["3001:3000"]
+    volumes:
+      - ./homepage:/app/config
+
+  uptime-kuma:
+    <<: *common
+    image: louislam/uptime-kuma:1
+    ports: ["3002:3001"]
+    volumes:
+      - /opt/appdata/uptime-kuma:/app/data
+
+  # Scrutiny hub; collectors run on both Proxmox hosts, which can read the disks' SMART data.
+  scrutiny:
+    <<: *common
+    image: ghcr.io/analogj/scrutiny:master-web
+    ports: ["8087:8080"]
+    environment:
+      SCRUTINY_WEB_INFLUXDB_HOST: scrutiny-influx
+    volumes:
+      - /opt/appdata/scrutiny/config:/opt/scrutiny/config
+    depends_on: [scrutiny-influx]
+
+  scrutiny-influx:
+    <<: *common
+    image: influxdb:2.7
+    volumes:
+      - /opt/appdata/scrutiny/influxdb:/var/lib/influxdb2
+
+  # Watches images on every VM and posts new versions to n8n; nothing updates itself.
+  diun:
+    <<: *common
+    image: crazymax/diun:4
+    command: serve
+    environment:
+      TZ: ${TZ}
+      DIUN_WATCH_SCHEDULE: "0 */6 * * *"
+      DIUN_PROVIDERS_DOCKER: "true"
+      DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT: "true"
+      DIUN_NOTIF_WEBHOOK_ENDPOINT: http://n8n:5678/webhook/diun
+      DIUN_NOTIF_WEBHOOK_METHOD: POST
+    volumes:
+      - /opt/appdata/diun:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # Buttons for a fixed list of maintenance commands (olivetin/config.yaml). Nothing else.
+  olivetin:
+    <<: *common
+    image: jamesread/olivetin:latest
+    ports: ["1337:1337"]
+    volumes:
+      - ./olivetin:/config:ro
+
+  dockge:
+    <<: *common
+    image: louislam/dockge:1
+    environment:
+      DOCKGE_STACKS_DIR: /opt/stacks
+    ports: ["5001:5001"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/appdata/dockge:/app/data
+      - /opt/stacks:/opt/stacks
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

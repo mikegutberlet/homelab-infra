@@ -1,0 +1,217 @@
+# media VM (RicksGarage, beside TrueNAS). Everything runs as storage (uid/gid 3000) and sees
+# the NAS at /mnt/nfs, the same path the old Servarr VM used, so moves are hardlinks/renames
+# inside one dataset and migrated root folders keep working.
+
+x-common: &common
+  restart: unless-stopped
+  labels:
+    autoheal: "true"
+
+x-lsio-env: &lsio-env
+  PUID: ${PUID}
+  PGID: ${PGID}
+  TZ: ${TZ}
+  UMASK: "002"
+
+x-arr-health: &arr-health
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 60s
+
+services:
+  sonarr:
+    <<: *common
+    image: lscr.io/linuxserver/sonarr:latest
+    environment: *lsio-env
+    ports: ["8989:8989"]
+    volumes:
+      - /opt/appdata/sonarr:/config
+      - /mnt/nfs:/mnt/nfs
+    healthcheck:
+      <<: *arr-health
+      test: ["CMD", "curl", "-fsS", "http://localhost:8989/ping"]
+
+  radarr:
+    <<: *common
+    image: lscr.io/linuxserver/radarr:latest
+    environment: *lsio-env
+    ports: ["7878:7878"]
+    volumes:
+      - /opt/appdata/radarr:/config
+      - /mnt/nfs:/mnt/nfs
+    healthcheck:
+      <<: *arr-health
+      test: ["CMD", "curl", "-fsS", "http://localhost:7878/ping"]
+
+  prowlarr:
+    <<: *common
+    image: lscr.io/linuxserver/prowlarr:latest
+    environment: *lsio-env
+    ports: ["9696:9696"]
+    volumes:
+      - /opt/appdata/prowlarr:/config
+    healthcheck:
+      <<: *arr-health
+      test: ["CMD", "curl", "-fsS", "http://localhost:9696/ping"]
+
+  bazarr:
+    <<: *common
+    image: lscr.io/linuxserver/bazarr:latest
+    environment: *lsio-env
+    ports: ["6767:6767"]
+    volumes:
+      - /opt/appdata/bazarr:/config
+      - /mnt/nfs:/mnt/nfs
+    healthcheck:
+      <<: *arr-health
+      test: ["CMD", "curl", "-fsS", "http://localhost:6767/api/system/ping"]
+
+  sabnzbd:
+    <<: *common
+    image: lscr.io/linuxserver/sabnzbd:latest
+    environment: *lsio-env
+    ports: ["8080:8080"]
+    volumes:
+      - /opt/appdata/sabnzbd:/config
+      - /mnt/nfs:/mnt/nfs
+    healthcheck:
+      <<: *arr-health
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api?mode=version"]
+
+  # All torrent traffic leaves through PIA over WireGuard; if the tunnel drops,
+  # qBittorrent has no network at all (kill switch).
+  gluetun:
+    <<: *common
+    image: qmcgaw/gluetun:v3.40
+    cap_add: [NET_ADMIN]
+    devices: [/dev/net/tun]
+    environment:
+      TZ: ${TZ}
+      VPN_SERVICE_PROVIDER: private internet access
+      VPN_TYPE: openvpn
+      OPENVPN_USER: ${PIA_USER}
+      OPENVPN_PASSWORD: ${PIA_PASSWORD}
+      SERVER_REGIONS: ${PIA_REGION}
+      VPN_PORT_FORWARDING: "on"
+    ports: ["8085:8085"]
+    volumes:
+      - /opt/appdata/gluetun:/gluetun
+
+  qbittorrent:
+    <<: *common
+    image: lscr.io/linuxserver/qbittorrent:latest
+    network_mode: service:gluetun
+    environment:
+      <<: *lsio-env
+      WEBUI_PORT: 8085
+    volumes:
+      - /opt/appdata/qbittorrent:/config
+      - /mnt/nfs:/mnt/nfs
+    depends_on:
+      gluetun: {condition: service_healthy}
+    healthcheck:
+      <<: *arr-health
+      test: ["CMD", "curl", "-fsS", "http://localhost:8085/api/v2/app/version"]
+
+  recyclarr:
+    <<: *common
+    image: ghcr.io/recyclarr/recyclarr:7
+    user: ${PUID}:${PGID}
+    environment:
+      TZ: ${TZ}
+      CRON_SCHEDULE: "@daily"
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_API_KEY: ${RADARR_API_KEY}
+    volumes:
+      - ./recyclarr:/config
+
+  jellyseerr:
+    <<: *common
+    image: fallenbagel/jellyseerr:2
+    environment:
+      TZ: ${TZ}
+    ports: ["5055:5055"]
+    volumes:
+      - /opt/appdata/jellyseerr:/app/config
+    healthcheck:
+      <<: *arr-health
+      test: ["CMD", "wget", "-qO-", "http://localhost:5055/api/v1/status"]
+
+  metube:
+    <<: *common
+    image: ghcr.io/alexta69/metube:latest
+    user: ${PUID}:${PGID}
+    environment:
+      DOWNLOAD_DIR: /mnt/nfs/Media/meTube
+      STATE_DIR: /config
+    ports: ["8081:8081"]
+    volumes:
+      - /opt/appdata/metube:/config
+      - /mnt/nfs:/mnt/nfs
+
+  storyteller:
+    <<: *common
+    image: registry.gitlab.com/storyteller-platform/storyteller:latest
+    environment:
+      STORYTELLER_SECRET_KEY: ${STORYTELLER_SECRET_KEY}
+    ports: ["8001:8001"]
+    volumes:
+      - /opt/appdata/storyteller:/data
+      - /mnt/nfs/Media/Books:/books
+      - /mnt/nfs/Media/Audiobooks:/audiobooks:ro
+
+  audiobookshelf:
+    <<: *common
+    image: ghcr.io/advplyr/audiobookshelf:2
+    environment:
+      TZ: ${TZ}
+    ports: ["13378:80"]
+    volumes:
+      - /opt/appdata/audiobookshelf/config:/config
+      - /opt/appdata/audiobookshelf/metadata:/metadata
+      - /mnt/nfs/Media/Audiobooks:/audiobooks
+      - /mnt/nfs/Media/Podcasts:/podcasts
+
+  romm-db:
+    <<: *common
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: ${ROMM_DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: romm
+      MARIADB_USER: romm
+      MARIADB_PASSWORD: ${ROMM_DB_PASSWORD}
+    volumes:
+      - /opt/appdata/romm/db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      retries: 5
+
+  romm:
+    <<: *common
+    image: rommapp/romm:4
+    environment:
+      DB_HOST: romm-db
+      DB_NAME: romm
+      DB_USER: romm
+      DB_PASSWD: ${ROMM_DB_PASSWORD}
+      ROMM_AUTH_SECRET_KEY: ${ROMM_AUTH_SECRET_KEY}
+      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
+      IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET}
+    ports: ["8095:8080"]
+    volumes:
+      - /opt/appdata/romm/resources:/romm/resources
+      - /opt/appdata/romm/assets:/romm/assets
+      - /mnt/nfs/Media/Games:/romm/library
+    depends_on:
+      romm-db: {condition: service_healthy}
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

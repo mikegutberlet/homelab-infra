@@ -1,0 +1,6 @@
+# Secrets are encrypted to an age key that lives on Goobs's Mac and on each VM
+# (/root/.config/sops/age/keys.txt). Generate it with `age-keygen` and paste the
+# public key below before encrypting anything.
+creation_rules:
+  - path_regex: stacks/.*/secrets\.sops\.env$
+    age: age1REPLACE_WITH_PUBLIC_KEY

@@ -1,0 +1,7 @@
+*.tfstate
+*.tfstate.*
+.terraform/
+**/.env
+!**/.env.example
+*.agekey
+keys.txt

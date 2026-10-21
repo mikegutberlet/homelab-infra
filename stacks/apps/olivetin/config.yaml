@@ -1,0 +1,10 @@
+# Each button runs exactly one fixed command. Report-only actions; nothing here deletes files.
+# TODO: create the SSH key and restricted users before enabling these; verify the jdupes image.
+actions:
+  - title: Find duplicate media files (report only)
+    icon: search
+    shell: ssh -i /config/olivetin_ed25519 storage@192.168.1.51 'docker run --rm -v /mnt/nfs:/mnt/nfs:ro ghcr.io/jbruchon/jdupes:latest -r -m /mnt/nfs/Media'
+    timeout: 3600
+  - title: TrueNAS pool status
+    icon: hard-drive
+    shell: ssh -i /config/olivetin_ed25519 olivetin@192.168.1.209 'zpool status DeepData'

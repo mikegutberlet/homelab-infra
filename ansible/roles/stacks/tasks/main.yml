@@ -1,0 +1,37 @@
+- name: Stack and appdata folders
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ app_uid }}"
+    group: "{{ app_gid }}"
+    mode: "0750"
+  loop: ["{{ stacks_root }}", "{{ appdata_root }}"]
+
+- name: Copy each stack's Compose files
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../stacks/{{ item }}/"
+    dest: "{{ stacks_root }}/{{ item }}/"
+    delete: false
+    rsync_opts: ["--exclude=*.sops.env"]
+  loop: "{{ stacks }}"
+
+- name: Decrypt each stack's secrets into .env (age key lives only on the VM)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    SOPS_AGE_KEY_FILE=/root/.config/sops/age/keys.txt \
+      sops --decrypt --input-type dotenv --output-type dotenv /dev/stdin \
+      > {{ stacks_root }}/{{ item }}/.env
+    chmod 600 {{ stacks_root }}/{{ item }}/.env
+  args:
+    executable: /bin/bash
+    stdin: "{{ lookup('file', playbook_dir ~ '/../../stacks/' ~ item ~ '/secrets.sops.env') }}"
+  loop: "{{ stacks }}"
+  changed_when: true
+  no_log: true
+
+- name: Start or update each stack
+  ansible.builtin.command:
+    cmd: docker compose up -d --remove-orphans --wait --wait-timeout 300
+    chdir: "{{ stacks_root }}/{{ item }}"
+  loop: "{{ stacks }}"
+  changed_when: true
