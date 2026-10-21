@@ -22,6 +22,11 @@
     - Stirling PDF: {href: "https://pdf.{{HOMEPAGE_VAR_TAILNET}}", icon: stirling-pdf.png, siteMonitor: "http://192.168.1.53:8070/"}
     - n8n: {href: "https://n8n.{{HOMEPAGE_VAR_TAILNET}}", icon: n8n.png, siteMonitor: "http://192.168.1.53:5678/healthz"}
     - Huginn: {href: "https://huginn.{{HOMEPAGE_VAR_TAILNET}}", icon: huginn.png, siteMonitor: "http://192.168.1.53:3000/users/sign_in"}
+- AI:
+    # No status dot for Open WebUI: lanfw lets only the edge VM reach port 3010 (it trusts
+    # Authentik's X-authentik-email header), so Homepage on the apps VM can't check it.
+    - Open WebUI: {href: "https://chat.{{HOMEPAGE_VAR_TAILNET}}", icon: open-webui.png}
+    - AnythingLLM: {href: "https://anythingllm.{{HOMEPAGE_VAR_TAILNET}}", icon: anything-llm.png, siteMonitor: "http://192.168.1.54:3011/api/ping"}
 - Lab:
     - Status (Uptime Kuma): {href: "https://status.{{HOMEPAGE_VAR_TAILNET}}", icon: uptime-kuma.png, siteMonitor: "http://192.168.1.53:3002/"}
     - Disks (Scrutiny): {href: "https://disks.{{HOMEPAGE_VAR_TAILNET}}", icon: scrutiny.png, siteMonitor: "http://192.168.1.53:8087/"}

@@ -48,6 +48,8 @@ MONITORS = [
     ("Dockge", "http://192.168.1.53:5001/", False, ["200-299", "300-399"]),
     ("Edge (Traefik, TCP)", "192.168.1.50:80", False, None),  # Kuma isn't on the tailnet
     ("Piper (TCP)", "192.168.1.54:10200", False, None),
+    ("AnythingLLM", "http://192.168.1.54:3011/api/ping", False, None),
+    # Open WebUI (3010) has no monitor: lanfw lets only the edge VM reach it.
     ("TrueNAS", "https://192.168.1.209/", False, ["200-299", "300-399"]),
     ("Proxmox RicksGarage", "https://192.168.1.137:8006/", False, None),
     ("Proxmox RicksShip", "https://192.168.1.37:8006/", False, None),
