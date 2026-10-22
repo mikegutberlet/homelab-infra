@@ -9,8 +9,9 @@ token cannot set raw PCI devices). Inside the VM the `gpu` role installs the non
 media container gets `/dev/dri`. The host's console goes dark at boot because the GPU no longer
 belongs to it; that is expected.
 
-Mounts the NAS at `/mnt/nfs`; `Media` is read-only to every container except Tdarr once the
-re-encoding run starts. Stack: `stacks/gpu/compose.yaml`. The Skylake iGPU can hardware-decode H.264
+Mounts the NAS at `/mnt/nfs`; `Media` is read-only to every container except Tdarr, which has
+had it read-write (plus the `to-delete` holding folder) since PR #8 on 2026-10-22 for the
+re-encoding run. Stack: `stacks/gpu/compose.yaml`. The Skylake iGPU can hardware-decode H.264
 and 8-bit HEVC and encode both; it cannot decode 10-bit HEVC or AV1, which fall back to CPU.
 
 ```mermaid
@@ -92,7 +93,7 @@ flowchart LR
 | Image | `ghcr.io/haveagitgat/tdarr:latest` (5.8 GB), internal node `gpu-vm`, ports 8265 (UI) and 8266 (server) |
 | Address | https://tdarr.tail9af84.ts.net (SSO) |
 | Data | `/opt/appdata/tdarr/{server,configs,logs}`; transcode cache `/opt/appdata/transcode/tdarr` on local disk, never NFS |
-| Media mount | `/mnt/nfs/Media` **read-only in the merged compose**. The plan switches it to read-write on a branch with a PR when the full run starts; at the time of writing the run is on hold behind the Radarr folder-rename task |
+| Media mount | `/mnt/nfs/Media` **read-write** and `/mnt/nfs/to-delete` mounted for the holding folder since PR #8 (merged 2026-10-22). Tdarr replaces files in place, so this is the one container besides Radarr/Sonarr that can change the library. The full run is on hold behind the Radarr folder-rename task |
 | Settings decided | See [Media library projects](../06-media-library.md#tdarr-settings) |
 | Health | No Compose healthcheck; no Kuma monitor yet |
 
