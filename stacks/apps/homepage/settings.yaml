@@ -1,0 +1,14 @@
+title: Home Lab
+headerStyle: boxed
+theme: dark
+color: slate
+hideVersion: true
+statusStyle: dot
+# Widgets check LAN addresses; the Proxmox and TrueNAS pages use self-signed certificates.
+layout:
+  Watch: {style: row, columns: 3}
+  Downloads: {style: row, columns: 3}
+  Apps: {style: row, columns: 3}
+  AI: {style: row, columns: 3}
+  Lab: {style: row, columns: 4}
+  Hosts: {style: row, columns: 3}

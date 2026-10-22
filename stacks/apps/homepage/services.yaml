@@ -1,38 +1,296 @@
-# Links go through Tailscale (https://<app>.<tailnet>); siteMonitor checks the LAN address from
-# the apps VM, which the lanfw firewall allows. Widgets with API keys can be added later.
+# Every app on the five VMs. Links go through Tailscale (https://<app>.<tailnet>); siteMonitor
+# and the widgets talk to the LAN address from the apps VM, which the lanfw firewall allows
+# (lab VMs .50-.54 reach every published port).
+#
+# Widget credentials come from the apps stack secrets (secrets.sops.env) as HOMEPAGE_VAR_*
+# environment variables on the homepage container; see compose.yaml. A widget whose variable
+# is still empty shows an error tile but the link and the status dot keep working.
 - Watch:
-    - Plex: {href: "https://plex.{{HOMEPAGE_VAR_TAILNET}}/web", icon: plex.png, siteMonitor: "http://192.168.1.52:32400/identity"}
-    - Emby: {href: "https://emby.{{HOMEPAGE_VAR_TAILNET}}", icon: emby.png, siteMonitor: "http://192.168.1.52:8096/emby/System/Ping"}
-    - Requests: {href: "https://requests.{{HOMEPAGE_VAR_TAILNET}}", icon: jellyseerr.png, siteMonitor: "http://192.168.1.51:5055/api/v1/status"}
-    - Audiobooks: {href: "https://audiobooks.{{HOMEPAGE_VAR_TAILNET}}", icon: audiobookshelf.png, siteMonitor: "http://192.168.1.51:13378/healthcheck"}
-    - Storyteller: {href: "https://storyteller.{{HOMEPAGE_VAR_TAILNET}}", icon: mdi-book-open-page-variant, siteMonitor: "http://192.168.1.51:8001/"}
-    - RomM: {href: "https://romm.{{HOMEPAGE_VAR_TAILNET}}", icon: romm.png, siteMonitor: "http://192.168.1.51:8095/"}
-    - MeTube: {href: "https://metube.{{HOMEPAGE_VAR_TAILNET}}", icon: metube.png, siteMonitor: "http://192.168.1.51:8081/"}
+    - Plex:
+        href: "https://plex.{{HOMEPAGE_VAR_TAILNET}}/web"
+        description: Movies and TV (gpu VM)
+        icon: plex.png
+        siteMonitor: "http://192.168.1.52:32400/identity"
+        widget:
+          type: plex
+          url: "http://192.168.1.52:32400"
+          key: "{{HOMEPAGE_VAR_PLEX_TOKEN}}"
+    - Emby:
+        href: "https://emby.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Movies and TV (gpu VM)
+        icon: emby.png
+        siteMonitor: "http://192.168.1.52:8096/emby/System/Ping"
+        widget:
+          type: emby
+          url: "http://192.168.1.52:8096"
+          key: "{{HOMEPAGE_VAR_EMBY_KEY}}"
+          enableBlocks: true
+          enableNowPlaying: true
+    - Requests:
+        href: "https://requests.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Jellyseerr, ask for a movie or show
+        icon: jellyseerr.png
+        siteMonitor: "http://192.168.1.51:5055/api/v1/status"
+        widget:
+          type: jellyseerr
+          url: "http://192.168.1.51:5055"
+          key: "{{HOMEPAGE_VAR_JELLYSEERR_KEY}}"
+    - ErsatzTV:
+        href: "https://ersatztv.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Live TV channels from the library
+        icon: ersatztv.png
+        siteMonitor: "http://192.168.1.52:8409/"
+    - Photos:
+        href: "https://photos.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Immich
+        icon: immich.png
+        siteMonitor: "http://192.168.1.52:2283/api/server/ping"
+        widget:
+          type: immich
+          url: "http://192.168.1.52:2283"
+          key: "{{HOMEPAGE_VAR_IMMICH_KEY}}"
+          version: 2
+    - Audiobooks:
+        href: "https://audiobooks.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Audiobookshelf
+        icon: audiobookshelf.png
+        siteMonitor: "http://192.168.1.51:13378/healthcheck"
+        widget:
+          type: audiobookshelf
+          url: "http://192.168.1.51:13378"
+          key: "{{HOMEPAGE_VAR_AUDIOBOOKSHELF_KEY}}"
+    - Storyteller:
+        href: "https://storyteller.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Ebooks synced with audiobooks
+        icon: mdi-book-open-page-variant
+        siteMonitor: "http://192.168.1.51:8001/"
+    - RomM:
+        href: "https://romm.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Retro games
+        icon: romm.png
+        siteMonitor: "http://192.168.1.51:8095/api/heartbeat"
+        widget:
+          type: romm
+          url: "http://192.168.1.51:8095"
+          username: "{{HOMEPAGE_VAR_ROMM_USER}}"
+          password: "{{HOMEPAGE_VAR_ROMM_PASSWORD}}"
+          fields: [platforms, totalRoms, saves, states]
+    - MeTube:
+        href: "https://metube.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Download videos from the web
+        icon: metube.png
+        siteMonitor: "http://192.168.1.51:8081/"
+
 - Downloads:
-    - Sonarr: {href: "https://sonarr.{{HOMEPAGE_VAR_TAILNET}}", icon: sonarr.png, siteMonitor: "http://192.168.1.51:8989/ping"}
-    - Radarr: {href: "https://radarr.{{HOMEPAGE_VAR_TAILNET}}", icon: radarr.png, siteMonitor: "http://192.168.1.51:7878/ping"}
-    - Prowlarr: {href: "https://prowlarr.{{HOMEPAGE_VAR_TAILNET}}", icon: prowlarr.png, siteMonitor: "http://192.168.1.51:9696/ping"}
-    - Bazarr: {href: "https://bazarr.{{HOMEPAGE_VAR_TAILNET}}", icon: bazarr.png, siteMonitor: "http://192.168.1.51:6767/"}
-    - SABnzbd: {href: "https://sabnzbd.{{HOMEPAGE_VAR_TAILNET}}", icon: sabnzbd.png, siteMonitor: "http://192.168.1.51:8080/"}
-    - qBittorrent: {href: "https://qbittorrent.{{HOMEPAGE_VAR_TAILNET}}", icon: qbittorrent.png, siteMonitor: "http://192.168.1.51:8085/"}
-    - Tautulli: {href: "https://tautulli.{{HOMEPAGE_VAR_TAILNET}}", icon: tautulli.png, siteMonitor: "http://192.168.1.53:8181/status"}
+    - Sonarr:
+        href: "https://sonarr.{{HOMEPAGE_VAR_TAILNET}}"
+        description: TV shows
+        icon: sonarr.png
+        siteMonitor: "http://192.168.1.51:8989/ping"
+        widget:
+          type: sonarr
+          url: "http://192.168.1.51:8989"
+          key: "{{HOMEPAGE_VAR_SONARR_KEY}}"
+          enableQueue: true
+    - Radarr:
+        href: "https://radarr.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Movies
+        icon: radarr.png
+        siteMonitor: "http://192.168.1.51:7878/ping"
+        widget:
+          type: radarr
+          url: "http://192.168.1.51:7878"
+          key: "{{HOMEPAGE_VAR_RADARR_KEY}}"
+          enableQueue: true
+    - Prowlarr:
+        href: "https://prowlarr.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Indexers
+        icon: prowlarr.png
+        siteMonitor: "http://192.168.1.51:9696/ping"
+        widget:
+          type: prowlarr
+          url: "http://192.168.1.51:9696"
+          key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"
+    - Bazarr:
+        href: "https://bazarr.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Subtitles
+        icon: bazarr.png
+        siteMonitor: "http://192.168.1.51:6767/"
+        widget:
+          type: bazarr
+          url: "http://192.168.1.51:6767"
+          key: "{{HOMEPAGE_VAR_BAZARR_KEY}}"
+    - SABnzbd:
+        href: "https://sabnzbd.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Usenet (primary)
+        icon: sabnzbd.png
+        siteMonitor: "http://192.168.1.51:8080/"
+        widget:
+          type: sabnzbd
+          url: "http://192.168.1.51:8080"
+          key: "{{HOMEPAGE_VAR_SABNZBD_KEY}}"
+    - qBittorrent:
+        href: "https://qbittorrent.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Torrents (fallback, through PIA)
+        icon: qbittorrent.png
+        siteMonitor: "http://192.168.1.51:8085/"
+        widget:
+          type: qbittorrent
+          url: "http://192.168.1.51:8085"
+          username: "{{HOMEPAGE_VAR_QBITTORRENT_USER}}"
+          password: "{{HOMEPAGE_VAR_QBITTORRENT_PASSWORD}}"
+    - Tautulli:
+        href: "https://tautulli.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Plex statistics
+        icon: tautulli.png
+        siteMonitor: "http://192.168.1.53:8181/status"
+        widget:
+          type: tautulli
+          url: "http://192.168.1.53:8181"
+          key: "{{HOMEPAGE_VAR_TAUTULLI_KEY}}"
+    - Tdarr:
+        href: "https://tdarr.{{HOMEPAGE_VAR_TAILNET}}"
+        description: H.265 conversion (Intel iGPU)
+        icon: tdarr.png
+        siteMonitor: "http://192.168.1.52:8265/"
+        widget:
+          type: tdarr
+          url: "http://192.168.1.52:8265"
+    - Unmanic:
+        href: "https://unmanic.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Library optimiser (no libraries yet)
+        icon: unmanic.png
+        siteMonitor: "http://192.168.1.52:8888/"
+
 - Apps:
-    - Nextcloud: {href: "https://cloud.{{HOMEPAGE_VAR_TAILNET}}", icon: nextcloud.png, siteMonitor: "http://192.168.1.53:8090/status.php"}
-    - Paperless: {href: "https://paperless.{{HOMEPAGE_VAR_TAILNET}}", icon: paperless-ngx.png, siteMonitor: "http://192.168.1.53:8000/"}
-    - Stirling PDF: {href: "https://pdf.{{HOMEPAGE_VAR_TAILNET}}", icon: stirling-pdf.png, siteMonitor: "http://192.168.1.53:8070/"}
-    - n8n: {href: "https://n8n.{{HOMEPAGE_VAR_TAILNET}}", icon: n8n.png, siteMonitor: "http://192.168.1.53:5678/healthz"}
-    - Huginn: {href: "https://huginn.{{HOMEPAGE_VAR_TAILNET}}", icon: huginn.png, siteMonitor: "http://192.168.1.53:3000/users/sign_in"}
+    - Nextcloud:
+        href: "https://cloud.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Files, calendar, contacts
+        icon: nextcloud.png
+        siteMonitor: "http://192.168.1.53:8090/status.php"
+        widget:
+          type: nextcloud
+          url: "http://192.168.1.53:8090"
+          key: "{{HOMEPAGE_VAR_NEXTCLOUD_TOKEN}}"
+    - Paperless:
+        href: "https://paperless.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Scanned documents
+        icon: paperless-ngx.png
+        siteMonitor: "http://192.168.1.53:8000/"
+        widget:
+          type: paperlessngx
+          url: "http://192.168.1.53:8000"
+          key: "{{HOMEPAGE_VAR_PAPERLESS_TOKEN}}"
+    - Stirling PDF:
+        href: "https://pdf.{{HOMEPAGE_VAR_TAILNET}}"
+        description: PDF tools
+        icon: stirling-pdf.png
+        siteMonitor: "http://192.168.1.53:8070/"
+    - n8n:
+        href: "https://n8n.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Automation and the daily digest
+        icon: n8n.png
+        siteMonitor: "http://192.168.1.53:5678/healthz"
+    - Huginn:
+        href: "https://huginn.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Agents
+        icon: huginn.png
+        siteMonitor: "http://192.168.1.53:3000/users/sign_in"
+
 - AI:
     # No status dot for Open WebUI: lanfw lets only the edge VM reach port 3010 (it trusts
     # Authentik's X-authentik-email header), so Homepage on the apps VM can't check it.
-    - Open WebUI: {href: "https://chat.{{HOMEPAGE_VAR_TAILNET}}", icon: open-webui.png}
-    - AnythingLLM: {href: "https://anythingllm.{{HOMEPAGE_VAR_TAILNET}}", icon: anything-llm.png, siteMonitor: "http://192.168.1.54:3011/api/ping"}
+    - Open WebUI:
+        href: "https://chat.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Chat (Gemini)
+        icon: open-webui.png
+    - AnythingLLM:
+        href: "https://anythingllm.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Documents and workspaces
+        icon: anything-llm.png
+        siteMonitor: "http://192.168.1.54:3011/api/ping"
+    - Piper:
+        description: Text to speech (Wyoming, port 10200, no web page)
+        icon: mdi-account-voice
+        siteMonitor: "tcp://192.168.1.54:10200"
+
 - Lab:
-    - Status (Uptime Kuma): {href: "https://status.{{HOMEPAGE_VAR_TAILNET}}", icon: uptime-kuma.png, siteMonitor: "http://192.168.1.53:3002/"}
-    - Disks (Scrutiny): {href: "https://disks.{{HOMEPAGE_VAR_TAILNET}}", icon: scrutiny.png, siteMonitor: "http://192.168.1.53:8087/"}
-    - Dockge: {href: "https://dockge.{{HOMEPAGE_VAR_TAILNET}}", icon: dockge.png, siteMonitor: "http://192.168.1.53:5001/"}
-    - OliveTin: {href: "https://olivetin.{{HOMEPAGE_VAR_TAILNET}}", icon: olivetin.png}
-    - Authentik: {href: "https://auth.{{HOMEPAGE_VAR_TAILNET}}", icon: authentik.png}
-    - Proxmox RicksGarage: {href: "https://192.168.1.137:8006", icon: proxmox.png}
-    - Proxmox RicksShip: {href: "https://192.168.1.37:8006", icon: proxmox.png}
-    - TrueNAS: {href: "https://192.168.1.209", icon: truenas.png}
+    - Status:
+        href: "https://status.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Uptime Kuma
+        icon: uptime-kuma.png
+        siteMonitor: "http://192.168.1.53:3002/"
+        widget:
+          type: uptimekuma
+          url: "http://192.168.1.53:3002"
+          slug: homelab # Kuma status page "homelab" (created with the widget keys)
+    - Disks:
+        href: "https://disks.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Scrutiny, SMART on both hosts
+        icon: scrutiny.png
+        siteMonitor: "http://192.168.1.53:8087/"
+        widget:
+          type: scrutiny
+          url: "http://192.168.1.53:8087"
+    - Dockge:
+        href: "https://dockge.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Compose stacks
+        icon: dockge.png
+        siteMonitor: "http://192.168.1.53:5001/"
+    - OliveTin:
+        href: "https://olivetin.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Maintenance buttons
+        icon: olivetin.png
+        siteMonitor: "http://192.168.1.53:1337/"
+    - Authentik:
+        href: "https://auth.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Single sign-on
+        icon: authentik.png
+        siteMonitor: "http://192.168.1.50:9000/-/health/live/"
+    - Traefik:
+        description: Reverse proxy on the edge VM
+        icon: traefik.png
+        siteMonitor: "http://192.168.1.50/ping"
+    - Tailscale:
+        href: "https://login.tailscale.com/admin/machines"
+        description: Tailnet admin (subnet router on the edge VM)
+        icon: tailscale.png
+    - WireGuard:
+        href: "https://wireguard.{{HOMEPAGE_VAR_TAILNET}}"
+        description: wg-easy, backup VPN (not enabled yet)
+        icon: wireguard.png
+
+- Hosts:
+    - Proxmox RicksGarage:
+        href: "https://192.168.1.137:8006"
+        description: NUC with the DAS, TrueNAS, edge and media VMs
+        icon: proxmox.png
+        siteMonitor: "https://192.168.1.137:8006/"
+        widget:
+          type: proxmox
+          url: "https://192.168.1.137:8006"
+          username: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_ID}}"
+          password: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET}}"
+          node: ricksgarage
+    - Proxmox RicksShip:
+        href: "https://192.168.1.37:8006"
+        description: NUC with the gpu, apps and ai VMs
+        icon: proxmox.png
+        siteMonitor: "https://192.168.1.37:8006/"
+        widget:
+          type: proxmox
+          url: "https://192.168.1.37:8006"
+          username: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_ID}}"
+          password: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET}}"
+          node: ricksship
+    - TrueNAS:
+        href: "https://192.168.1.209"
+        description: DeepData pool (RAIDZ1, five 20 TB drives)
+        icon: truenas.png
+        siteMonitor: "https://192.168.1.209/"
+        widget:
+          type: truenas
+          url: "https://192.168.1.209"
+          key: "{{HOMEPAGE_VAR_TRUENAS_KEY}}"
+          enablePools: true
+          nasType: scale
