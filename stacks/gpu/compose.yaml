@@ -142,6 +142,7 @@ services:
     volumes:
       - /opt/appdata/tdarr/server:/app/server
       - /opt/appdata/tdarr/configs:/app/configs
+      - ./tdarr-init:/custom-cont-init.d:ro # adds abc to gid 1000 (group_add alone doesn't reach it)
       - /opt/appdata/tdarr/logs:/app/logs
       - /opt/appdata/transcode/tdarr:/temp # local disk, never NFS
       # Read-write since 2026-10-21: Tdarr re-encodes H.264 movies to HEVC in place (Goobs's OK).

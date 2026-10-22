@@ -1,0 +1,6 @@
+#!/bin/bash
+# Adds Tdarr's user (abc, uid 3000) to gid 1000 at container start. 870 movie folders on the NAS
+# are goobs:goobs (1000) 0775, and Compose's group_add only reaches PID 1, not the processes
+# s6 starts as abc. Runs from /custom-cont-init.d (root-owned, read-only mount).
+getent group 1000 >/dev/null || groupadd -g 1000 nasgoobs
+usermod -aG "$(getent group 1000 | cut -d: -f1)" abc
