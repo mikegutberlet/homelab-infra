@@ -128,7 +128,7 @@ sonarr:
           assign_scores_to: [name: *sonarr_foreign]
         - trash_id: 85fae4a2294965b75710ef2989c850eb # HD/UHD Streaming Boost
           assign_scores_to: [name: *sonarr_foreign]
-        - trash_id: f8bf8eab4617f12dfdbd16303d8da245 # Golden Rule HD (x265 (HD))
+        - trash_id: 158188097a58d7687dee647e04af0da3 # Golden Rule HD (x265 (HD))
           assign_scores_to: [name: *sonarr_foreign]
 
 radarr:
