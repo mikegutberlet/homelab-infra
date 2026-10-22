@@ -87,7 +87,7 @@
     daemon_reload: true
 
 # The ops door: only when the public key is set (ansible/inventory/group_vars/docker_vms.yml).
-- name: ops user (no password, no shell of its own: every login runs the forced command)
+- name: ops user (password locked; every login runs the forced command)
   ansible.builtin.user:
     name: ops
     shell: /bin/bash

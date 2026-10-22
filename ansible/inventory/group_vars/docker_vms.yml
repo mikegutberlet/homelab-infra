@@ -32,4 +32,4 @@ ops_report_url: http://192.168.1.53:5678/webhook/homelab/report
 ops_never: [n8n, postgres, redis, autoheal, tailscale, immich-db, immich-redis, romm-db, authentik-db, authentik-redis, scrutiny-influx]
 # Public half of the key n8n uses for the ops door (private key only in n8n's credential store).
 # Generate on the Mac: ssh-keygen -t ed25519 -N '' -C n8n-ops -f ~/.config/homelab/ops_ed25519
-# ops_pubkey: "ssh-ed25519 AAAA... n8n-ops"
+ops_pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFvwWu+OpdSLNembAGzQTtZI24dBIUjrhZ79ImzoXJky n8n-ops"
