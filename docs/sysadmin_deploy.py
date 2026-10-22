@@ -47,6 +47,17 @@ def n8n_json(cmd):
     return json.loads(out[start:]) if start >= 0 else []
 
 
+def list_workflows():
+    """name -> id from `n8n list:workflow`, which prints plain 'id|name' lines (no JSON flag in n8n 2.x)."""
+    out = ssh(f"{N8N} n8n list:workflow", check=False)
+    found = {}
+    for line in out.splitlines():
+        if "|" in line and " " not in line.split("|", 1)[0]:
+            wid, name = line.strip().split("|", 1)
+            found[name] = wid
+    return found
+
+
 def new_id():
     return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
 
@@ -86,11 +97,13 @@ ssh(f"{N8N} sh -c 'cat > /tmp/creds.json && n8n import:credentials --input=/tmp/
 
 print("Importing the workflow...")
 wf = builder.build(ids, {"Gmail SMTP": smtp_name})
-workflows = {w["name"]: w["id"] for w in n8n_json("n8n list:workflow --output=json") if isinstance(w, dict)}
+workflows = list_workflows()
 if "Homelab sysadmin" in workflows:
     wf["id"] = workflows["Homelab sysadmin"]
 ssh(f"{N8N} sh -c 'cat > /tmp/wf.json && n8n import:workflow --input=/tmp/wf.json; rm -f /tmp/wf.json'", stdin=json.dumps(wf))
-workflows = {w["name"]: w["id"] for w in n8n_json("n8n list:workflow --output=json") if isinstance(w, dict)}
+workflows = list_workflows()
+if "Homelab sysadmin" not in workflows:
+    sys.exit("The import did not produce a 'Homelab sysadmin' workflow; check n8n > Workflows before re-running.")
 if "Homelab digest" in workflows:
     ssh(f"{N8N} n8n update:workflow --id={workflows['Homelab digest']} --active=false", check=False)
     print("  old 'Homelab digest' deactivated (kept)")
