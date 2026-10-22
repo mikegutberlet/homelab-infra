@@ -48,7 +48,8 @@ to have. Public trackers only. Never a cam, telesync or screener; nothing below 
 | Knaben         | on, Sonarr + Radarr                      |
 | TorrentDownload| on, Sonarr + Radarr                      |
 | LimeTorrents   | on, Sonarr only (Radarr rejects it: "no results in configured categories") |
-| 1337x, EZTV    | behind Cloudflare: need the FlareSolverr container (`flaresolverr`, Prowlarr indexer proxy, tag `flaresolverr`) |
+| 1337x          | on, Sonarr + Radarr, through FlareSolverr (indexer proxy, tag `flaresolverr`) |
+| EZTV           | on, Sonarr only (TV tracker), through FlareSolverr |
 | BitSearch, TheRARBG | not in this Prowlarr version        |
 
 ## Quality floor (both apps)
@@ -62,6 +63,9 @@ to have. Public trackers only. Never a cam, telesync or screener; nothing below 
   CAM/HDCAM/TS/HDTS/TELESYNC/TC/HDTC/TELECINE/SCR/SCREENER/DVDSCR/WORKPRINT/R5/PDVD/PreDVD),
   scored -10000 in both profiles; listed in Recyclarr's `reset_unmatched_scores.except` so
   the daily sync keeps the score.
+- Jellyseerr's default profiles are the Recyclarr-managed ones ("Anything Not terrible" / "Anything
+  Not Terrible ") since 2026-10-22, so requests follow the same rules; the "No CAM/TS/Screener"
+  format is scored -10000 in every other profile too.
 - Radarr minimum availability **Released** on every movie and as Jellyseerr's default: Radarr
   only searches once a movie has a digital/physical release, so the cam-era window is skipped;
   a good WEB-DL at digital release still comes in early.
