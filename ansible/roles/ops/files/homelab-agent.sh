@@ -66,7 +66,8 @@ mounts_json() {
   ls /mnt/backups >/dev/null 2>&1
   findmnt -rn -t nfs,nfs4 --mountpoint /mnt/backups >/dev/null 2>&1 && bk_mounted=true
   timeout 5 bash -c "</dev/tcp/$NAS_IP/2049" 2>/dev/null && nas_up=true
-  local wait_nas; wait_nas=$(systemctl is-active wait-nas 2>/dev/null || echo "absent")
+  local wait_nas; wait_nas=$(systemctl is-active wait-nas 2>/dev/null); [ -n "$wait_nas" ] || wait_nas=absent
+  [ "$wait_nas" = inactive ] && ! systemctl cat wait-nas >/dev/null 2>&1 && wait_nas=absent
   j -n --argjson m "$nfs_mounted" --argjson e "$nfs_nonempty" --argjson b "$bk_mounted" \
     --argjson n "$nas_up" --arg w "$wait_nas" \
     '{nfs:{mounted:$m, nonempty:$e}, backups_mounted:$b, nas_tcp_2049:$n, wait_nas:$w}'
@@ -77,7 +78,8 @@ backup_json() {
   local last_ok=null last_rc=null newest=null newest_bytes=null prev_bytes=null timer_next=null
   local base; base="/mnt/backups/$(hostname)"
   # Last successful run: the newest "backup /mnt/backups/..." line in the journal.
-  local t; t=$(journalctl -u homelab-backup -o short-unix --no-pager -g '^backup /mnt/backups' 2>/dev/null | tail -1 | cut -d. -f1)
+  # homelab-backup logs "<date> <time> backup /mnt/backups/<host>/<day>: <size>" on success.
+  local t; t=$(journalctl -u homelab-backup -o short-unix --no-pager -g 'backup /mnt/backups' 2>/dev/null | tail -1 | cut -d. -f1)
   [[ "$t" =~ ^[0-9]+$ ]] && last_ok=$t
   local rc; rc=$(systemctl show homelab-backup.service -p ExecMainStatus --value 2>/dev/null)
   [[ "$rc" =~ ^[0-9]+$ ]] && last_rc=$rc
@@ -226,13 +228,17 @@ edge_json() {
       online:(.Self.Online // false), key_expiry:(.Self.KeyExpiry // null),
       key_days_left:(if .Self.KeyExpiry then (((.Self.KeyExpiry|sub("\\.[0-9]+";"")|fromdate) - $now)/86400|floor) else null end),
       routes:(.Self.PrimaryRoutes // []), peers_online:([.Peer[]? | select(.Online)] | length)}' <<<"$ts" 2>/dev/null || echo '{}')
-  # One TLS handshake per ts.net name that TSDProxy publishes (apps.yaml keys).
+  # One TLS handshake per ts.net name that TSDProxy publishes (apps.yaml keys). The VM's own
+  # resolver knows nothing about MagicDNS, so each name is resolved through the tailscale
+  # container (the TSDProxy nodes are its peers) and the handshake goes to that IP with SNI.
   local tailnet; tailnet=$(sed -n 's/^TS_TAILNET=//p' /opt/stacks/edge/.env 2>/dev/null | tr -d '"')
   local certs='[]'
   if [ -n "$tailnet" ] && [ -r /opt/stacks/edge/tsdproxy/apps.yaml ]; then
     certs=$(grep -E '^[a-z0-9-]+:$' /opt/stacks/edge/tsdproxy/apps.yaml | tr -d ':' | while read -r app; do
-      local host="$app.$tailnet" exp days ok=false
-      exp=$(timeout 15 openssl s_client -servername "$host" -connect "$host:443" </dev/null 2>/dev/null \
+      local host="$app.$tailnet" exp days ok=false ip
+      ip=$(jq -r --arg h "$host." '[.Peer[]? | select(.DNSName == $h) | .TailscaleIPs[0]] | first // empty' <<<"$ts")
+      [ -n "$ip" ] || ip=$(docker exec edge-tailscale-1 nslookup "$host" 100.100.100.100 2>/dev/null | awk '/^Address/ && $2 !~ /100\.100\.100\.100/ {print $2; exit}')
+      exp=$(timeout 15 openssl s_client -servername "$host" -connect "${ip:-$host}:443" </dev/null 2>/dev/null \
             | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
       if [ -n "$exp" ]; then ok=true; days=$(( ($(date -d "$exp" +%s) - now) / 86400 )); else days=null; fi
       jq -c -n --arg h "$host" --argjson ok "$ok" --argjson d "$days" '{host:$h, ok:$ok, days_left:$d}'

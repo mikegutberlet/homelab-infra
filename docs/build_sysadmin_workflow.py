@@ -36,8 +36,11 @@ nodes, conn = [], {}
 CRED_IDS = {}  # credential name -> id, filled by docs/sysadmin_deploy.py so the import needs no clicking
 
 
+CRED_NAMES = {}  # lookup key -> the credential's real name in n8n, when it differs
+
+
 def cred(kind, name):
-    return {kind: {"id": CRED_IDS[name], "name": name}} if name in CRED_IDS else None
+    return {kind: {"id": CRED_IDS[name], "name": CRED_NAMES.get(name, name)}} if name in CRED_IDS else None
 
 
 def node(name, type_, version, pos, params, **extra):
@@ -74,9 +77,10 @@ def email(name, pos):
     return node(name, "n8n-nodes-base.emailSend", 2.1, pos, {"fromEmail": MAIL_FROM, "toEmail": MAIL_TO, "subject": "={{ $json.subject }}", "emailFormat": "text", "text": "={{ $json.text }}", "options": {}}, **({"credentials": c} if c else {}))
 
 
-def build(cred_ids=None):
+def build(cred_ids=None, cred_names=None):
     """Return the workflow dict; cred_ids maps credential names to n8n ids (optional)."""
     nodes.clear(); conn.clear(); CRED_IDS.clear(); CRED_IDS.update(cred_ids or {})
+    CRED_NAMES.clear(); CRED_NAMES.update(cred_names or {})
     _build()
     return {"name": "Homelab sysadmin", "nodes": list(nodes), "connections": dict(conn),
             "settings": {"executionOrder": "v1", "timezone": "America/Los_Angeles", "saveExecutionProgress": False}}

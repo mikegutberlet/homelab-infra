@@ -61,9 +61,14 @@ if not pve_secret or not nas_key:
     sys.exit("Proxmox token secret or TrueNAS key missing in the apps VM's .env; run docs/homepage_keys.py first.")
 
 print("Existing credentials...")
-existing = {c["name"]: c["id"] for c in n8n_json("n8n export:credentials --all")}
-if "Gmail SMTP" not in existing:
-    sys.exit("No 'Gmail SMTP' credential in n8n; create it in the UI first (Credentials > SMTP).")
+all_creds = n8n_json("n8n export:credentials --all")
+existing = {c["name"]: c["id"] for c in all_creds}
+# The Gmail app-password credential: "Gmail SMTP" by name, else the only SMTP-type credential.
+smtp = [c for c in all_creds if c.get("type") == "smtp"]
+smtp_name = "Gmail SMTP" if "Gmail SMTP" in existing else (smtp[0]["name"] if len(smtp) == 1 else None)
+if not smtp_name:
+    sys.exit(f"Need exactly one SMTP credential in n8n (found {[c['name'] for c in smtp]}); create or rename it in the UI first.")
+print(f"  using SMTP credential '{smtp_name}'")
 ids = {}
 creds = []
 for h in HOSTS:
@@ -74,13 +79,13 @@ for h in HOSTS:
 for name, value in (("Proxmox API token", f"PVEAPIToken=homepage@pve!homepage={pve_secret}"), ("TrueNAS API key", f"Bearer {nas_key}")):
     ids[name] = existing.get(name, new_id())
     creds.append({"id": ids[name], "name": name, "type": "httpHeaderAuth", "data": {"name": "Authorization", "value": value}})
-ids["Gmail SMTP"] = existing["Gmail SMTP"]
+ids["Gmail SMTP"] = existing[smtp_name]
 
 print("Importing credentials...")
 ssh(f"{N8N} sh -c 'cat > /tmp/creds.json && n8n import:credentials --input=/tmp/creds.json; rm -f /tmp/creds.json'", stdin=json.dumps(creds))
 
 print("Importing the workflow...")
-wf = builder.build(ids)
+wf = builder.build(ids, {"Gmail SMTP": smtp_name})
 workflows = {w["name"]: w["id"] for w in n8n_json("n8n list:workflow --output=json") if isinstance(w, dict)}
 if "Homelab sysadmin" in workflows:
     wf["id"] = workflows["Homelab sysadmin"]
