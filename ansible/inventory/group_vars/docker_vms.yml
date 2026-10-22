@@ -18,6 +18,8 @@ nfs_shares:
     opts: "nfsvers=4.2,nconnect=4,hard,noatime,_netdev,x-systemd.automount,x-systemd.mount-timeout=30"
 nfs_readahead_kb: 4096 # kernel default 128; sequential media reads over 1 GbE (role nfs)
 
+swap_mb: 2048 # role base; media overrides (hosts.yml)
+
 timezone: America/Los_Angeles # same as the Proxmox hosts and TrueNAS
 
 # lanfw: interface the LAN arrives on (Debian cloud image).

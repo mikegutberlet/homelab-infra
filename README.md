@@ -81,5 +81,9 @@ Things learned the hard way:
   Each Proxmox host pings healthchecks.io every 5 min (`playbooks/proxmox-heartbeat.yml`), which is
   the only alert that works while the lab is dark. Set the NUC BIOS to "After Power Failure: Power On".
   A UPS with NUT for a clean shutdown is the plan; see the "Power outage plan" doc.
-- RicksGarage is tight on RAM (TrueNAS 16 GB + edge 3 + media 6): media's balloon floor
-  is 5 GB because 3 GB starved it.
+- RAM per host (sized 2026-10-22 from live use): RicksGarage = TrueNAS 16 + edge 4 + media 8
+  (fixed, no ballooning) = 28 of 31 GiB; RicksShip = gpu 10 + apps 10 + ai 4 = 24 of 31 GiB, the
+  spare kept for Ollama/Kasm later. The old VMs 113 (8 GB) and 117 (12 GB) must stay off: either one
+  overcommits its host. Every Docker VM has a swap file (media 4 GB, others 2 GB, swappiness 10)
+  and the biggest containers have `mem_limit` caps. Measure inside the VM with `free -m`:
+  Proxmox's memory graph counts page cache.

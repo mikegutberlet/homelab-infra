@@ -1,5 +1,9 @@
 # gpu VM (RicksShip) with the Iris Pro 580 passed through for Quick Sync (/dev/dri).
 
+# mem_limit/cpus (2026-10-22): caps sit above each container's measured peak, so one runaway app
+# gets restarted instead of starving the whole VM. Page cache counts toward the cap and is
+# reclaimed first, so a cap below a cache-heavy peak (SABnzbd, Tdarr) is fine.
+
 x-common: &common
   restart: unless-stopped
   labels:
@@ -125,6 +129,8 @@ services:
   tdarr:
     <<: *common
     image: ghcr.io/haveagitgat/tdarr:latest
+    mem_limit: 4g
+    cpus: 4
     environment:
       <<: *lsio-env
       serverIP: 0.0.0.0
@@ -154,6 +160,8 @@ services:
   unmanic:
     <<: *common
     image: josh5/unmanic:latest
+    mem_limit: 2g
+    cpus: 2
     environment: *lsio-env
     ports: ["8888:8888"]
     devices: [/dev/dri:/dev/dri]

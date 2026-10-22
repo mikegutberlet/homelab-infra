@@ -1,6 +1,10 @@
 # ai VM (RicksShip). No local models yet: Ollama waits for the GTX 1660 Ti eGPU, so
 # Open WebUI and AnythingLLM use Google Gemini (key in secrets.sops.env).
 
+# mem_limit/cpus (2026-10-22): caps sit above each container's measured peak, so one runaway app
+# gets restarted instead of starving the whole VM. Page cache counts toward the cap and is
+# reclaimed first, so a cap below a cache-heavy peak (SABnzbd, Tdarr) is fine.
+
 x-common: &common
   restart: unless-stopped
   labels:
@@ -10,6 +14,7 @@ services:
   open-webui:
     <<: *common
     image: ghcr.io/open-webui/open-webui:main
+    mem_limit: 2g
     environment:
       # Trusts this header for login, so port 3010 must only be reachable by Traefik: the lanfw
       # role allows it from the edge VM (192.168.1.50) only (edge_only_ports on the ai host).
@@ -25,6 +30,7 @@ services:
   anythingllm:
     <<: *common
     image: mintplexlabs/anythingllm:latest
+    mem_limit: 1536m
     cap_add: [SYS_ADMIN]
     environment:
       STORAGE_DIR: /app/server/storage
