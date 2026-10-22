@@ -171,10 +171,11 @@ services:
     image: kometateam/kometa:v2.5.3
     network_mode: host # reaches Plex on 127.0.0.1:32400
     user: ${PUID}:${PGID}
-    # Kometa writes its logs and cache next to config.yml, so /config is appdata and the
-    # repo's config.yml is linked in (edits apply at the next run, no restart needed).
+    # Kometa writes its logs and cache next to config.yml, so /config is appdata. It also
+    # rewrites config.yml when it loads it, so the repo's read-only copy is copied in at each
+    # start (a link fails with "Read-only file system"); edits apply after a restart.
     entrypoint: ["/tini", "-s", "--", "/bin/sh", "-c",
-                 "ln -sf /config/homelab/config.yml /config/config.yml && exec /.venv/bin/python3 /kometa.py \"$$@\"", "kometa"]
+                 "rm -f /config/config.yml && cp /config/homelab/config.yml /config/config.yml && exec /.venv/bin/python3 /kometa.py \"$$@\"", "kometa"]
     environment:
       TZ: ${TZ}
       HOME: /config
