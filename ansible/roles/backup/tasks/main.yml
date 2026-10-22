@@ -9,7 +9,9 @@
     src: "192.168.1.209:/mnt/DeepData/NAS/Backups/homelab"
     path: /mnt/backups
     fstype: nfs
-    opts: "nfsvers=4.2,hard,noatime,_netdev,x-systemd.automount,x-systemd.mount-timeout=30"
+    # Same options as the NAS mount in group_vars (nconnect=4 since 2026-10-22), so a backup run
+    # never rewrites the fstab line and remounts this folder.
+    opts: "nfsvers=4.2,nconnect=4,hard,noatime,_netdev,x-systemd.automount,x-systemd.mount-timeout=30"
     state: mounted
 
 - name: Backup script
