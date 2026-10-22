@@ -46,11 +46,14 @@ flowchart LR
 | Hardware transcoding | Quick Sync through VA-API, verified (`h264_vaapi`) on 2026-10-21 |
 | Settings changed | "Empty trash automatically after every scan" turned **off** on 2026-10-22, because a scan during a window where the NAS is unmounted would have emptied the library |
 | Live TV | ErsatzTV added as an HDHomeRun tuner at `http://192.168.1.52:8409` |
+| Home rows | Curated rows from Kometa (daily 05:00), see [home rows](../../home-rows.md) |
 | Integrations | Tautulli (apps VM), Jellyseerr sign-in and availability, Radarr/Sonarr notifications, ErsatzTV media source |
 | Health | `GET /identity` every 60 s; critical Kuma monitor (instant email) |
 | Why still Plex | Goobs prefers Emby but calls Plex "a necessary evil for now" (2026-10-21); both run side by side ([D09](../07-decisions.md#d09-plex-and-emby-side-by-side)) |
 
 ## Emby
+
+Curated home rows come from the Home Screen Companion plugin, fed by the home-rows container (daily 07:00); see [home rows](../../home-rows.md).
 
 | | |
 | --- | --- |

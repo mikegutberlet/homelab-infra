@@ -26,6 +26,11 @@
           key: "{{HOMEPAGE_VAR_EMBY_KEY}}"
           enableBlocks: true
           enableNowPlaying: true
+    - Home rows:
+        href: "http://192.168.1.52:8097/health"
+        description: Curated Plex and Emby rows (Kometa 5 am, Emby copy 7 am)
+        icon: mdi-view-carousel
+        siteMonitor: "http://192.168.1.52:8097/health"
     - Requests:
         href: "https://requests.{{HOMEPAGE_VAR_TAILNET}}"
         description: Jellyseerr, ask for a movie or show
