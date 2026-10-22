@@ -36,7 +36,9 @@ services:
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
     networks: [proxy]
     healthcheck:
-      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      # ping lives on the web entrypoint (:80); the probe needs that entrypoint, on loopback
+      # (a bare ":80" makes the healthcheck dial "http://:80" and fail)
+      test: ["CMD", "traefik", "healthcheck", "--ping", "--ping.entryPoint=web", "--entrypoints.web.address=127.0.0.1:80"]
       interval: 30s
       retries: 3
 
