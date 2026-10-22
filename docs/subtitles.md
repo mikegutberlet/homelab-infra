@@ -1,0 +1,65 @@
+# Subtitles: always available, accurate
+
+Started 2026-10-22. Goal (Goobs): every movie and show has accurate subtitles. Bazarr on the
+media VM does the work; this page records the settings that live in Bazarr's own config
+(`/opt/appdata/bazarr`, backed up nightly) and the parts that are in this repo.
+
+## What the audit found (2026-10-22, before changes)
+
+- Bazarr 1.6.2 healthy, linked to Sonarr and Radarr; providers OpenSubtitles.com, Subdl,
+  Addic7ed, Jimaku, YIFY, none throttled.
+- One language profile ("Eng/Japanese Subs", en + ja) and default profiles **off**: 1,977 of
+  3,227 movies and 316 of 549 series had no profile, so Bazarr never searched for them.
+- Wanted on the profiled titles: 4,392 episodes and 323 movies, almost all missing Japanese.
+- Machine/AI-translated subtitles accepted; movie minimum score 70 (series 90); subsync off;
+  embedded PGS/VobSub counted as satisfying the language; stale bind IP 192.168.1.14.
+
+## Target settings (Bazarr UI, Settings pages)
+
+Languages
+- Enabled languages: English, Japanese.
+- Profiles: **English** (en, HI: no, forced: no, "must contain" empty) and
+  **English + Japanese** (en then ja, same options). Default profile for series and movies:
+  English (so new titles are covered immediately).
+- The old "Eng/Japanese Subs" profile stays until nothing uses it, then is deleted.
+
+Providers
+- OpenSubtitles.com and Subdl: *Include machine-translated / AI-translated* **off**.
+- Added, no login needed: Podnapisi, Gestdown, Subsource, Embedded Subtitles (extracts text
+  subtitles already inside the video to a .srt; it cannot read PGS images).
+- Addic7ed kept (frequent timeouts; Gestdown covers the same shows).
+
+Subtitles
+- Minimum score: series 90 (unchanged), movies **80** (was 70).
+- Automatic synchronization **on**, ffsubsync, audio-based, with the score thresholds on at
+  their defaults (series 96, movies 86): only subtitles that scored below that get re-timed.
+- Upgrade previously downloaded subtitles: on, 7 days, every 12 h (unchanged).
+- Later, after the first backfill: *Ignore embedded PGS/VobSub subtitles* on, so Roku-friendly
+  text subtitles get fetched for titles that only have image subtitles.
+
+General
+- Bind address 0.0.0.0 (was 192.168.1.14 from the old VM), a form login for the UI.
+
+## In this repo
+
+- `stacks/media/subtitle-profiles/assign_profiles.py` (service `subtitle-profiles`): daily,
+  gives every title in Bazarr that has no profile, or still sits on "Eng/Japanese Subs", the
+  English profile, or English + Japanese when Sonarr/Radarr say the original language is
+  Japanese or the title carries the tag `ja-subs`. Hand-picked profiles are never touched.
+  Needs `BAZARR_API_KEY` in `secrets.sops.env`. `DRY_RUN=true ONCE=true` prints the plan.
+
+## How the backfill runs
+
+Bazarr's own wanted-search task does it, one provider at a time, so it is light on the NAS;
+no manual "search all". OpenSubtitles.com free accounts allow 20 downloads a day (VIP:
+1,000), so a backlog in the thousands takes weeks on the free tier. Provider throttling is
+normal and clears by itself.
+
+## Later
+
+- Whisper (speech-to-text) as a last-resort provider for titles no source has, on CPU on
+  the apps or ai VM (no spare GPU; the iGPU is Tdarr's).
+- Plex and Emby pick up new subtitle files only on a library scan over NFS; add an hourly
+  refresh or Bazarr's Plex hook.
+- Review the Japanese subtitles already downloaded onto non-Japanese movies (about 870
+  files); move to a holding folder only with Goobs's OK.

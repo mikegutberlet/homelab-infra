@@ -170,6 +170,22 @@ services:
       - ./profile-sorter:/app:ro
     depends_on: [sonarr, radarr]
 
+  # Bazarr only fetches subtitles for titles with a language profile; this keeps every title on one
+  # (English, or English + Japanese for Japanese-original titles and the "ja-subs" tag).
+  subtitle-profiles:
+    <<: *common
+    image: python:3.12-alpine
+    user: ${PUID}:${PGID}
+    command: ["python", "-u", "/app/assign_profiles.py"]
+    environment:
+      TZ: ${TZ}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      BAZARR_API_KEY: ${BAZARR_API_KEY}
+    volumes:
+      - ./subtitle-profiles:/app:ro
+    depends_on: [sonarr, radarr, bazarr]
+
   jellyseerr:
     <<: *common
     image: fallenbagel/jellyseerr:2
