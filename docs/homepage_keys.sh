@@ -54,6 +54,10 @@ if (( CREATE )); then
   # Paperless API token for the superuser (drf_create_token returns the existing one on re-runs).
   pu=$(rs $APPS "docker exec apps-paperless-1 python3 manage.py shell -c \"from django.contrib.auth.models import User; print(User.objects.filter(is_superuser=True).first().username)\"")
   need HOMEPAGE_PAPERLESS_TOKEN "$(rs $APPS "docker exec apps-paperless-1 python3 manage.py drf_create_token $pu | awk \"{print \\\$3}\"")"
+  # qBittorrent: let the apps VM (Homepage) read the queue without a login. Done from inside
+  # qBittorrent's own network namespace, where localhost needs no password. No restart.
+  ssh $MEDIA "sudo docker exec media-qbittorrent-1 curl -s --data-urlencode 'json={\"bypass_auth_subnet_whitelist_enabled\":true,\"bypass_auth_subnet_whitelist\":\"192.168.1.53/32\"}' http://127.0.0.1:8085/api/v2/app/setPreferences" \
+    && echo "  qBittorrent: 192.168.1.53 on the auth-bypass list"
 fi
 
 # Hand-added keys (Emby, Immich, RomM user/password) from the Mac.
