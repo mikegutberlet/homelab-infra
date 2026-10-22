@@ -1,6 +1,10 @@
 # edge VM (RicksGarage): the only way into any app.
 # Request path: Tailscale device -> TSDProxy (app.<tailnet>.ts.net, TLS) -> Traefik -> Authentik -> app.
 
+# mem_limit/cpus (2026-10-22): caps sit above each container's measured peak, so one runaway app
+# gets restarted instead of starving the whole VM. Page cache counts toward the cap and is
+# reclaimed first, so a cap below a cache-heavy peak (SABnzbd, Tdarr) is fine.
+
 x-common: &common
   restart: unless-stopped
   labels:
@@ -68,6 +72,7 @@ services:
   authentik-server:
     <<: *common
     image: ghcr.io/goauthentik/server:2025.8
+    mem_limit: 1g
     command: server
     environment: &authentik-env
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
@@ -87,6 +92,7 @@ services:
   authentik-worker:
     <<: *common
     image: ghcr.io/goauthentik/server:2025.8
+    mem_limit: 1g
     command: worker
     environment: *authentik-env
     depends_on:
@@ -98,6 +104,7 @@ services:
   tsdproxy:
     <<: *common
     image: almeidapaulopt/tsdproxy:1
+    mem_limit: 1g
     environment:
       TZ: ${TZ}
     # TSDProxy 1.4 ignores TSDPROXY_AUTHKEY once tsdproxy.yaml defines a provider,

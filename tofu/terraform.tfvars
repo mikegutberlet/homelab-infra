@@ -9,7 +9,7 @@ vms = {
     node      = "RicksGarage"
     ip        = "192.168.1.50/24"
     cores     = 2
-    memory_mb = 3072
+    memory_mb = 4096 # 3 GB left ~0.5 GB free (Authentik + tsdproxy ~1.8 GB), 2026-10-22
     disk_gb   = 32
     datastore = "local-lvm"
     startup   = 3 # after TrueNAS (1) and the old Servarr VM (2)
@@ -20,8 +20,10 @@ vms = {
     node       = "RicksGarage"
     ip         = "192.168.1.51/24"
     cores      = 4
-    memory_mb  = 6144
-    balloon_mb = 5120 # 3 GB starved it (all apps ~3 GB + page cache, no swap) on 2026-10-21
+    # 8 GB fixed, no ballooning: at 6 GB with a 5 GB balloon floor it nearly ran out of memory on
+    # 2026-10-22 (load >100, SSH frozen). Container peaks: SABnzbd 2.5 GB, Bazarr 1.6 GB,
+    # FlareSolverr 1.5 GB, Radarr/Sonarr ~1 GB each.
+    memory_mb  = 8192
     disk_gb    = 64
     datastore  = "local-lvm"
     startup    = 4
