@@ -1,0 +1,15 @@
+# Top bar: the apps VM's own load, the clock, and a search box.
+- resources:
+    label: apps VM
+    cpu: true
+    memory: true
+    disk: /
+    uptime: true
+- datetime:
+    text_size: xl
+    format:
+      dateStyle: long
+      timeStyle: short
+- search:
+    provider: duckduckgo
+    target: _blank

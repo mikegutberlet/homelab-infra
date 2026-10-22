@@ -1,0 +1,27 @@
+# RomM config (mounted read-only at /romm/config/config.yml). The library is NAS/Media/Games/ROMs,
+# mounted as /romm/library/roms, so each top-level folder there is one console. Goobs's folder
+# names are mapped to RomM platform slugs here; nothing is renamed on the NAS.
+# Folders that match no platform (the loose per-game folders, "BIOS files", archives) are skipped;
+# to add a console, create a folder here or on the NAS with a slug RomM knows.
+system:
+  platforms:
+    GBA: gba
+    GB: gb
+    GBColor: gbc
+    NDS: nds
+    PS1: psx
+    PS2: ps2
+    PSP: psp
+exclude:
+  platforms:
+    - BIOS files
+    - Paste To Phone
+  roms:
+    single_file:
+      extensions: [part, txt, url, nfo, DS_Store, jpg, png, pdf]
+      names: [".DS_Store", "Thumbs.db"]
+    multi_file:
+      names: [".DS_Store"]
+      parts:
+        extensions: [part, txt, url, nfo, DS_Store]
+        names: [".DS_Store"]

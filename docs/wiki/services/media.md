@@ -184,9 +184,13 @@ delay profile or RSS) and first-run steps in [`docs/books.md`](../../books.md).
 ## RomM
 
 `rommapp/romm:4` with `mariadb:11`, port 8095, https://romm.tail9af84.ts.net (SSO). Retro game
-library over `Media/Games`, metadata from IGDB (`IGDB_CLIENT_ID/SECRET` in the secrets; whether real
-IGDB credentials were filled in is `(unverified)`). Data in `/opt/appdata/romm/{db,resources,assets}`;
-the MariaDB is dumped nightly by the backup script.
+library: `Media/Games/ROMs` is mounted as `/romm/library/roms`, and `stacks/media/romm/config.yml`
+maps Goobs's console folder names (`GBA`, `GBColor`, `NDS`, `PS2`, `PSP`, ...) to RomM platform slugs,
+so nothing is renamed on the NAS (fixed 2026-10-22; before that the whole `Games` share was the
+library and RomM found no consoles). Folders that match no platform, such as the loose per-game
+folders and `BIOS files`, are skipped. Metadata: Hasheous and the built-in LibretroDB (no key); IGDB
+only if `IGDB_CLIENT_ID/SECRET` are filled in (empty as of 2026-10-22). Data in
+`/opt/appdata/romm/{db,resources,assets}`; the MariaDB is dumped nightly by the backup script.
 
 ## Not in this stack
 

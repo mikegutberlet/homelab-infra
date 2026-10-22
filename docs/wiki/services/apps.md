@@ -106,11 +106,15 @@ Config in `/opt/appdata/tautulli`. Health `GET /status`.
 ## Homepage
 
 `ghcr.io/gethomepage/homepage:v1`, port 3001, https://home.tail9af84.ts.net (SSO).
-`stacks/apps/homepage/services.yaml` lists every app in five groups (Watch, Downloads, Apps, AI, Lab)
-with Tailscale links and a `siteMonitor` on the LAN health URL (allowed by lanfw because the check
-comes from a lab VM). Open WebUI has no status dot because only the edge VM may reach its port. API
-widgets (download queues, stream counts) are not configured yet. `HOMEPAGE_ALLOWED_HOSTS` is the
-ts.net name; `HOMEPAGE_VAR_TAILNET` feeds the links.
+`stacks/apps/homepage/services.yaml` lists every app on the five VMs in six groups (Watch, Downloads,
+Apps, AI, Lab, Hosts) with Tailscale links and a `siteMonitor` on the LAN health URL (allowed by lanfw
+because the check comes from a lab VM). Open WebUI has no status dot because only the edge VM may
+reach its port. Widgets (queues, streams, counts, host load) exist for the arr apps, SABnzbd,
+qBittorrent, Jellyseerr, Plex, Emby, Tautulli, Immich, Audiobookshelf, RomM, Nextcloud, Paperless,
+Tdarr, Uptime Kuma, Scrutiny, both Proxmox hosts and TrueNAS. Their keys live in the apps stack
+secrets as `HOMEPAGE_*` and reach the container as `HOMEPAGE_VAR_*` (compose.yaml); an empty key only
+breaks that one tile. `settings.yaml` holds the layout and `widgets.yaml` the top bar.
+`HOMEPAGE_ALLOWED_HOSTS` is the ts.net name; `HOMEPAGE_VAR_TAILNET` feeds the links.
 
 ## Uptime Kuma ("status")
 

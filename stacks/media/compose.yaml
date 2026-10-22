@@ -262,6 +262,9 @@ services:
       interval: 30s
       retries: 5
 
+  # Library: RomM wants library/roms/<platform-slug>/, and the NAS has Games/ROMs/<console>/
+  # with Goobs's own folder names, so Games/ROMs is mounted as the roms folder and
+  # romm/config.yml maps each folder name to a RomM platform slug (nothing moves on the NAS).
   romm:
     <<: *common
     image: rommapp/romm:4
@@ -271,13 +274,17 @@ services:
       DB_USER: romm
       DB_PASSWD: ${ROMM_DB_PASSWORD}
       ROMM_AUTH_SECRET_KEY: ${ROMM_AUTH_SECRET_KEY}
+      # Metadata: IGDB needs a Twitch developer client (optional, empty = off); Hasheous and
+      # the built-in LibretroDB need no key.
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET}
+      HASHEOUS_API_ENABLED: "true"
     ports: ["8095:8080"]
     volumes:
       - /opt/appdata/romm/resources:/romm/resources
       - /opt/appdata/romm/assets:/romm/assets
-      - /mnt/nfs/Media/Games:/romm/library
+      - ./romm/config.yml:/romm/config/config.yml:ro
+      - /mnt/nfs/Media/Games/ROMs:/romm/library/roms
     depends_on:
       romm-db: {condition: service_healthy}
 

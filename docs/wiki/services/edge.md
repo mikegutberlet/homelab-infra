@@ -1,8 +1,7 @@
 # edge VM (201, RicksGarage, 192.168.1.50)
 
 The only way into any app. 2 vCPU, 3 GB RAM, 32 GB disk on `local-lvm`, starts third after TrueNAS.
-It does **not** mount the NAS. Stack: `stacks/edge/compose.yaml`. Three Docker networks: `socket`
-(internal, only the socket proxy and Traefik), `authentik` (internal, Authentik and its databases),
+It does **not** mount the NAS. Stack: `stacks/edge/compose.yaml`. Two Docker networks: `authentik` (internal, Authentik and its databases),
 and `proxy` (Traefik, Authentik server, TSDProxy, wg-easy).
 
 ```mermaid
@@ -13,8 +12,6 @@ flowchart LR
     AKS --> AKDB[(authentik-db<br/>Postgres 16)]
     AKS --> AKR[(authentik-redis)]
     AKW[authentik-worker] --> AKDB
-    TR -- "docker provider" --> SP[socket-proxy<br/>read-only]
-    SP --> DS[/var/run/docker.sock/]
     TR -- "file provider routes.yml" --> APPS["Apps on .51 .52 .53 .54"]
     SR[tailscale lab-router<br/>host network] -. "advertises 192.168.1.0/24" .-> TS
     WG[wg-easy<br/>not started] -. "51820/udp" .-> INET((Internet))
@@ -27,8 +24,8 @@ flowchart LR
 | Purpose | Reverse proxy for every web UI; applies the Authentik middleware |
 | Image | `traefik:v3.3` |
 | Listens | `:80` on the VM (only TSDProxy and the lab VMs can reach it) |
-| Config | Static flags in the compose command; dynamic routes in `traefik/dynamic/routes.yml` (file provider, watched); Docker provider through the socket proxy with `exposedbydefault=false` |
-| Key settings | `entrypoints.web.forwardedHeaders.trustedIPs=172.16.0.0/12` so TSDProxy's `X-Forwarded-Proto: https` is believed; `--ping` for the healthcheck; dashboard API on (not routed externally); access log on |
+| Config | Static flags in the compose command; dynamic routes in `traefik/dynamic/routes.yml` (file provider, watched); no Docker provider (removed 2026-10-22: it errored every few seconds against the newer daemon API and nothing used it) |
+| Key settings | `entrypoints.web.forwardedHeaders.trustedIPs=172.16.0.0/12` so TSDProxy's `X-Forwarded-Proto: https` is believed; `--ping` on the `web` entrypoint, so `http://192.168.1.50/ping` serves the healthcheck, Homepage and Kuma; dashboard API on (not routed externally); access log on |
 | Health | `traefik healthcheck --ping` every 30 s |
 | Talks to | Authentik outpost (forward auth), every app's LAN port |
 | Notes | Traefik does not terminate TLS; TSDProxy does. Changing `routes.yml` through a redeploy does not restart Traefik: restart it by hand after route changes |
@@ -66,13 +63,6 @@ flowchart LR
 | Settings | `TS_ROUTES=192.168.1.0/24`, kernel networking (`TS_USERSPACE=false`); IP forwarding is enabled by the base role on the edge VM only |
 | Data | `/opt/appdata/tailscale` (node state) |
 | State | Route auto-approved by the tailnet ACL `autoApprovers` rule. Replaced the old, long-offline routers from the previous setup |
-
-## Docker socket proxy
-
-`tecnativa/docker-socket-proxy:0.3.0` with `CONTAINERS=1`, `POST=0`: Traefik can list containers for
-its Docker provider but cannot create, change or stop anything. The raw socket is never mounted into
-Traefik. (autoheal and Dockge still mount the raw socket on the VMs where they run, because they need
-to restart containers.)
 
 ## wg-easy
 

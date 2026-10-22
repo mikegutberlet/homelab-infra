@@ -9,22 +9,13 @@ x-common: &common
     TZ: ${TZ}
 
 services:
-  socket-proxy:
-    <<: *common
-    image: tecnativa/docker-socket-proxy:0.3.0
-    environment:
-      CONTAINERS: 1
-      POST: 0
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks: [socket]
-
   traefik:
     <<: *common
     image: traefik:v3.3
     command:
-      - --providers.docker.endpoint=tcp://socket-proxy:2375
-      - --providers.docker.exposedbydefault=false
+      # Routes come only from the file provider (docs/gen_routes.py); the Docker provider was
+      # removed 2026-10-22 (it failed every few seconds: Traefik 3.3's Docker client is older than
+      # the daemon's minimum API, and no container carries traefik labels anyway).
       - --providers.file.directory=/etc/traefik/dynamic
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
@@ -33,6 +24,7 @@ services:
       # otherwise Authentik builds http:// URLs and browsers block them as mixed content.
       - --entrypoints.web.forwardedHeaders.trustedIPs=172.16.0.0/12
       - --ping=true
+      - --ping.entryPoint=web # http://192.168.1.50/ping answers for Homepage and Kuma
       - --api.dashboard=true
       - --accesslog=true
     environment:
@@ -42,9 +34,11 @@ services:
       - "80:80"
     volumes:
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
-    networks: [socket, proxy]
+    networks: [proxy]
     healthcheck:
-      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      # ping lives on the web entrypoint (:80); the probe needs that entrypoint, on loopback
+      # (a bare ":80" makes the healthcheck dial "http://:80" and fail)
+      test: ["CMD", "traefik", "healthcheck", "--ping", "--ping.entryPoint=web", "--entrypoints.web.address=127.0.0.1:80"]
       interval: 30s
       retries: 3
 
@@ -82,6 +76,9 @@ services:
       AUTHENTIK_POSTGRESQL__NAME: authentik
       AUTHENTIK_POSTGRESQL__USER: authentik
       AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+    # 9000 on the LAN is only for health checks from the lab VMs (lanfw drops everyone else);
+    # logins still go through Traefik at auth.<tailnet>.
+    ports: ["9000:9000"]
     depends_on:
       authentik-db: {condition: service_healthy}
       authentik-redis: {condition: service_healthy}
@@ -156,6 +153,5 @@ secrets:
     environment: TS_AUTHKEY
 
 networks:
-  socket: {internal: true}
   authentik: {internal: true}
   proxy: {}
