@@ -148,6 +148,15 @@ def sops(args, stdin):
     return r.stdout
 
 
+def dotenv_value(v):
+    """Quote a value for a compose .env file: a bare "$" there starts a variable reference, so a
+    password like pa$sword reaches the container truncated (and compose warns 'variable "sword"
+    is not set'). Single quotes keep it literal; a value with a quote of its own escapes the $."""
+    if v.startswith(("'", '"')) or "$" not in v:
+        return v
+    return f"'{v}'" if "'" not in v else v.replace("$", "$$")
+
+
 def update_secrets(path, vals):
     """Replace keys inside a sops dotenv file; the plaintext never touches the repo or a disk."""
     if not vals:
@@ -156,7 +165,7 @@ def update_secrets(path, vals):
     recips = ",".join(re.findall(r"^sops_age__list_\d+__map_recipient=(.*)$", enc, re.M))
     plain = sops(["--decrypt", "--input-type", "dotenv", "--output-type", "dotenv"], enc)
     lines = [ln for ln in plain.splitlines() if ln.partition("=")[0] not in vals]
-    lines += [f"{k}={v}" for k, v in vals.items()]
+    lines += [f"{k}={dotenv_value(v)}" for k, v in vals.items()]
     out = sops(["--encrypt", "--age", recips, "--input-type", "dotenv", "--output-type", "dotenv"], "\n".join(lines) + "\n")
     open(path, "w").write(out)
     print(f"Updated {path} ({len(vals)} keys)")
