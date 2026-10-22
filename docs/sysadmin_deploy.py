@@ -58,6 +58,14 @@ def list_workflows():
     return found
 
 
+def set_active(wid, active):
+    """n8n 2.x: publish:workflow / unpublish:workflow (update:workflow --active still works but is deprecated)."""
+    verb = "publish" if active else "unpublish"
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", APPS, f"{N8N} n8n {verb}:workflow --id={wid}"], capture_output=True, text=True)
+    if r.returncode != 0:
+        ssh(f"{N8N} n8n update:workflow --id={wid} --active={'true' if active else 'false'}", check=False)
+
+
 def new_id():
     return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
 
@@ -105,9 +113,9 @@ workflows = list_workflows()
 if "Homelab sysadmin" not in workflows:
     sys.exit("The import did not produce a 'Homelab sysadmin' workflow; check n8n > Workflows before re-running.")
 if "Homelab digest" in workflows:
-    ssh(f"{N8N} n8n update:workflow --id={workflows['Homelab digest']} --active=false", check=False)
+    set_active(workflows["Homelab digest"], False)
     print("  old 'Homelab digest' deactivated (kept)")
-ssh(f"{N8N} n8n update:workflow --id={workflows['Homelab sysadmin']} --active=true", check=False)
+set_active(workflows["Homelab sysadmin"], True)
 print("Restarting n8n so the webhooks and timers register...")
 ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml restart n8n")
 print("Done. Check n8n > Workflows > Homelab sysadmin (active) and Executions after the next 15-minute tick.")
