@@ -1,0 +1,95 @@
+# SMART self-tests for the USB DAS disks (2026-10-22). TrueNAS sees virtual disks, so the only
+# place that can test the five Exos drives is the Proxmox host that owns the USB bridges. None
+# of them had ever run a self-test; the Oct 2 uncorrectable read on ZVTAM9MF is the reason.
+# Read-only for the pool: a self-test runs inside the drive and yields to real I/O.
+# Schedule per disk: a short test once a week (Mon..Fri, 02:00) and a long test once a month,
+# five days apart so two 20 TB long tests (about 28 h each) never overlap. Results land in the
+# host journal (smartd) and in Scrutiny (playbooks/proxmox-scrutiny.yml).
+# Undo: restore /etc/smartd.conf to its single DEVICESCAN line (the Debian default; the first
+# run saved a copy as /etc/smartd.conf.bak-20261022) and restart smartmontools.
+- name: SMART self-tests on the USB DAS
+  hosts: proxmox
+  vars:
+    # Drive serial whose long test runs first each month (day 1).
+    smart_long_first: ZVTAM9MF
+    smart_short_hour: "02"
+    smart_long_hour: "03"
+  tasks:
+    - name: USB disks by ID (whole disks only)
+      ansible.builtin.find:
+        paths: /dev/disk/by-id
+        patterns: "usb-*"
+        excludes: "*-part*"
+        file_type: link
+      register: usb_disks
+
+    - name: No USB disks here
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} has no USB disks; smartd left as it is."
+      when: usb_disks.files | length == 0
+
+    - name: smartmontools present
+      ansible.builtin.apt:
+        name: [smartmontools]
+      when: usb_disks.files | length > 0
+
+    # The by-id link carries the USB bridge's serial (915000000C02 style), not the drive's;
+    # the drive's own serial comes through the bridge with SAT.
+    - name: Drive serial behind each USB bridge
+      ansible.builtin.shell: set -o pipefail; smartctl -d sat -i {{ item }} | awk '/^Serial Number:/ {print $3}'
+      args:
+        executable: /bin/bash
+      loop: "{{ usb_disks.files | map(attribute='path') | sort }}"
+      register: smart_info
+      changed_when: false
+      when: usb_disks.files | length > 0
+
+    - name: Disk list with drive serials
+      ansible.builtin.set_fact:
+        disks: "{{ disks | default([]) + [{'path': item.item, 'serial': item.stdout | trim}] }}"
+      loop: "{{ smart_info.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: usb_disks.files | length > 0
+
+    - name: The long-test-first drive is present
+      ansible.builtin.assert:
+        that: disks | selectattr('serial', 'equalto', smart_long_first) | list | length == 1
+        fail_msg: "smart_long_first={{ smart_long_first }} is none of {{ disks | map(attribute='serial') | list }}"
+      when: usb_disks.files | length > 0
+
+    - name: Order the disks, long-test-first drive in front
+      ansible.builtin.set_fact:
+        das_disks: >-
+          {{ (disks | selectattr('serial', 'equalto', smart_long_first) | list)
+             + (disks | rejectattr('serial', 'equalto', smart_long_first) | list) }}
+      when: usb_disks.files | length > 0
+
+    - name: smartd config for the DAS
+      ansible.builtin.copy:
+        dest: /etc/smartd.conf
+        mode: "0644"
+        content: |
+          # homelab-infra, playbooks/proxmox-smart.yml. Debian default was a single DEVICESCAN line.
+          # -d sat: SMART through the ASM235CM USB bridges. -a: monitor everything. -W: warn at 45 C,
+          # alert at 50 C. -s: short test weekly (S/../../<weekday>/HH), long test monthly
+          # (L/../<day>/./HH). Mail goes to root if the host ever gets a working MTA.
+          {% for disk in das_disks %}
+          # {{ disk.serial }}
+          {{ disk.path }} -d sat -a -W 4,45,50 -s (S/../../{{ loop.index }}/{{ smart_short_hour }}|L/../{{ '%02d' | format(1 + (loop.index0 * 5)) }}/./{{ smart_long_hour }}) -m root -M exec /usr/share/smartmontools/smartd-runner
+          {% endfor %}
+      when: usb_disks.files | length > 0
+      notify: Restart smartd
+
+    - name: smartd enabled
+      ansible.builtin.service:
+        name: smartmontools
+        enabled: true
+        state: started
+      when: usb_disks.files | length > 0
+
+  handlers:
+    - name: Restart smartd
+      ansible.builtin.service:
+        name: smartmontools
+        state: restarted
