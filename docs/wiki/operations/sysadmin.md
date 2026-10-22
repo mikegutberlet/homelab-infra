@@ -53,7 +53,10 @@ The ops key pair is generated on the Mac (`~/.config/homelab/ops_ed25519`); the 
 
 ## Operate it
 
-- Import or update: n8n > Workflows > Import from file > `homelab-sysadmin.workflow.json`, map the
+- Install or update everything in one go from the Mac: `python3 docs/sysadmin_deploy.py` (imports the
+  credentials from the apps VM's `.env` and `~/.config/homelab/ops_ed25519`, imports the workflow with
+  those credential ids, deactivates the old "Homelab digest", activates, restarts n8n).
+- By hand instead: n8n > Workflows > Import from file > `homelab-sysadmin.workflow.json`, map the
   credentials, activate. Deactivate the old "Homelab digest" (same webhook paths would clash).
 - Test a report by hand: `sudo homelab-agent --print` on a VM shows what it sends;
   `sudo homelab-agent` sends it. Then n8n > Executions.
