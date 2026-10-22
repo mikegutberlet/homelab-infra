@@ -4,9 +4,8 @@ Bazarr only fetches subtitles for titles that have a language profile, and its "
 setting only covers titles added after it is switched on. This runs once at start and then daily:
 any title with no profile, or still on one of the legacy profiles in REASSIGN_FROM, gets
 
-  * "English + Japanese" when the original language in Sonarr/Radarr is Japanese, or the title
-    carries the tag "ja-subs" there;
-  * "English" otherwise.
+  * "English + Japanese" (Goobs wants Japanese on everything, 2026-10-22);
+  * "English" only when the title carries the tag "en-only" in Sonarr/Radarr.
 
 Titles on any other profile are left alone, so a profile picked by hand in Bazarr sticks.
 It never starts a search; Bazarr's own wanted-search task picks the new items up.
@@ -22,7 +21,7 @@ import urllib.request
 BAZARR = os.environ.get("BAZARR_URL", "http://bazarr:6767")
 ENGLISH = os.environ.get("PROFILE_EN", "English")
 ENGLISH_JA = os.environ.get("PROFILE_EN_JA", "English + Japanese")
-OPT_IN_TAG = os.environ.get("JA_TAG", "ja-subs")
+EN_ONLY_TAG = os.environ.get("EN_ONLY_TAG", "en-only")
 REASSIGN_FROM = [p.strip() for p in os.environ.get("REASSIGN_FROM", "Eng/Japanese Subs").split(",") if p.strip()]
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
 BATCH = 100
@@ -51,9 +50,8 @@ def bazarr_api(path, method="GET", form=None):
     return json.loads(body) if body else None
 
 
-def wants_japanese(arr_item, ja_tag_ids):
-    language = (arr_item.get("originalLanguage") or {}).get("name", "")
-    return language.lower() == "japanese" or bool(ja_tag_ids.intersection(arr_item.get("tags", [])))
+def english_only(arr_item, en_only_tag_ids):
+    return bool(en_only_tag_ids.intersection(arr_item.get("tags", [])))
 
 
 def assign(name, base, key_env, arr_endpoint, bz_endpoint, bz_id_field, arr_id_key):
@@ -63,7 +61,7 @@ def assign(name, base, key_env, arr_endpoint, bz_endpoint, bz_id_field, arr_id_k
         print(f"{name}: Bazarr profile missing ({ENGLISH!r} or {ENGLISH_JA!r}), skipping", flush=True)
         return
     reassign_ids = {profiles[p] for p in REASSIGN_FROM if p in profiles}
-    ja_tag_ids = {t["id"] for t in arr_api(base, key, "tag") if t["label"] == OPT_IN_TAG}
+    en_only_tag_ids = {t["id"] for t in arr_api(base, key, "tag") if t["label"] == EN_ONLY_TAG}
     arr_items = {item["id"]: item for item in arr_api(base, key, arr_endpoint)}
 
     changes = []
@@ -74,7 +72,7 @@ def assign(name, base, key_env, arr_endpoint, bz_endpoint, bz_id_field, arr_id_k
         arr_item = arr_items.get(item[arr_id_key])
         if arr_item is None:
             continue  # Bazarr has not synced it yet; next pass
-        wanted = profiles[ENGLISH_JA] if wants_japanese(arr_item, ja_tag_ids) else profiles[ENGLISH]
+        wanted = profiles[ENGLISH] if english_only(arr_item, en_only_tag_ids) else profiles[ENGLISH_JA]
         if wanted != current:
             changes.append((item[arr_id_key], item.get("title", "?"), current, wanted))
 

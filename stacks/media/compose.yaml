@@ -171,7 +171,7 @@ services:
     depends_on: [sonarr, radarr]
 
   # Bazarr only fetches subtitles for titles with a language profile; this keeps every title on one
-  # (English, or English + Japanese for Japanese-original titles and the "ja-subs" tag).
+  # (English + Japanese everywhere; English only for titles tagged "en-only" in Sonarr/Radarr).
   subtitle-profiles:
     <<: *common
     image: python:3.12-alpine

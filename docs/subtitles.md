@@ -18,19 +18,21 @@ media VM does the work; this page records the settings that live in Bazarr's own
 
 Languages
 - Enabled languages: English, Japanese.
-- Profiles: **English** (en, HI: no, forced: no, "must contain" empty) and
-  **English + Japanese** (en then ja, same options). Default profile for series and movies:
-  English (so new titles are covered immediately).
+- Profiles: **English + Japanese** (en then ja, HI: no, forced: no) and **English** (en, same
+  options). Goobs chose Japanese on everything (2026-10-22), so the default profile for series
+  and movies is English + Japanese; English is only for titles tagged `en-only` in Sonarr/Radarr.
 - The old "Eng/Japanese Subs" profile stays until nothing uses it, then is deleted.
 
 Providers
-- OpenSubtitles.com and Subdl: *Include machine-translated / AI-translated* **off**.
+- OpenSubtitles.com and Subdl: machine- and AI-translated subtitles stay **allowed**: they are
+  the only Japanese source for most Western titles. Bazarr cannot allow them per language.
 - Added, no login needed: Podnapisi, Gestdown, Subsource, Embedded Subtitles (extracts text
   subtitles already inside the video to a .srt; it cannot read PGS images).
 - Addic7ed kept (frequent timeouts; Gestdown covers the same shows).
 
 Subtitles
-- Minimum score: series 90 (unchanged), movies **80** (was 70).
+- Minimum score: series 90, movies 70 (both unchanged; a higher movie floor would reject most
+  Japanese matches, which are the right film but not the exact release).
 - Automatic synchronization **on**, ffsubsync, audio-based, with the score thresholds on at
   their defaults (series 96, movies 86): only subtitles that scored below that get re-timed.
 - Upgrade previously downloaded subtitles: on, 7 days, every 12 h (unchanged).
@@ -44,8 +46,8 @@ General
 
 - `stacks/media/subtitle-profiles/assign_profiles.py` (service `subtitle-profiles`): daily,
   gives every title in Bazarr that has no profile, or still sits on "Eng/Japanese Subs", the
-  English profile, or English + Japanese when Sonarr/Radarr say the original language is
-  Japanese or the title carries the tag `ja-subs`. Hand-picked profiles are never touched.
+  English + Japanese profile, or English when the title carries the tag `en-only` in
+  Sonarr/Radarr. Hand-picked profiles are never touched.
   Needs `BAZARR_API_KEY` in `secrets.sops.env`. `DRY_RUN=true ONCE=true` prints the plan.
 
 ## How the backfill runs
