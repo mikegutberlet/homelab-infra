@@ -86,6 +86,9 @@ services:
     volumes:
       - /opt/appdata/sabnzbd:/config
       - /mnt/nfs:/mnt/nfs
+      # Temp downloads on their own 200 GB disk (role scratch), not the system disk: a queue
+      # bigger than ~22 GB used to pause SABnzbd at its 15 GB free-space floor (2026-10-22).
+      - /srv/usenet-incomplete:/incomplete
     healthcheck:
       <<: *arr-health
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/api?mode=version"]
