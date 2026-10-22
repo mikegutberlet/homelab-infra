@@ -53,11 +53,15 @@
     rsync_opts: ["--exclude=*.sops.env"]
   loop: "{{ stacks }}"
 
+# A bare "$" in a value would start a compose variable reference (a password like pa$sword reaches
+# the container truncated, and every compose call warns 'variable "sword" is not set'), so values
+# with a "$" are single-quoted on the way out unless the file already quotes them.
 - name: Decrypt each stack's secrets into .env (age key lives only on the VM)
   ansible.builtin.shell: |
     set -euo pipefail
     SOPS_AGE_KEY_FILE=/root/.config/sops/age/keys.txt \
       sops --decrypt --input-type dotenv --output-type dotenv /dev/stdin \
+      | awk -v q="'" '/^[A-Za-z_][A-Za-z0-9_]*=/ { k = $0; sub(/=.*/, "", k); v = substr($0, length(k) + 2); c = substr(v, 1, 1); if (index(v, "$") && c != q && c != "\"" && !index(v, q)) v = q v q; print k "=" v; next } { print }' \
       > {{ stacks_root }}/{{ item }}/.env
     chmod 600 {{ stacks_root }}/{{ item }}/.env
   args:
