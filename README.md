@@ -8,6 +8,9 @@ Design and decisions: see the "Home lab app stack: infrastructure design" doc in
 Claude project. Step-by-step change log with undo notes: `~/HomeLab/changes-2026-10-21.md`
 on Goobs's Mac.
 
+The full wiki (overview, architecture and data-flow diagrams, per-service deep dives,
+decision records, runbooks, open items) lives in [`docs/wiki/`](docs/wiki/README.md).
+
 ## What runs where (2026-10-21)
 
 | VM | Host | IP | Running | Held back |
