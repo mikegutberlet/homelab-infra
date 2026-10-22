@@ -13,7 +13,7 @@ Listenarr for audiobooks, and Listenarr matches against Audible, which fits Audi
 Audible-based matching.
 
 Both are beta software. Image tags are pinned (`chaptarr/chaptarr:0.9.965`,
-`therobbiedavis/listenarr:canary-1.3.19`, the Docker Hub mirror of `ghcr.io/listenarrs/listenarr`;
+`therobbiedavis/listenarr:canary-1.3.11`, the Docker Hub mirror of `ghcr.io/listenarrs/listenarr`;
 Listenarr publishes canary builds only, several a week). Bump the tag deliberately, after reading the
 release notes.
 

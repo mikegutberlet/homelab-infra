@@ -172,7 +172,7 @@ Health `GET /healthcheck`.
 
 ## Listenarr and Chaptarr (books)
 
-Added 2026-10-22. `therobbiedavis/listenarr:canary-1.3.19` (audiobooks, port 4545,
+Added 2026-10-22. `therobbiedavis/listenarr:canary-1.3.11` (audiobooks, port 4545,
 https://listenarr.tail9af84.ts.net, SSO) and `chaptarr/chaptarr:0.9.965` (ebooks, port 8789,
 https://chaptarr.tail9af84.ts.net, SSO), both as 3000 with `/mnt/nfs` mounted like SABnzbd. Readarr
 was retired upstream and its metadata server is gone, so Chaptarr (a Readarr fork with its own

@@ -226,9 +226,9 @@ services:
   # Neither image ships curl/wget for a Docker healthcheck; Kuma and Homepage watch them instead.
   listenarr:
     <<: *common
-    # Canary is the only channel (no stable tag yet); pinned so a nightly build can't change
+    # Canary is the only channel (no stable tag yet); pinned to the newest build with release notes
     # behaviour on a restart. Docker Hub mirror of ghcr.io/listenarrs/listenarr, same tags.
-    image: docker.io/therobbiedavis/listenarr:canary-1.3.19
+    image: docker.io/therobbiedavis/listenarr:canary-1.3.11
     environment:
       <<: *lsio-env
       LISTENARR_PUBLIC_URL: https://listenarr.${TS_TAILNET}
