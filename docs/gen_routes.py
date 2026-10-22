@@ -12,6 +12,7 @@ APPS = {
     "requests": ("192.168.1.51", 5055, False), "metube": ("192.168.1.51", 8081, True),
     "storyteller": ("192.168.1.51", 8001, False), "audiobooks": ("192.168.1.51", 13378, False),
     "romm": ("192.168.1.51", 8095, True),
+    "listenarr": ("192.168.1.51", 4545, True), "chaptarr": ("192.168.1.51", 8789, True),
     # gpu VM
     "plex": ("192.168.1.52", 32400, False), "emby": ("192.168.1.52", 8096, False),
     "ersatztv": ("192.168.1.52", 8409, True), "photos": ("192.168.1.52", 2283, False),
