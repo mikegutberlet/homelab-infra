@@ -47,11 +47,25 @@ General
 
 ## In this repo
 
-- `stacks/media/subtitle-profiles/assign_profiles.py` (service `subtitle-profiles`): daily,
-  gives every title in Bazarr that has no profile, or still sits on "Eng/Japanese Subs", the
-  English + Japanese profile, or English when the title carries the tag `en-only` in
-  Sonarr/Radarr. Hand-picked profiles are never touched.
-  Needs `BAZARR_API_KEY` in `secrets.sops.env`. `DRY_RUN=true ONCE=true` prints the plan.
+- `stacks/media/subtitle-profiles/assign_profiles.py`: gives every title in Bazarr that has no
+  profile, or still sits on "Eng/Japanese Subs", the English + Japanese profile, or English
+  when the title carries the tag `en-only` in Sonarr/Radarr. Hand-picked profiles are never
+  touched. It ran once on 2026-10-22 (inside the Bazarr container, with `ONCE=true` and the
+  three API keys in the environment; `DRY_RUN=true` prints the plan first). It is not a
+  running service: with the default profile on, new titles get a profile by themselves, so
+  the script is only for a re-sort (for example after adding `en-only` tags).
+
+## Applied 2026-10-22 (Goobs: "go", 04:14 UTC)
+
+- All 3,227 movies and 550 series are on English + Japanese; none without a profile.
+- Wanted after the assignment: 20,269 episodes (20,261 missing Japanese, 6,282 English) and
+  2,109 movies (2,105 Japanese, 809 English). Before: 4,392 and 323, because two thirds of
+  the library was unmanaged.
+- Backups: `/opt/appdata/bazarr/pre-subtitles-20261022/` on the media VM (config plus an
+  integrity-checked database copy); on the Mac `~/HomeLab/subtitles/` has
+  `changes-20261022.md` (every change with its old value and undo), the profiles export and
+  the assignment manifests (dry run and real run).
+- Not done: Bazarr UI login (Goobs), Subsource key and OpenSubtitles VIP (optional).
 
 ## How the backfill runs
 

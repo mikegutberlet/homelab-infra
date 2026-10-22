@@ -90,7 +90,10 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Image / port | `lscr.io/linuxserver/bazarr:latest` (config copied from 1.6.2), 6767 |
 | Address | https://bazarr.tail9af84.ts.net (SSO) |
 | Data | `/opt/appdata/bazarr`; media at `/mnt/nfs` |
-| Notes | On the old VM it only ran while someone was logged in to the desktop, so it had been down since the host restart; now it starts on its own. Subtitle provider accounts came over with the config |
+| Languages | Profile **English + Japanese** on every movie and series (Goobs's choice, 2026-10-22) and the default for new titles; **English** only for titles tagged `en-only` in Sonarr/Radarr. Before 2026-10-22 two thirds of the library had no profile and was never searched |
+| Providers | OpenSubtitles.com, Subdl, Addic7ed, Gestdown, Jimaku, YIFY, Embedded Subtitles. Machine-translated subtitles allowed (the only Japanese source for most titles). Minimum score 90 (series) / 70 (movies) |
+| Accuracy | Subsync on (ffsubsync, audio-based) for subtitles scoring below 96 (series) / 86 (movies); upgrades for 7 days, every 12 h |
+| Notes | Backfill runs through Bazarr's 6-hourly wanted search; OpenSubtitles.com free tier is 20 downloads a day. Details and the 2026-10-22 change record in [docs/subtitles.md](../../subtitles.md). On the old VM it only ran while someone was logged in to the desktop; now it starts on its own |
 | Health | `GET /api/system/ping` |
 
 ## SABnzbd
