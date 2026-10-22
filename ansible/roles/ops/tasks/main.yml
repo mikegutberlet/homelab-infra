@@ -1,0 +1,132 @@
+# Junior sysadmin (n8n "Homelab sysadmin" workflow, stacks/apps/n8n): a reporter that POSTs this
+# VM's facts to n8n every 15 minutes, and the "ops door", an SSH user whose key can only run
+# /usr/local/sbin/homelab-ops (forced command + one sudo rule). Nothing here reboots, deletes
+# or changes app settings; see the verbs in files/homelab-ops.sh.
+- name: Tools the agent uses
+  ansible.builtin.apt:
+    name: [jq, curl, openssl]
+
+# Expected services: every service in each stack's compose file (read on the Mac), limited to
+# stack_services where hosts.yml sets it. The allow-list for restarts leaves out ops_never.
+- name: Expected and restartable services
+  ansible.builtin.set_fact:
+    ops_expected: >-
+      {%- set out = [] -%}
+      {%- for s in stacks | default([]) -%}
+        {%- set svcs = (lookup('file', playbook_dir ~ '/../../stacks/' ~ s ~ '/compose.yaml') | from_yaml).services.keys() | list -%}
+        {%- if (stack_services | default({}))[s] is defined -%}
+          {%- set svcs = svcs | intersect((stack_services | default({}))[s]) -%}
+        {%- endif -%}
+        {%- for v in svcs -%}{%- set _ = out.append(s ~ '/' ~ v) -%}{%- endfor -%}
+      {%- endfor -%}
+      {{ out | sort }}
+
+- name: Allow-list without the services the door must never touch
+  ansible.builtin.set_fact:
+    ops_allow: "{{ ops_expected | reject('search', '/(' ~ (ops_never | join('|')) ~ ')$') | list }}"
+
+- name: Agent configuration
+  ansible.builtin.copy:
+    dest: /etc/homelab-agent.conf
+    mode: "0644"
+    content: |
+      # Written by Ansible (role ops). Read by homelab-agent and homelab-ops.
+      REPORT_URL={{ ops_report_url }}
+      STACKS="{{ stacks | default([]) | join(' ') }}"
+      EXPECTED="{{ ops_expected | join(' ') }}"
+      NAS_IP=192.168.1.209
+
+- name: Scripts
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "/usr/local/sbin/{{ item.dest }}"
+    mode: "0750"
+    owner: root
+    group: root
+  loop:
+    - { src: homelab-agent.sh, dest: homelab-agent }
+    - { src: homelab-ops.sh, dest: homelab-ops }
+
+- name: Agent service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/homelab-agent.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Homelab sysadmin reporter (POSTs this VM's state to n8n)
+      After=docker.service network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/homelab-agent
+      TimeoutStartSec=240
+      Nice=10
+
+- name: Agent timer (every 15 minutes, offset per VM so the reports do not all land at once)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/homelab-agent.timer
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Homelab sysadmin reporter
+
+      [Timer]
+      OnCalendar=*:0/15
+      RandomizedDelaySec=90
+      Persistent=false
+
+      [Install]
+      WantedBy=timers.target
+
+- name: Agent timer enabled
+  ansible.builtin.systemd:
+    name: homelab-agent.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# The ops door: only when the public key is set (ansible/inventory/group_vars/docker_vms.yml).
+- name: ops user (no password, no shell of its own: every login runs the forced command)
+  ansible.builtin.user:
+    name: ops
+    shell: /bin/bash
+    create_home: true
+    password_lock: true
+  when: ops_pubkey is defined
+
+- name: Forced-command wrapper
+  ansible.builtin.copy:
+    src: homelab-ops-door.sh
+    dest: /usr/local/sbin/homelab-ops-door
+    mode: "0755"
+  when: ops_pubkey is defined
+
+- name: ops key pinned to the door (no pty, no forwarding)
+  ansible.posix.authorized_key:
+    user: ops
+    key: "{{ ops_pubkey }}"
+    key_options: 'command="/usr/local/sbin/homelab-ops-door",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc'
+    exclusive: true
+  when: ops_pubkey is defined
+
+- name: ops may run only homelab-ops as root
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/homelab-ops
+    mode: "0440"
+    content: |
+      ops ALL=(root) NOPASSWD: /usr/local/sbin/homelab-ops
+      ops ALL=(root) NOPASSWD: /usr/local/sbin/homelab-ops *
+    validate: visudo -cf %s
+  when: ops_pubkey is defined
+
+- name: Services homelab-ops may restart or stop
+  ansible.builtin.copy:
+    dest: /etc/homelab-ops.allow
+    mode: "0644"
+    content: |
+      # Written by Ansible (role ops): stack/service pairs the ops door accepts. n8n itself,
+      # databases and autoheal are left out on purpose.
+      {% for s in ops_allow %}
+      {{ s }}
+      {% endfor %}

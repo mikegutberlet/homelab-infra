@@ -6,6 +6,7 @@
     - { role: nfs, tags: [nfs] }
     - { role: backup, tags: [backup] }
     - { role: lanfw, tags: [lanfw] }
+    - { role: ops, tags: [ops] }
 
 - name: GPU VM drivers
   hosts: docker_vms
