@@ -66,7 +66,7 @@ pilot (23:32 UTC) to go straight to the full run.
 | Radarr | H.265 penalty off (PR #6); the flow triggers a Radarr rescan per file; the first 5 are verified by hand (new file shown, no download queued) |
 | Schedule | 1 worker, low priority, paused 17:00 to 23:00 Pacific |
 | Safety nets | First day's originals (about 40 files) moved to `to-delete/2026-10-21/tdarr-originals` instead of deleted; SSIM spot-check on 3 early outputs; run log under `~/HomeLab/tdarr-review/run/` on the Mac |
-| Mount | Tdarr's `/mnt/nfs/Media` goes from `:ro` to `rw` in `stacks/gpu/compose.yaml` on a branch with a PR when the run starts |
+| Mount | Tdarr's `/mnt/nfs/Media` is read-write and `/mnt/nfs/to-delete` is mounted for the holding folder (`stacks/gpu/compose.yaml`, PR #8 merged 2026-10-22); Unmanic stays read-only |
 
 ## Radarr clean-up (the bigger win)
 

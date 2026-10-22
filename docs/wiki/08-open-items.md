@@ -32,7 +32,7 @@ Everything that is pending, waiting on a decision, or known but not yet verified
 | Item | Status |
 | --- | --- |
 | GingaDADDY indexer | Disabled in Prowlarr with settings kept and a 100 grabs/day limit; re-enable about **2026-10-22 05:45 UTC**; if still capped, Goobs emails them |
-| Tdarr full conversion run | Settings done per the plan; the read-write NAS mount for Tdarr needs a PR, and the run is on hold behind the folder-rename task above |
+| Tdarr full conversion run | Settings done per the plan; Tdarr's `Media` mount is read-write and it also mounts `to-delete` since PR #8 (merged 2026-10-22); the run is on hold behind the folder-rename task above |
 | ErsatzTV channel build | 11 channels chosen; building in the ErsatzTV thread |
 | Wrong movie and TV cover art | Being handled in its own thread |
 | Radarr relink and duplicate sorting | 850 missing movies relinked, 208 weaker copies moved to holding, 15 better copies imported, junk cleanup done; remaining unmatched folders listed above |
