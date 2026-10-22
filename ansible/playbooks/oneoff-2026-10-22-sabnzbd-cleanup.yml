@@ -10,7 +10,11 @@
 # 2. Deletes Goobs approved in the thread ("yes", 16:36 UTC): MobLand S02E05 (not an upgrade;
 #    removed through Sonarr so SABnzbd deletes the files), test_download_100MB, and the old
 #    /mnt/nfs/sabnzb/incomplete folder (orphans, SABnzbd no longer points there).
-# 3. Only with radarr_cleanup=true: drop the three Radarr queue items that are not import
+# 3. SABnzbd duplicate detection off: no_dupes=1 / no_smart_dupes=1 ("Discard") made SABnzbd
+#    silently drop every NZB it had seen before and return no job id, which Sonarr/Radarr log as
+#    a grab failure with an empty error (hundreds today). The Arr apps decide what to grab, so
+#    SABnzbd's own check only gets in the way (Servarr wiki recommendation).
+# 4. Only with radarr_cleanup=true: drop the three Radarr queue items that are not import
 #    problems (two not upgrades, one matched to the wrong movie), blocklisted, files removed.
 - name: Sonarr fix and approved SABnzbd cleanup
   hosts: media
@@ -136,7 +140,39 @@
       ansible.builtin.debug:
         var: rmres.stdout_lines
 
-    # ---- 3. Radarr queue items that are not import problems (opt-in) ----
+    # ---- 3. SABnzbd duplicate detection off (the ini is only safe to edit with the container stopped) ----
+    - name: Current duplicate settings
+      ansible.builtin.shell: grep -E '^(no_dupes|no_smart_dupes)\s*=' {{ appdata_root }}/sabnzbd/sabnzbd.ini
+      register: dupes
+      changed_when: false
+
+    - name: Stop SABnzbd
+      ansible.builtin.command:
+        cmd: docker compose stop -t 60 sabnzbd
+        chdir: "{{ stacks_root }}/media"
+      when: dupes.stdout is not search('no_dupes = 0') or dupes.stdout is not search('no_smart_dupes = 0')
+      changed_when: true
+
+    - name: no_dupes and no_smart_dupes off
+      ansible.builtin.lineinfile:
+        path: "{{ appdata_root }}/sabnzbd/sabnzbd.ini"
+        regexp: '^{{ item }}\s*='
+        line: "{{ item }} = 0"
+      loop: [no_dupes, no_smart_dupes]
+
+    - name: Start SABnzbd
+      ansible.builtin.command:
+        cmd: docker compose up -d --no-deps --wait --wait-timeout 180 sabnzbd
+        chdir: "{{ stacks_root }}/media"
+      changed_when: true
+
+    - name: Duplicate settings after
+      ansible.builtin.shell: grep -E '^(no_dupes|no_smart_dupes)\s*=' {{ appdata_root }}/sabnzbd/sabnzbd.ini
+      register: dupes_after
+      changed_when: false
+      failed_when: dupes_after.stdout is not search('no_dupes = 0') or dupes_after.stdout is not search('no_smart_dupes = 0')
+
+    # ---- 4. Radarr queue items that are not import problems (opt-in) ----
     - name: Radarr queue
       ansible.builtin.uri:
         url: http://127.0.0.1:7878/api/v3/queue?pageSize=200
