@@ -57,7 +57,7 @@ collections:
     smart_filter:
       sort_by: random
       any:
-        content_rating: [TV-Y, TV-Y7, TV-Y7-FV]
+        content_rating: [TV-Y, TV-Y7]
         genre: [Kids, Children]
 
   Limited Series:
@@ -78,16 +78,16 @@ collections:
 
   HBO:
     template: {name: Row}
-    smart_filter: {sort_by: random, all: {network: [HBO, HBO Max, Max]}}
+    smart_filter: {sort_by: random, any: {network: [HBO, HBO Max, Max]}}
   Netflix Originals:
     template: {name: Row}
     smart_filter: {sort_by: random, all: {network: Netflix}}
   FX:
     template: {name: Row}
-    smart_filter: {sort_by: random, all: {network: [FX, FXX, FX on Hulu]}}
+    smart_filter: {sort_by: random, any: {network: [FX, FXX]}}
   AMC:
     template: {name: Row}
-    smart_filter: {sort_by: random, all: {network: [AMC, AMC+]}}
+    smart_filter: {sort_by: random, all: {network: AMC}}
   Adult Swim:
     template: {name: Row}
     smart_filter: {sort_by: random, all: {network: Adult Swim}}
@@ -96,4 +96,4 @@ collections:
     smart_filter: {sort_by: random, all: {network: Cartoon Network}}
   Disney TV:
     template: {name: Row}
-    smart_filter: {sort_by: random, all: {network: [Disney Channel, Disney+, Disney XD, Disney Junior]}}
+    smart_filter: {sort_by: random, any: {network: [Disney Channel, Disney+, Disney XD]}}

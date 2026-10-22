@@ -1,4 +1,6 @@
-# Movie rows for Plex. "HomeRow" rows are pinned to Home for Goobs and shared users, in this
+# Movie rows for Plex. In smart_filter, a list under `all:` means every value must match, so
+# rows that accept several studios or ratings use `any:`.
+# "HomeRow" rows are pinned to Home for Goobs and shared users, in this
 # order; "Row" rows show on the Movies library's Recommended tab and under Collections.
 # Every row only ever lists movies already in the library. home-rows/rows.py copies the
 # list-based ones (Trending, Popular, Top Rated, seasonal, Oscars, Hidden Gems, International)
@@ -41,9 +43,11 @@ collections:
   Halloween Movies:
     template: {name: HomeRow}
     schedule: range(10/01-10/31)
-    imdb_search:
-      list.any: ls546214737, ls023118929, ls000099714
-      limit: 500
+    # IMDb list searches got "403 Forbidden" on 2026-10-22, so this uses TMDb's keyword plus
+    # the usual Halloween franchises instead of Kometa's IMDb lists.
+    plex_all: true
+    filters:
+      tmdb_keyword: halloween
     tmdb_collection:
       - 185103 # Hotel Transylvania
       - 11716 # Addams Family
@@ -79,7 +83,7 @@ collections:
     template: {name: HomeRow}
     smart_filter:
       sort_by: random
-      all:
+      any:
         content_rating: [G, PG]
     summary: Rated G and PG.
 
@@ -176,13 +180,13 @@ collections:
 
   Pixar:
     template: {name: Row}
-    smart_filter: {sort_by: release.asc, all: {studio: [Pixar, Pixar Animation Studios]}}
+    smart_filter: {sort_by: release.asc, any: {studio: [Pixar, Pixar Animation Studios]}}
   Disney:
     template: {name: Row}
-    smart_filter: {sort_by: release.asc, all: {studio: [Walt Disney Pictures, Walt Disney Animation Studios, Walt Disney Productions]}}
+    smart_filter: {sort_by: release.asc, any: {studio: [Walt Disney Pictures, Walt Disney Animation Studios, Walt Disney Productions]}}
   DreamWorks:
     template: {name: Row}
-    smart_filter: {sort_by: release.asc, all: {studio: [DreamWorks Animation, DreamWorks Pictures]}}
+    smart_filter: {sort_by: release.asc, any: {studio: [DreamWorks Animation, DreamWorks Pictures]}}
   Marvel Studios:
     template: {name: Row}
     smart_filter: {sort_by: release.asc, all: {studio: Marvel Studios}}
