@@ -58,7 +58,7 @@ collections:
       sort_by: random
       any:
         content_rating: [TV-Y, TV-Y7]
-        genre: [Kids, Children]
+        genre: Children # the TV library has no "Kids" genre
 
   Limited Series:
     template: {name: Row}
