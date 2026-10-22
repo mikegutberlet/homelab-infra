@@ -140,8 +140,10 @@ services:
       - /opt/appdata/tdarr/configs:/app/configs
       - /opt/appdata/tdarr/logs:/app/logs
       - /opt/appdata/transcode/tdarr:/temp # local disk, never NFS
-      # Read-only until Goobs sets re-encoding rules (Tdarr replaces files in place).
-      - /mnt/nfs/Media:/mnt/nfs/Media:ro
+      # Read-write since 2026-10-21: Tdarr re-encodes H.264 movies to HEVC in place (Goobs's OK).
+      # The first day's originals go to the NAS holding folder instead of being deleted.
+      - /mnt/nfs/Media:/mnt/nfs/Media
+      - /mnt/nfs/to-delete:/mnt/nfs/to-delete
 
   # Unmanic gets its own folders and an off-hours schedule so it never fights Tdarr.
   unmanic:

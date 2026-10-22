@@ -1,0 +1,21 @@
+{
+  "trash_id": "f7981de50c8515d8c2ff2afbf303d38d",
+  "trash_scores": {
+    "default": 2000
+  },
+  "trash_description": "Release lists English among its languages (title tag such as English/ENG, or language data from the indexer). Used only in the Foreign - Prefer English Dub profiles.",
+  "name": "Homelab: English Audio",
+  "includeCustomFormatWhenRenaming": false,
+  "specifications": [
+    {
+      "name": "English",
+      "implementation": "LanguageSpecification",
+      "negate": false,
+      "required": true,
+      "fields": {
+        "value": 1,
+        "exceptLanguage": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "trash_id": "7572bfe6bb8e657b4918d81a60f1103c",
+  "trash_scores": {
+    "default": -10000
+  },
+  "trash_description": "Release has neither the title's original language nor English (for example a Hindi or Latino dub). Blocks those once the profile accepts any language.",
+  "name": "Homelab: Not Original or English",
+  "includeCustomFormatWhenRenaming": false,
+  "specifications": [
+    {
+      "name": "Not Original",
+      "implementation": "LanguageSpecification",
+      "negate": true,
+      "required": true,
+      "fields": {
+        "value": -2,
+        "exceptLanguage": false
+      }
+    },
+    {
+      "name": "Not English",
+      "implementation": "LanguageSpecification",
+      "negate": true,
+      "required": true,
+      "fields": {
+        "value": 1,
+        "exceptLanguage": false
+      }
+    }
+  ]
+}
