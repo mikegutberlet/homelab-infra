@@ -7,3 +7,77 @@
     opts: "{{ nfs_shares[item].opts }}"
     state: mounted
   loop: "{{ nfs_mounts | default([]) }}"
+
+# Power loss (2026-10-21): the VMs on RicksShip can boot before TrueNAS on RicksGarage has
+# imported the pool. Docker would then start the apps against an empty autofs mountpoint:
+# Radarr/Sonarr see every file as missing (and RSS would start re-downloading), Plex could
+# empty its trash. So Docker waits until every share is really mounted and shows content.
+# No timeout: without the NAS these apps are useless anyway, and the hosts' heartbeat pings
+# (playbooks/proxmox-heartbeat.yml) cover the alerting while the lab is dark.
+- name: wait-nas script
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/wait-nas
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      # Blocks until every NFS share is mounted (not just its autofs trigger) and non-empty.
+      shares="{{ nfs_mounts | default([]) | map('extract', nfs_shares, 'path') | join(' ') }}"
+      while :; do
+        ok=1
+        for p in $shares; do
+          ls "$p" >/dev/null 2>&1 # triggers the automount
+          if ! findmnt -rn -t nfs,nfs4 --mountpoint "$p" >/dev/null || [ -z "$(ls -A "$p" 2>/dev/null)" ]; then
+            ok=0
+          fi
+        done
+        [ "$ok" = 1 ] && exit 0
+        sleep 10
+      done
+  when: nfs_mounts | default([]) | length > 0
+
+- name: wait-nas service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wait-nas.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Wait for the NAS shares before Docker starts
+      After=network-online.target remote-fs.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/wait-nas
+      TimeoutStartSec=infinity
+
+      [Install]
+      WantedBy=multi-user.target
+  when: nfs_mounts | default([]) | length > 0
+
+- name: Docker drop-in folder
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: "0755"
+  when: nfs_mounts | default([]) | length > 0
+
+- name: Docker starts only after the NAS is mounted
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker.service.d/wait-nas.conf
+    mode: "0644"
+    content: |
+      [Unit]
+      After=wait-nas.service
+      Requires=wait-nas.service
+  when: nfs_mounts | default([]) | length > 0
+
+# Enabling it on a running VM changes nothing until the next boot (the share is already up,
+# so the service exits at once); Docker itself is not restarted.
+- name: Enable wait-nas
+  ansible.builtin.systemd:
+    name: wait-nas.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: nfs_mounts | default([]) | length > 0

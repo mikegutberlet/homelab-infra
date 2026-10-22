@@ -70,5 +70,11 @@ Things learned the hard way:
 - Compose doesn't restart a container when only a bind-mounted config file changes:
   restart TSDProxy/Traefik/etc. after route changes. Mount config folders, not single files.
 - The NUC6 hosts hang on warm reboot: power off, then someone presses the power button.
+- Power cuts happen (first one 2026-10-21). Cold start order: TrueNAS first on RicksGarage, then the
+  VMs; the media/gpu/apps VMs hold Docker until the NAS share is mounted and non-empty
+  (`wait-nas.service`, role `nfs`), so an early boot never shows the apps an empty library.
+  Each Proxmox host pings healthchecks.io every 5 min (`playbooks/proxmox-heartbeat.yml`), which is
+  the only alert that works while the lab is dark. Set the NUC BIOS to "After Power Failure: Power On".
+  A UPS with NUT for a clean shutdown is the plan; see the "Power outage plan" doc.
 - RicksGarage is tight on RAM (TrueNAS 16 GB + edge 3 + media 6): media's balloon floor
   is 5 GB because 3 GB starved it.
