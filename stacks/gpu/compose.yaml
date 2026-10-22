@@ -135,6 +135,10 @@ services:
       nodeName: gpu-vm
     ports: ["8265:8265", "8266:8266"]
     devices: [/dev/dri:/dev/dri]
+    # 870 movie folders on the NAS still belong to user goobs (gid 1000, mode 775), so the
+    # storage user alone cannot write the converted file next to the original. Joining group
+    # 1000 lets Tdarr write there without re-permissioning any existing data (2026-10-22).
+    group_add: ["1000"]
     volumes:
       - /opt/appdata/tdarr/server:/app/server
       - /opt/appdata/tdarr/configs:/app/configs
