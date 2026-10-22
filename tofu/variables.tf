@@ -30,6 +30,10 @@ variable "vms" {
     balloon_mb = optional(number, 0) # >0 lets Proxmox reclaim RAM down to this floor
     disk_gb    = number
     datastore  = string
+    # Optional second disk (scsi1) for scratch data that must not share the system disk,
+    # e.g. SABnzbd's incomplete folder on the media VM. Not backed up.
+    scratch_gb        = optional(number, 0)
+    scratch_datastore = optional(string)
     igpu       = optional(bool, false)
     startup    = optional(number, 10)
     start      = optional(bool, true) # false = created but left stopped (and not started on boot)

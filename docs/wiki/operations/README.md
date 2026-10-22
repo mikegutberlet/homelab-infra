@@ -13,6 +13,7 @@ with the tools installed during the build (OpenTofu, the Ansible venv at
 | [Backups and restore](backups-and-restore.md) | Checking last night's backup, restoring an app, rebuilding a VM |
 | [Alerts and monitoring](alerts.md) | What an email means and what to do; adding monitors |
 | [Access and credentials](access-and-credentials.md) | Where every secret lives and how to rotate it |
+| [Locked out of an app](locked-out.md) | A login or API key stopped working; resets without waiting for anyone |
 | [Troubleshooting](troubleshooting.md) | Known failure modes and their fixes |
 
 ## Standing rules for anyone operating the lab

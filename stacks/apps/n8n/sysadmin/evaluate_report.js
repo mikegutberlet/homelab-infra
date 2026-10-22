@@ -28,6 +28,7 @@ for (const d of r.disks || []) {
   else if (d.used_pct >= S.DISK_WARN) add(`disk:${d.mount}`, 'warning', `${host}: ${d.mount} is ${d.used_pct}% full`, `${gb(d.avail)} left`);
 }
 const m = r.mounts || {};
+// m.nfs is null on VMs without an NFS library mount (edge, ai); the agent only reports it where hosts.yml has nfs_mounts.
 if (m.nfs && !(m.nfs.mounted && m.nfs.nonempty)) {
   if (m.nas_tcp_2049) add('nfs', 'critical', `${host}: /mnt/nfs is ${m.nfs.mounted ? 'mounted but empty' : 'not mounted'} while the NAS is up`, 'Apps are running against an empty library path', { verb: 'remount-nas', target: 'nfs' });
   else add('nfs', 'critical', `${host}: /mnt/nfs is not available and TrueNAS does not answer on 2049`, 'Waiting for the NAS; nothing to fix from here');
@@ -102,7 +103,8 @@ if (md.prowlarr) {
 }
 if (md.sabnzbd) {
   const s = md.sabnzbd;
-  if (s.diskspace_gb != null && s.diskspace_gb < S.SAB_DISK_CRIT_GB) add('sab-disk', 'critical', `SABnzbd sees only ${s.diskspace_gb} GB free`, 'Downloads will pause; check the NAS and the sabnzb folder');
+  if (s.diskspace_gb != null && s.diskspace_gb < S.SAB_DISK_CRIT_GB) add('sab-disk', 'critical', `SABnzbd's temp disk has only ${s.diskspace_gb} GB free`, 'Downloads pause at 20 GB; finished jobs that will not import are the usual cause (check the Radarr/Sonarr queues and /srv/usenet-incomplete)');
+  else if (s.diskspace_gb != null && s.diskspace_gb < S.SAB_DISK_WARN_GB) add('sab-disk', 'warning', `SABnzbd's temp disk is down to ${s.diskspace_gb} GB free`, 'Pauses at 20 GB');
   if (s.paused && s.queue_count > 0) add('sab-paused', 'warning', `SABnzbd is paused with ${s.queue_count} item(s) queued`, s.pause_int && s.pause_int !== '0' ? `timed pause, ${s.pause_int} min left` : 'manual or disk pause');
   if ((s.failed_24h || []).length) add('sab-failed', 'warning', `SABnzbd: ${s.failed_24h.length} failed download(s) in 24 h`, s.failed_24h.slice(0, 5).map((f) => `${f.name}: ${f.fail_message || ''}`).join('; '));
 }
@@ -122,6 +124,51 @@ if (md.tdarr) {
     if (pt.done !== t.done || !pt.doneAt) sd.tdarr[host] = { ...pt, done: t.done, doneAt: now, errored: t.errored };
     else { sd.tdarr[host].errored = t.errored; if (t.queued > 0 && !(t.nodes || []).every((n) => n.paused) && now - pt.doneAt > S.TDARR_IDLE_H * H) add('tdarr-idle', 'warning', `Tdarr: no file finished in ${Math.round((now - pt.doneAt) / H)} h with ${t.queued} queued`, 'Workers may be stuck; check the Tdarr node page'); }
   }
+}
+
+// ---- logins and API keys (agent v2; fingerprints only) ----
+// 2026-10-22: a Sonarr/Radarr password mismatch went unnoticed for hours. Now a changed login,
+// a changed or rejected API key, a consumer holding a stale key, or repeated failed logins are
+// raised the same quarter hour. Nothing here is auto-fixed: credentials are Goobs's call.
+const lg = r.logins || {};
+const plg = (prev && prev.logins) || {};
+const lockedOut = 'Reset steps: wiki operations/locked-out.md (playbooks/arr-auth.yml)';
+for (const app of ['sonarr', 'radarr', 'prowlarr']) {
+  const a = lg[app]; if (!a) continue;
+  const p = plg[app] || null;
+  if (p && (a.auth_method !== p.auth_method || a.auth_required !== p.auth_required))
+    add(`login-mode:${app}`, 'critical', `${app}: login mode changed to ${a.auth_method}/${a.auth_required} (was ${p.auth_method}/${p.auth_required})`, `Only a config.xml edit or a restore does this. ${lockedOut}`);
+  if (p && p.users && a.users && a.users.fp !== p.users.fp)
+    add(`login-users:${app}`, 'critical', `${app}: the web login changed (user${a.users.count === 1 ? '' : 's'} ${a.users.names.join(', ')})`, `Password or username differs from 15 minutes ago. If you did not change it: restore ${app}.db from /mnt/backups. ${lockedOut}`);
+  if (a.auth_method === 'Forms' && a.users && a.users.count === 0)
+    add(`login-nouser:${app}`, 'critical', `${app}: forms login is on but no user exists`, 'The next page load asks to create one; whoever gets there first owns the app');
+  if (p && p.apikey_fp && a.apikey_fp && a.apikey_fp !== p.apikey_fp)
+    add(`apikey:${app}`, 'critical', `${app}: API key changed`, 'Prowlarr, Bazarr, Recyclarr, Jellyseerr, Homepage and the agent all hold the old one; update them or restore config.xml');
+  if (a.api_http != null && a.api_http !== 200)
+    add(`apikey-rejected:${app}`, 'critical', `${app}: rejects its own API key (HTTP ${a.api_http})`, 'config.xml and the running app disagree; a restart usually reloads the file');
+  // Counts are per log file; the first report after a deploy (or a log rotation) sets the baseline.
+  const newFails = p && p.auth_failures != null && a.auth_failures >= p.auth_failures ? a.auth_failures - p.auth_failures : 0;
+  if (newFails >= S.LOGIN_FAILS_CRIT)
+    add(`login-failures:${app}`, 'critical', `${app}: ${newFails} failed web login(s) in the last 15 min`, `Last at ${a.last_failure || '?'} (VM local time). The stored login has ${p && p.users && a.users && a.users.fp === p.users.fp ? 'NOT changed' : 'changed'}; check the password-manager entry (user ${a.users ? a.users.names.join('/') : '?'}). ${lockedOut}`);
+  else if (newFails > 0)
+    add(`login-failures:${app}`, 'info', `${app}: ${newFails} failed web login(s)`, `Last at ${a.last_failure || '?'}`);
+}
+if (lg.sabnzbd) {
+  const a = lg.sabnzbd, p = plg.sabnzbd || null;
+  if (p && a.login_fp !== p.login_fp) add('login-users:sabnzbd', 'critical', `SABnzbd: the web login changed (${a.login_set ? 'set' : 'none'})`, `Was ${p.login_set ? 'set' : 'none'} 15 minutes ago. ${lockedOut}`);
+  if (p && p.apikey_fp && a.apikey_fp && a.apikey_fp !== p.apikey_fp) add('apikey:sabnzbd', 'critical', 'SABnzbd: API key changed', 'Sonarr, Radarr, Listenarr, Chaptarr, Homepage and the agent hold the old one');
+  if (a.api_http != null && a.api_http !== 200) add('apikey-rejected:sabnzbd', 'critical', `SABnzbd: rejects its own API key (HTTP ${a.api_http})`, 'sabnzbd.ini and the running app disagree');
+}
+// Consumers: every stored copy of an arr key must match the app's own key. Copies on another VM
+// (Homepage on apps) are compared against the media VM's last report.
+const own = {};
+for (const h of [...new Set([host, ...Object.keys(sd.last)])]) for (const app of ['sonarr', 'radarr', 'prowlarr', 'sabnzbd']) {
+  const x = ((h === host ? lg : (sd.last[h].logins || {}))[app]) || null;
+  if (x && x.apikey_fp) own[app] = x.apikey_fp;
+}
+for (const [who, fpv] of Object.entries(lg.consumers || {})) {
+  const [consumer, app] = who.split(':');
+  if (own[app] && fpv !== own[app]) add(`apikey-stale:${who}`, 'critical', `${consumer} holds a stale ${app} API key`, `${consumer}'s copy differs from ${app}'s config; its calls fail with 401. Paste the current key into ${consumer}'s settings`);
 }
 
 // ---- edge: Tailscale and certificates ----

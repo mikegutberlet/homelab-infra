@@ -1,0 +1,5 @@
+#!/bin/sh
+# Sourced by the nginx image's entrypoint before the templates are rendered. Until
+# docs/sysadmin_deploy.py has written token.env, CHAT_TOKEN is unset and envsubst would leave
+# "${CHAT_TOKEN}" in the config, which nginx then rejects as an unknown variable (crash loop).
+export CHAT_TOKEN="${CHAT_TOKEN:-not-set-yet}"

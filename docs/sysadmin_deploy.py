@@ -7,13 +7,17 @@ Goobs runs this on the Mac (lab SSH key; the ops key pair at ~/.config/homelab/o
 
 What it does, in order:
   1. Reads the Proxmox token secret and the TrueNAS API key from the apps VM's decrypted
-     /opt/stacks/apps/.env (root-only there; they came from docs/homepage_keys.py) and the ops
+     /opt/stacks/apps/.env (root-only there; they came from docs/homepage_keys.py), the Gemini key
+     from the ai VM's /opt/stacks/ai/.env (LLM_API_KEY, the one Open WebUI uses) and the ops
      private key from the Mac. Nothing is printed.
-  2. Imports five SSH credentials (ops edge/media/gpu/apps/ai), two Header Auth credentials
-     (Proxmox API token, TrueNAS API key) into n8n through its CLI, replacing same-named ones.
-  3. Builds the workflow with those credential ids plus the existing "Gmail SMTP" id, imports it
-     (replacing an earlier "Homelab sysadmin"), deactivates the old "Homelab digest" (same webhook
-     paths), activates the new one and restarts n8n so the webhooks and timers register.
+  2. Imports five SSH credentials (ops edge/media/gpu/apps/ai), four Header Auth credentials
+     (Proxmox API token, TrueNAS API key, Gemini API key, Sysadmin chat token) into n8n through
+     its CLI, replacing same-named ones. The chat token is made here on first run and kept in
+     /opt/appdata/sysadmin-chat/token.env on the apps VM, where the chat page's nginx reads it.
+  3. Imports the "Homelab ops door" sub-workflow (the chat agent's SSH lookups and confirmed fixes),
+     then builds the sysadmin workflow with those credential ids plus the existing "Gmail SMTP" id,
+     imports it (replacing an earlier "Homelab sysadmin"), deactivates the old "Homelab digest" (same
+     webhook paths), activates the new one and restarts n8n so the webhooks and timers register.
 Secrets travel over SSH on stdin, into the n8n container's /tmp, and are removed right after.
 """
 import json
@@ -28,13 +32,15 @@ sys.path.insert(0, str(ROOT / "docs"))
 import build_sysadmin_workflow as builder  # noqa: E402
 
 APPS = "goobs@192.168.1.53"
+AI = "goobs@192.168.1.54"
+TOKEN_ENV = "/opt/appdata/sysadmin-chat/token.env"
 OPS_KEY = pathlib.Path.home() / ".config/homelab/ops_ed25519"
 HOSTS = builder.HOSTS
 N8N = "sudo docker compose -f /opt/stacks/apps/compose.yaml exec -T n8n"
 
 
-def ssh(cmd, stdin=None, check=True):
-    r = subprocess.run(["ssh", "-o", "BatchMode=yes", APPS, cmd], input=stdin, capture_output=True, text=True)
+def ssh(cmd, stdin=None, check=True, host=APPS):
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", host, cmd], input=stdin, capture_output=True, text=True)
     if check and r.returncode != 0:
         sys.exit(f"ssh failed: {cmd[:80]}...\n{r.stderr.strip()[-500:]}")
     return r.stdout
@@ -45,6 +51,25 @@ def n8n_json(cmd):
     out = ssh(f"{N8N} {cmd}", check=False)
     start = out.find("[")
     return json.loads(out[start:]) if start >= 0 else []
+
+
+def list_workflows():
+    """name -> id from `n8n list:workflow`, which prints plain 'id|name' lines (no JSON flag in n8n 2.x)."""
+    out = ssh(f"{N8N} n8n list:workflow", check=False)
+    found = {}
+    for line in out.splitlines():
+        if "|" in line and " " not in line.split("|", 1)[0]:
+            wid, name = line.strip().split("|", 1)
+            found[name] = wid
+    return found
+
+
+def set_active(wid, active):
+    """n8n 2.x: publish:workflow / unpublish:workflow (update:workflow --active still works but is deprecated)."""
+    verb = "publish" if active else "unpublish"
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", APPS, f"{N8N} n8n {verb}:workflow --id={wid}"], capture_output=True, text=True)
+    if r.returncode != 0:
+        ssh(f"{N8N} n8n update:workflow --id={wid} --active={'true' if active else 'false'}", check=False)
 
 
 def new_id():
@@ -59,6 +84,15 @@ vals = dict(line.split("=", 1) for line in env.strip().splitlines() if "=" in li
 pve_secret, nas_key = vals.get("HOMEPAGE_PROXMOX_TOKEN_SECRET", ""), vals.get("HOMEPAGE_TRUENAS_KEY", "")
 if not pve_secret or not nas_key:
     sys.exit("Proxmox token secret or TrueNAS key missing in the apps VM's .env; run docs/homepage_keys.py first.")
+gemini_key = ssh("sudo grep -E '^LLM_API_KEY=' /opt/stacks/ai/.env", host=AI).strip().split("=", 1)[-1]
+if not gemini_key:
+    sys.exit("LLM_API_KEY missing in the ai VM's /opt/stacks/ai/.env (the Gemini key Open WebUI uses).")
+# The chat page's webhook token: made once, kept on the apps VM, restarted into the nginx container.
+chat_token = ssh(f"sudo cat {TOKEN_ENV} 2>/dev/null", check=False).strip().split("=", 1)[-1]
+if not chat_token:
+    chat_token = secrets.token_urlsafe(32)
+    ssh(f"sudo install -d -m 750 -o root -g root {TOKEN_ENV.rsplit('/', 1)[0]} && sudo sh -c 'umask 077; cat > {TOKEN_ENV}'", stdin=f"CHAT_TOKEN={chat_token}\n")
+    print(f"  new chat token written to {TOKEN_ENV}")
 
 print("Existing credentials...")
 all_creds = n8n_json("n8n export:credentials --all")
@@ -76,25 +110,44 @@ for h in HOSTS:
     ids[name] = existing.get(name, new_id())
     creds.append({"id": ids[name], "name": name, "type": "sshPrivateKey",
                   "data": {"host": builder.HOSTS[h], "port": 22, "username": "ops", "privateKey": priv, "passphrase": ""}})
-for name, value in (("Proxmox API token", f"PVEAPIToken=homepage@pve!homepage={pve_secret}"), ("TrueNAS API key", f"Bearer {nas_key}")):
+for name, header, value in (("Proxmox API token", "Authorization", f"PVEAPIToken=homepage@pve!homepage={pve_secret}"),
+                            ("TrueNAS API key", "Authorization", f"Bearer {nas_key}"),
+                            ("Sysadmin chat token", "X-Chat-Token", chat_token)):
     ids[name] = existing.get(name, new_id())
-    creds.append({"id": ids[name], "name": name, "type": "httpHeaderAuth", "data": {"name": "Authorization", "value": value}})
+    creds.append({"id": ids[name], "name": name, "type": "httpHeaderAuth", "data": {"name": header, "value": value}})
+ids["Gemini API key"] = existing.get("Gemini API key", new_id())
+creds.append({"id": ids["Gemini API key"], "name": "Gemini API key", "type": "googlePalmApi",
+              "data": {"host": "https://generativelanguage.googleapis.com", "apiKey": gemini_key}})
 ids["Gmail SMTP"] = existing[smtp_name]
 
 print("Importing credentials...")
 ssh(f"{N8N} sh -c 'cat > /tmp/creds.json && n8n import:credentials --input=/tmp/creds.json; rm -f /tmp/creds.json'", stdin=json.dumps(creds))
 
+print("Importing the ops door sub-workflow...")
+workflows = list_workflows()
+door = builder.build_ops_door(ids)
+door["id"] = workflows.get("Homelab ops door", door["id"])
+ssh(f"{N8N} sh -c 'cat > /tmp/door.json && n8n import:workflow --input=/tmp/door.json; rm -f /tmp/door.json'", stdin=json.dumps(door))
+workflows = list_workflows()
+door_id = workflows.get("Homelab ops door")
+if not door_id:
+    sys.exit("The import did not produce a 'Homelab ops door' workflow; check n8n > Workflows before re-running.")
+set_active(door_id, True)  # a sub-workflow needs no trigger, but published is what Execute Workflow expects
+
 print("Importing the workflow...")
-wf = builder.build(ids, {"Gmail SMTP": smtp_name})
-workflows = {w["name"]: w["id"] for w in n8n_json("n8n list:workflow --output=json") if isinstance(w, dict)}
+wf = builder.build(ids, {"Gmail SMTP": smtp_name}, ops_door_id=door_id)
 if "Homelab sysadmin" in workflows:
     wf["id"] = workflows["Homelab sysadmin"]
 ssh(f"{N8N} sh -c 'cat > /tmp/wf.json && n8n import:workflow --input=/tmp/wf.json; rm -f /tmp/wf.json'", stdin=json.dumps(wf))
-workflows = {w["name"]: w["id"] for w in n8n_json("n8n list:workflow --output=json") if isinstance(w, dict)}
+workflows = list_workflows()
+if "Homelab sysadmin" not in workflows:
+    sys.exit("The import did not produce a 'Homelab sysadmin' workflow; check n8n > Workflows before re-running.")
 if "Homelab digest" in workflows:
-    ssh(f"{N8N} n8n update:workflow --id={workflows['Homelab digest']} --active=false", check=False)
+    set_active(workflows["Homelab digest"], False)
     print("  old 'Homelab digest' deactivated (kept)")
-ssh(f"{N8N} n8n update:workflow --id={workflows['Homelab sysadmin']} --active=true", check=False)
-print("Restarting n8n so the webhooks and timers register...")
+set_active(workflows["Homelab sysadmin"], True)
+print("Restarting n8n so the webhooks and timers register, and the chat page so it picks up its token...")
 ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml restart n8n")
-print("Done. Check n8n > Workflows > Homelab sysadmin (active) and Executions after the next 15-minute tick.")
+ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml up -d --force-recreate sysadmin-chat", check=False)
+print("Done. Check n8n > Workflows > Homelab sysadmin (active) and Executions after the next 15-minute tick;")
+print("the chat page is https://sysadmin.<tailnet> (Homepage > Sysadmin chat).")

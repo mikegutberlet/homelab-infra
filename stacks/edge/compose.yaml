@@ -30,7 +30,10 @@ services:
       - --ping=true
       - --ping.entryPoint=web # http://192.168.1.50/ping answers for Homepage and Kuma
       - --api.dashboard=true
+      # 3xx-5xx only: the 200s are mostly UI polls that carry API keys in the query string
+      # (SABnzbd's ?apikey=), and the lines that matter for a lockout are the 302/401/403s.
       - --accesslog=true
+      - --accesslog.filters.statusCodes=300-599
     environment:
       TZ: ${TZ}
       TS_TAILNET: ${TS_TAILNET}

@@ -85,11 +85,15 @@ like, not for whether writes succeed. Tightening the export is a later step that
 | `/opt/appdata/transcode/{plex,emby,tdarr,unmanic}` | Transcode scratch | no |
 | `/opt/appdata/postgres`, `/opt/appdata/*/db`, `/opt/appdata/immich` | Raw database files (dumped separately) and Immich's large data | raw files no; Immich no (see open items) |
 | Plex Metadata/Media, Emby metadata, `MediaCover`, caches, logs | Regenerable bloat | no |
+| `/srv/usenet-incomplete` (media only) | SABnzbd's temp downloads, a 200 GB disk of its own (scsi1 on the host's `xfstest` SSD, label `usenet-tmp`, Ansible role `scratch`) | no (`backup=0` on the host too) |
 
 Databases are never placed on NFS: SQLite and Postgres corrupt under NFS locking semantics, and the
 old setup's local disks proved the apps' state is small enough to live on the VM.
 
-VM disks: edge 32 GB, media 64 GB, gpu 96 GB, apps 96 GB, ai 32 GB, all thin with `discard=on`.
+VM disks: edge 32 GB, media 64 GB (+200 GB scratch), gpu 96 GB, apps 96 GB, ai 32 GB, all thin with `discard=on`.
+SABnzbd's temp folder lived on the media system disk until 2026-10-22; with its 15 GB free-space
+floor, any queue over about 22 GB paused downloads. Now: temp on the scratch disk, pause at 20 GB
+free there and at 500 GB free on the NAS, Direct Unpack on (`playbooks/sabnzbd-temp-disk.yml`).
 The gpu VM's 96 GB holds about 40 GB of Plex library data copied from the old server plus Tdarr's
 5.8 GB image and transcode space.
 

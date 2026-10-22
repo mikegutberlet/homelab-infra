@@ -27,13 +27,22 @@ const SETTINGS = {
   RECLAIM_WARN_GB: 20,
   QUEUE_CRIT: 20,                            // stuck arr items
   STUCK_RETRY_H: 24, STUCK_BLOCKLIST_H: 48,
-  SAB_DISK_CRIT_GB: 100,
+  // SABnzbd's temp disk is 200 GB (scratch disk, 2026-10-22); SABnzbd itself pauses at 20 GB free.
+  SAB_DISK_WARN_GB: 30, SAB_DISK_CRIT_GB: 22,
   TDARR_IDLE_H: 6,
+  LOGIN_FAILS_CRIT: 3,                       // failed arr web logins per 15 min that email at once
   KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,
   SCRUB_WARN_DAYS: 45,
   PVE_EXPECT_RUNNING: [110, 201, 202, 203, 204, 205],
   PVE_EXPECT_STOPPED: [113, 117],
   TZ: 'America/Los_Angeles',
+  // Chat page (sysadmin.<tailnet>). CHAT_FIXES_ENABLED lets a fix proposed in chat run after Goobs
+  // presses Confirm; it is separate from FIXES_ENABLED, which gates the automatic ones.
+  // On since 2026-10-22 20:32Z (Goobs: "CHAT_FIXES_ENABLED on"); false = chat proposes but Confirm does nothing.
+  CHAT_FIXES_ENABLED: true,
+  CHAT_FIX_PER_HOUR: 2,                      // per target, counting automatic fixes too
+  CHAT_FIX_PER_DAY: 10,                      // all chat fixes together
+  CHAT_CONFIRM_MIN: 15,                      // a proposal expires after this
 };
 const TB = 1e12, GB = 1e9, H = 3600e3;
 const now = Date.now();

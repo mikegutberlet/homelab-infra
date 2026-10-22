@@ -1,0 +1,89 @@
+# Set or reset the web login mode of Sonarr, Radarr and Prowlarr (2026-10-22, after a locked-out
+# afternoon). Run from the Mac:
+#
+#   ansible-playbook playbooks/arr-auth.yml                       # External: Authentik is the login
+#   ansible-playbook playbooks/arr-auth.yml -e method=None        # password reset: the next page
+#                                                                 # load asks for a new user/password
+#   ansible-playbook playbooks/arr-auth.yml -e apps=sonarr        # one app only
+#
+# Each app is stopped, its config.xml backed up to config.xml.bak-<date>-auth, the
+# <AuthenticationMethod> line rewritten, and the app started. Nothing else in config.xml or the
+# database changes; the old login row stays in <app>.db (restore the .bak to go back to it).
+# These ports are blocked on the LAN (role lanfw), so with External the only way to a page is
+# Tailscale plus Authentik on the edge VM. The API keys keep working in every mode.
+- name: Arr web login mode
+  hosts: media
+  become: true
+  vars:
+    method: External # External | Forms | None (Basic is not used here)
+    apps: sonarr,radarr,prowlarr
+    ports: { sonarr: 8989, radarr: 7878, prowlarr: 9696 }
+    stamp: "{{ lookup('pipe', 'date +%Y%m%d') }}"
+  tasks:
+    - name: Method is one the apps accept
+      ansible.builtin.assert:
+        that: method in ['External', 'Forms', 'None']
+        fail_msg: "method must be External, Forms or None"
+
+    - name: Current method per app
+      ansible.builtin.shell: |
+        set -o pipefail
+        sed -n 's:.*<AuthenticationMethod>\(.*\)</AuthenticationMethod>.*:\1:p' {{ appdata_root }}/{{ item }}/config.xml | head -1
+      args: { executable: /bin/bash }
+      loop: "{{ apps.split(',') }}"
+      register: current
+      changed_when: false
+
+    - name: Apps that need the change
+      ansible.builtin.set_fact:
+        todo: "{{ current.results | rejectattr('stdout', 'equalto', method) | map(attribute='item') | list }}"
+
+    - name: Nothing to do
+      ansible.builtin.debug:
+        msg: "{{ apps }} already use {{ method }}"
+      when: todo | length == 0
+
+    - name: Stop the apps (config.xml is rewritten on every start, so edit it stopped)
+      ansible.builtin.command:
+        cmd: docker compose stop -t 30 {{ todo | join(' ') }}
+        chdir: "{{ stacks_root }}/media"
+      when: todo | length > 0
+
+    - name: Backup config.xml
+      ansible.builtin.copy:
+        src: "{{ appdata_root }}/{{ item }}/config.xml"
+        dest: "{{ appdata_root }}/{{ item }}/config.xml.bak-{{ stamp }}-auth"
+        remote_src: true
+        mode: preserve
+      loop: "{{ todo }}"
+
+    - name: Set the method
+      ansible.builtin.replace:
+        path: "{{ appdata_root }}/{{ item }}/config.xml"
+        regexp: '<AuthenticationMethod>[^<]*</AuthenticationMethod>'
+        replace: '<AuthenticationMethod>{{ method }}</AuthenticationMethod>'
+      loop: "{{ todo }}"
+
+    - name: Start the apps
+      ansible.builtin.command:
+        cmd: docker compose start {{ todo | join(' ') }}
+        chdir: "{{ stacks_root }}/media"
+      when: todo | length > 0
+
+    - name: Confirm each app answers again (the login redirect, 200 or 302, means it reloaded config.xml)
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ ports[item] }}/"
+        follow_redirects: none
+        status_code: [200, 302]
+      loop: "{{ todo }}"
+      register: probe
+      retries: 12
+      delay: 5
+      until: probe.status in [200, 302]
+
+    - name: What to do next
+      ansible.builtin.debug:
+        msg: >-
+          {{ todo | join(', ') }} now use {{ method }}.
+          {% if method == 'None' %}Open each app through Authentik: it asks for a new username and password (Settings > General > Security also works). Then run this playbook again without -e to go back to External, or leave Forms if you set one.{% elif method == 'External' %}Authentik is the only login; the old password row stays in the database but is not used.{% else %}The login form uses the user row in {{ appdata_root }}/<app>/<app>.db.{% endif %}
+      when: todo | length > 0
