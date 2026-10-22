@@ -22,7 +22,7 @@ sonarr:
     quality_profiles:
       - trash_id: 72dae194fc92bf828f32cde7744e51a1 # WEB-1080p
         # The profile 538 of 541 series use (the name really ends with a space).
-        name: "Anything Not Terrible "
+        name: &sonarr_main "Anything Not Terrible "
         reset_unmatched_scores:
           enabled: true
           except: ["No CAM/TS/Screener"]
@@ -120,16 +120,18 @@ sonarr:
           - 7572bfe6bb8e657b4918d81a60f1103c # Homelab: Not Original or English (-10000)
         assign_scores_to:
           - name: *sonarr_foreign
+    # A group listed here is no longer auto-synced to the guide-backed profile, so every entry
+    # names the main profile too, or its scores there reset to 0 (seen in the 2026-10-22 preview).
     custom_format_groups:
       add:
         - trash_id: 59c3af66780d08332fdc64e68297098f # [Unwanted] Unwanted Formats
-          assign_scores_to: [name: *sonarr_foreign]
+          assign_scores_to: [name: *sonarr_main, name: *sonarr_foreign]
         - trash_id: abe720fab2d27682adc2a735136cec02 # Streaming Services General
-          assign_scores_to: [name: *sonarr_foreign]
+          assign_scores_to: [name: *sonarr_main, name: *sonarr_foreign]
         - trash_id: 85fae4a2294965b75710ef2989c850eb # HD/UHD Streaming Boost
-          assign_scores_to: [name: *sonarr_foreign]
-        - trash_id: f8bf8eab4617f12dfdbd16303d8da245 # Golden Rule HD (x265 (HD))
-          assign_scores_to: [name: *sonarr_foreign]
+          assign_scores_to: [name: *sonarr_main, name: *sonarr_foreign]
+        - trash_id: 158188097a58d7687dee647e04af0da3 # Golden Rule HD (x265 (HD))
+          assign_scores_to: [name: *sonarr_main, name: *sonarr_foreign]
 
 radarr:
   radarr:
@@ -139,7 +141,7 @@ radarr:
       type: movie
     quality_profiles:
       - trash_id: d1d67249d3890e49bc12e275d989a7e9 # HD Bluray + WEB
-        name: Anything Not terrible
+        name: &radarr_main Anything Not terrible
         reset_unmatched_scores:
           enabled: true
           except: ["No CAM/TS/Screener"]
@@ -284,9 +286,10 @@ radarr:
             score: 0
           - name: *radarr_foreign
             score: 0
+    # Same rule as Sonarr: name the main profile on every group listed here.
     custom_format_groups:
       add:
         - trash_id: a3ac6af01d78e4f21fcb75f601ac96df # [Unwanted] Unwanted Formats
-          assign_scores_to: [name: *radarr_foreign]
+          assign_scores_to: [name: *radarr_main, name: *radarr_foreign]
         - trash_id: d9cc9a504e5ede6294c8b973aad4f028 # Streaming Services General
-          assign_scores_to: [name: *radarr_foreign]
+          assign_scores_to: [name: *radarr_main, name: *radarr_foreign]
