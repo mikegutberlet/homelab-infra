@@ -58,7 +58,8 @@ by Goobs and checked free before use; whether they sit outside the router's DHCP
 - Apps that **skip** Authentik, because they have their own accounts and mobile clients: Plex,
   Emby, Requests (Jellyseerr), Immich, Nextcloud, Audiobookshelf, Storyteller, and Authentik itself.
 - Most apps behind Authentik also keep their own login as a second lock, because their LAN ports are
-  reachable from the lab VMs. Open WebUI is the exception: it trusts `X-authentik-email` and signs the
+  reachable from the lab VMs. Sonarr, Radarr and Prowlarr can run with `AuthenticationMethod=External`
+  instead (`playbooks/arr-auth.yml`, 2026-10-22), Authentik being their only login. Open WebUI is the exception: it trusts `X-authentik-email` and signs the
   user in automatically, which is why its port is locked to the edge VM only.
 
 ## Ports and who may reach them

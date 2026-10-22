@@ -16,7 +16,7 @@ EXPECTED=${EXPECTED:-}                 # "stack/service stack/service ..." that 
 NAS_IP=${NAS_IP:-192.168.1.209}
 EXTRA_DISKS=${EXTRA_DISKS:-}           # more mount points to report, e.g. the SABnzbd scratch disk
 APPDATA=/opt/appdata
-AGENT_VERSION=1
+AGENT_VERSION=2
 
 now=$(date +%s)
 j() { jq -c "$@"; }
@@ -222,6 +222,99 @@ media_json() {
     '{sonarr:$s, radarr:$r, prowlarr:$p, sabnzbd:$sab, qbittorrent:$qb, tdarr:$t} | with_entries(select(.value != null))'
 }
 
+# ---------- logins: are the app credentials still what they were? ----------
+# Fingerprints only (sha256, first 16 hex chars); no password, hash or API key leaves the VM.
+# n8n compares each run with the previous one and emails when a login or key changes, when the
+# app rejects its own key, when a consumer (Prowlarr, Bazarr, Recyclarr, Jellyseerr, the stack
+# .env, Homepage) holds a different key than the app, and when logins fail (2026-10-22: a
+# password mismatch sat unnoticed for hours).
+fp() { printf '%s' "$1" | sha256sum | cut -c1-16; }
+arr_logins() { # name port apiver
+  local name=$1 port=$2 v=$3
+  local cfg="$APPDATA/$name/config.xml"
+  [ -r "$cfg" ] || { echo null; return; }
+  local method required key users=null code=null fails=0 last_fail=null
+  method=$(sed -n 's:.*<AuthenticationMethod>\(.*\)</AuthenticationMethod>.*:\1:p' "$cfg" | head -1)
+  required=$(sed -n 's:.*<AuthenticationRequired>\(.*\)</AuthenticationRequired>.*:\1:p' "$cfg" | head -1)
+  key=$(arr_key "$name")
+  local db="$APPDATA/$name/$name.db"
+  if [ -r "$db" ] && command -v sqlite3 >/dev/null; then
+    users=$(sqlite3 -readonly "$db" "select Username||'|'||Password||'|'||ifnull(Salt,'') from Users order by Id" 2>/dev/null \
+      | jq -R -s -c 'split("\n") | map(select(length>0))' 2>/dev/null)
+    [ -n "$users" ] && users=$(jq -c --arg fp "$(fp "$users")" '{count:length, fp:$fp, names:map(split("|")[0])}' <<<"$users") || users=null
+  fi
+  [ -n "$key" ] && code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' -H "X-Api-Key: $key" "http://127.0.0.1:$port/api/$v/system/status" 2>/dev/null)
+  [[ "$code" =~ ^[1-9][0-9]+$ ]] || code=null # 000 = no answer
+  # Failed form logins in the current log file (the app logs "Auth-Failure" with the username).
+  local logf="$APPDATA/$name/logs/$name.txt"
+  if [ -r "$logf" ]; then
+    fails=$(grep -c 'Auth-Failure' "$logf" 2>/dev/null || true)
+    last_fail=$(grep 'Auth-Failure' "$logf" 2>/dev/null | tail -1 | cut -c1-19)
+  fi
+  j -n --arg m "$method" --arg r "$required" --arg k "$(fp "$key")" --argjson u "$users" --argjson c "$code" \
+    --argjson f "$(num "$fails")" --arg lf "${last_fail:-}" \
+    '{auth_method:$m, auth_required:$r, apikey_fp:(if $k=="" then null else $k end), users:$u, api_http:$c,
+      auth_failures:$f, last_failure:(if $lf=="" then null else $lf end)}'
+}
+
+# Where other apps keep Sonarr's and Radarr's keys: fingerprint each so n8n can spot a mismatch.
+consumer_keys() {
+  local out='{}' k
+  # Prowlarr > Settings > Apps (settings JSON holds "apiKey").
+  if [ -r "$APPDATA/prowlarr/prowlarr.db" ] && command -v sqlite3 >/dev/null; then
+    while IFS='|' read -r impl key; do
+      [ -n "$key" ] && out=$(jq -c --arg a "prowlarr:${impl,,}" --arg f "$(fp "$key")" '.[$a]=$f' <<<"$out")
+    done < <(sqlite3 -readonly "$APPDATA/prowlarr/prowlarr.db" "select Implementation, json_extract(Settings,'$.apiKey') from Applications" 2>/dev/null)
+  fi
+  # Bazarr config.yaml: a sonarr: / radarr: block with an apikey: line.
+  local bz="$APPDATA/bazarr/config/config.yaml"
+  if [ -r "$bz" ]; then
+    for app in sonarr radarr; do
+      k=$(awk -v app="$app" '$0 ~ "^"app":" {s=1; next} s && /^[^ ]/ {s=0} s && /^ *apikey:/ {gsub(/[ "'"'"']/,"",$2); print $2; exit}' "$bz")
+      [ -n "$k" ] && out=$(jq -c --arg a "bazarr:$app" --arg f "$(fp "$k")" '.[$a]=$f' <<<"$out")
+    done
+  fi
+  # The media stack .env (Recyclarr and the profile sorter read SONARR_API_KEY/RADARR_API_KEY).
+  for app in sonarr radarr; do
+    k=$(sed -n "s/^${app^^}_API_KEY=//p" /opt/stacks/media/.env 2>/dev/null | tr -d '"' | head -1)
+    [ -n "$k" ] && out=$(jq -c --arg a "env:$app" --arg f "$(fp "$k")" '.[$a]=$f' <<<"$out")
+  done
+  # Jellyseerr settings.json.
+  local js="$APPDATA/jellyseerr/settings.json"
+  if [ -r "$js" ]; then
+    for app in sonarr radarr; do
+      k=$(jq -r ".${app}[0].apiKey // empty" "$js" 2>/dev/null)
+      [ -n "$k" ] && out=$(jq -c --arg a "jellyseerr:$app" --arg f "$(fp "$k")" '.[$a]=$f' <<<"$out")
+    done
+  fi
+  # Homepage (apps VM): HOMEPAGE_<APP>_KEY in the apps stack .env.
+  for app in sonarr radarr prowlarr bazarr sabnzbd; do
+    k=$(sed -n "s/^HOMEPAGE_${app^^}_KEY=//p" /opt/stacks/apps/.env 2>/dev/null | tr -d '"' | head -1)
+    [ -n "$k" ] && out=$(jq -c --arg a "homepage:$app" --arg f "$(fp "$k")" '.[$a]=$f' <<<"$out")
+  done
+  echo "$out"
+}
+
+sab_logins() {
+  local ini="$APPDATA/sabnzbd/sabnzbd.ini"
+  [ -r "$ini" ] || { echo null; return; }
+  local user pass key code=null
+  user=$(sed -n 's/^username *= *//p' "$ini" | head -1); pass=$(sed -n 's/^password *= *//p' "$ini" | head -1)
+  key=$(sed -n 's/^api_key *= *//p' "$ini" | head -1)
+  [ -n "$key" ] && code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' "http://127.0.0.1:8080/api?mode=version&apikey=$key" 2>/dev/null)
+  [[ "$code" =~ ^[1-9][0-9]+$ ]] || code=null
+  j -n --arg u "$user" --arg lp "$(fp "$user|$pass")" --arg k "$(fp "$key")" --argjson c "$code" \
+    '{login_set:($u!=""), login_fp:$lp, apikey_fp:(if $k=="" then null else $k end), api_http:$c}'
+}
+
+logins_json() {
+  local sonarr radarr prowlarr sab consumers
+  sonarr=$(arr_logins sonarr 8989 v3); radarr=$(arr_logins radarr 7878 v3); prowlarr=$(arr_logins prowlarr 9696 v1)
+  sab=$(sab_logins); consumers=$(consumer_keys)
+  j -n --argjson s "$sonarr" --argjson r "$radarr" --argjson p "$prowlarr" --argjson sab "$sab" --argjson c "$consumers" \
+    '{sonarr:$s, radarr:$r, prowlarr:$p, sabnzbd:$sab, consumers:$c} | with_entries(select(.value != null and .value != {}))'
+}
+
 # ---------- edge: Tailscale and certificates ----------
 edge_json() {
   docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^edge-tailscale-1$' || { echo null; return; }
@@ -253,9 +346,9 @@ edge_json() {
 report=$(j -n --arg host "$(hostname)" --argjson ts "$now" --argjson v "$AGENT_VERSION" \
   --argjson host_j "$(host_json)" --argjson disks "$(disks_json)" --argjson mounts "$(mounts_json)" \
   --argjson backup "$(backup_json)" --argjson docker "$(docker_json)" --argjson media "$(media_json)" \
-  --argjson edge "$(edge_json)" \
+  --argjson edge "$(edge_json)" --argjson logins "$(logins_json)" \
   '{host:$host, ts:$ts, agent_version:$v, system:$host_j, disks:$disks, mounts:$mounts, backup:$backup,
-    docker:$docker, media:$media, edge:$edge}')
+    docker:$docker, media:$media, logins:$logins, edge:$edge}')
 
 if [ "${1:-}" = "--print" ]; then
   jq . <<<"$report"

@@ -5,6 +5,7 @@ Known failure modes from the build, with the fix that worked.
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Authentik page loads but shows "The request failed and the interceptors did not return an alternative response" | Traefik did not trust TSDProxy's `X-Forwarded-Proto`, so Authentik built `http://` API URLs and the browser blocked mixed content | `--entrypoints.web.forwardedHeaders.trustedIPs=172.16.0.0/12` on Traefik (in place) |
+| Sonarr/Radarr form login says the credentials are invalid, right after a VM restart (2026-10-22) | The restart only logged the browser out; the password in the manager was from the old VM. The hash on the server had not changed | Try the login set at migration time; otherwise `playbooks/arr-auth.yml` ([Locked out](locked-out.md)) |
 | Authentik initial-setup says "Flow does not apply to current user" | `akadmin` already had a password | `docker compose exec authentik-server ak create_recovery_key 1 akadmin`, open the link, set a password, delete the link file |
 | An app name does not resolve or has no certificate | TSDProxy could not register it: single-use or expired Tailscale key, or `apps.yaml` changed without a restart | New reusable key in edge secrets; `docker compose restart tsdproxy`; first visit takes up to a minute |
 | Route change has no effect | Compose does not recreate containers for bind-mounted file changes | Restart traefik / tsdproxy / homepage / recyclarr after editing their config |
