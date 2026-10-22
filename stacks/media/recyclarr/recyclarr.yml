@@ -115,7 +115,7 @@ sonarr:
           - d84935abd3f8556dcd51d4f27e22d0a6 # WEB Tier 03
           - d0c516558625b04b363fa6c5c2c7cfd4 # WEB Scene
           # Home-lab formats from ../recyclarr-extra/custom-formats/sonarr.
-          - f7981de50c8515d8c2ff2afbf303d38d # Homelab: English Audio (+2000)
+          - f7981de50c8515d8c2ff2afbf303d38d # Homelab: English Tag (+1000, title only)
           - f12cacec1d53d2f8cfb36d384fd32a7a # Homelab: Dubbed or Dual Audio (+2000)
           - 7572bfe6bb8e657b4918d81a60f1103c # Homelab: Not Original or English (-10000)
         assign_scores_to:
@@ -272,7 +272,7 @@ radarr:
           - ae43b294509409a6a13919dedd4764c4 # Repack2
           - 5caaaa1c08c1742aa4342d8c4cc463f2 # Repack3
           # Home-lab formats from ../recyclarr-extra/custom-formats/radarr.
-          - 03c8697a4963714a449ff7f3ef63c43a # Homelab: English Audio (+2000)
+          - 03c8697a4963714a449ff7f3ef63c43a # Homelab: English Tag (+1000, title only)
           - f88d7ef98af0031394cdedfe46f92766 # Homelab: Dubbed or Dual Audio (+2000)
           - cf978d4b72de03a4773bee970890c94b # Homelab: Not Original or English (-10000)
         assign_scores_to:
