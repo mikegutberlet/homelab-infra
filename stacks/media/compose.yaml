@@ -152,6 +152,23 @@ services:
       # folder: a single-file bind mount keeps the old file after a redeploy replaces it.
       - /opt/appdata/recyclarr:/config
       - ./recyclarr:/config/configs:ro
+      # settings.yml (symlinked from /opt/appdata/recyclarr) and the home-lab custom formats.
+      - ./recyclarr-extra:/config/extra:ro
+
+  # Moves non-English-original movies/series from the main profiles into
+  # "Foreign - Prefer English Dub" once a day (Radarr/Sonarr can't choose a profile by language).
+  profile-sorter:
+    <<: *common
+    image: python:3.12-alpine
+    user: ${PUID}:${PGID}
+    command: ["python", "-u", "/app/sort_profiles.py"]
+    environment:
+      TZ: ${TZ}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_API_KEY: ${RADARR_API_KEY}
+    volumes:
+      - ./profile-sorter:/app:ro
+    depends_on: [sonarr, radarr]
 
   jellyseerr:
     <<: *common
