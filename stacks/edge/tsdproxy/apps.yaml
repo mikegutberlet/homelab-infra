@@ -90,6 +90,9 @@ dockge:
 tautulli:
   url: http://traefik:80
 
+sysadmin:
+  url: http://traefik:80
+
 chat:
   url: http://traefik:80
 

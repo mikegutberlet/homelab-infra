@@ -202,6 +202,11 @@
         description: Automation and the daily digest
         icon: n8n.png
         siteMonitor: "http://192.168.1.53:5678/healthz"
+    - Sysadmin chat:
+        href: "https://sysadmin.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Ask the junior sysadmin; fixes only on Confirm
+        icon: mdi-robot-happy
+        siteMonitor: "http://192.168.1.53:3003/healthz"
     - Huginn:
         href: "https://huginn.{{HOMEPAGE_VAR_TAILNET}}"
         description: Agents
