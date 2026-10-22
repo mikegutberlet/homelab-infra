@@ -152,6 +152,11 @@ http:
       entryPoints: [web]
       service: tautulli
       middlewares: [authentik]
+    sysadmin:
+      rule: Host(`sysadmin.{{ env "TS_TAILNET" }}`)
+      entryPoints: [web]
+      service: sysadmin
+      middlewares: [authentik]
     chat:
       rule: Host(`chat.{{ env "TS_TAILNET" }}`)
       entryPoints: [web]
@@ -292,6 +297,10 @@ http:
       loadBalancer:
         servers:
           - url: http://192.168.1.53:8181
+    sysadmin:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.53:3003
     chat:
       loadBalancer:
         servers:

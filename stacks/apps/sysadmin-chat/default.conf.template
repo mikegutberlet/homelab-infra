@@ -1,0 +1,30 @@
+# Chat page for the n8n sysadmin. Serves index.html and forwards /api/chat to the workflow's
+# chat webhook, adding the webhook's token (CHAT_TOKEN, /opt/appdata/sysadmin-chat/token.env,
+# written by docs/sysadmin_deploy.py) so the browser never holds it. Authentik sits in front.
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    resolver 127.0.0.11 valid=30s; # Docker DNS: n8n may start after this container
+
+    location = / {
+        add_header Cache-Control "no-store";
+        try_files /index.html =404;
+    }
+    location = /healthz {
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+    location = /api/chat {
+        limit_except POST { deny all; }
+        client_max_body_size 64k;
+        set $n8n http://n8n:5678;
+        proxy_pass $n8n/webhook/homelab/chat;
+        proxy_set_header X-Chat-Token "${CHAT_TOKEN}";
+        proxy_set_header X-authentik-username $http_x_authentik_username;
+        proxy_set_header Content-Type application/json;
+        proxy_read_timeout 150s;
+    }
+    location / {
+        return 404;
+    }
+}

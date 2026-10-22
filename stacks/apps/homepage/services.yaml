@@ -26,6 +26,11 @@
           key: "{{HOMEPAGE_VAR_EMBY_KEY}}"
           enableBlocks: true
           enableNowPlaying: true
+    - Home rows:
+        href: "http://192.168.1.52:8097/health"
+        description: Curated Plex and Emby rows (Kometa 5 am, Emby copy 7 am)
+        icon: mdi-view-carousel
+        siteMonitor: "http://192.168.1.52:8097/health"
     - Requests:
         href: "https://requests.{{HOMEPAGE_VAR_TAILNET}}"
         description: Jellyseerr, ask for a movie or show
@@ -202,6 +207,11 @@
         description: Automation and the daily digest
         icon: n8n.png
         siteMonitor: "http://192.168.1.53:5678/healthz"
+    - Sysadmin chat:
+        href: "https://sysadmin.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Ask the junior sysadmin; fixes only on Confirm
+        icon: mdi-robot-happy
+        siteMonitor: "http://192.168.1.53:3003/healthz"
     - Huginn:
         href: "https://huginn.{{HOMEPAGE_VAR_TAILNET}}"
         description: Agents

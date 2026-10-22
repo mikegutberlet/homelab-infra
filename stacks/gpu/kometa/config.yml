@@ -1,0 +1,57 @@
+# Kometa: Netflix-style rows on the Plex home screen (Goobs picked all 25 rows, 2026-10-22).
+# It only builds collections and pins some of them to Home; it never touches media files,
+# overlays, metadata or Radarr/Sonarr (no arr sections here, so nothing is ever downloaded).
+# Secrets (<<name>>) come from KOMETA_<NAME> variables in the gpu stack's .env.
+# The Emby side is home-rows (../home-rows), which copies the list-based rows from here.
+
+plex:
+  url: http://127.0.0.1:32400 # Kometa runs on the host network next to Plex
+  token: <<plextoken>>
+  timeout: 120
+  db_cache: 40
+  clean_bundles: false
+  empty_trash: false
+  optimize: false
+  verify_ssl: false
+
+tmdb:
+  apikey: <<tmdbkey>>
+  language: en
+  region: US
+  cache_expiration: 60
+
+mdblist:
+  apikey: <<mdblistkey>> # only the Christmas row uses MDBList
+  cache_expiration: 60
+
+libraries:
+  Movies:
+    collection_files:
+      - file: /config/homelab/movies.yml
+      - default: franchise # boxed sets such as Star Wars or Harry Potter (2+ owned films)
+  TV Shows:
+    collection_files:
+      - file: /config/homelab/shows.yml
+
+settings:
+  run_order: [collections] # no operations, metadata or overlays
+  cache: true
+  cache_expiration: 60
+  asset_directory: /config/assets
+  asset_folders: false
+  sync_mode: sync
+  minimum_items: 1
+  delete_below_minimum: true
+  delete_not_scheduled: true # seasonal rows disappear outside their dates
+  default_collection_order: release
+  # Home rows appear in the order they are written in movies.yml and shows.yml.
+  auto_sort_hubs: configured
+  run_again_delay: 0
+  missing_only_released: true
+  show_unmanaged: false
+  show_unconfigured: false
+  show_missing: false
+  show_missing_assets: false
+  save_report: false
+  tvdb_language: eng
+  verify_ssl: true

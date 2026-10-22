@@ -25,6 +25,8 @@ DIGEST_WEBHOOK = "http://n8n:5678/webhook/homelab/kuma"  # Kuma and n8n share a 
 MONITORS = [
     ("Plex", "http://192.168.1.52:32400/identity", True, None),
     ("Emby", "http://192.168.1.52:8096/emby/System/Ping", True, None),
+    # 200 while Kometa (Plex) and home-rows (Emby) both ran in the last 26 hours, else 503.
+    ("Home rows (Kometa + Emby)", "http://192.168.1.52:8097/health", False, None),
     ("Sonarr", "http://192.168.1.51:8989/ping", True, None),
     ("Radarr", "http://192.168.1.51:7878/ping", True, None),
     ("Prowlarr", "http://192.168.1.51:9696/ping", True, None),
@@ -44,6 +46,7 @@ MONITORS = [
     ("Paperless", "http://192.168.1.53:8000/", False, ["200-299", "300-399"]),
     ("Stirling PDF", "http://192.168.1.53:8070/", False, ["200-299", "300-399"]),
     ("n8n", "http://192.168.1.53:5678/healthz", False, None),
+    ("Sysadmin chat", "http://192.168.1.53:3003/healthz", False, None),
     ("Huginn", "http://192.168.1.53:3000/users/sign_in", False, None),
     ("Homepage", "http://192.168.1.53:3001/", False, ["200-299", "300-399", "400-499"]),
     ("Scrutiny", "http://192.168.1.53:8087/api/health", False, None),

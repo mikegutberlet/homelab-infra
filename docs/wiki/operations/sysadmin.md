@@ -39,11 +39,35 @@ under `/mnt/nfs`, pull images, change app settings, touch the Tdarr queue.
 Switches live at the top of `stacks/apps/n8n/sysadmin/settings.js`: `FIXES_ENABLED` (false =
 report-only, the digest shows "would have fixed") and `BLOCKLIST_ENABLED`. Change, rebuild, re-import.
 
+## Chat with the sysadmin (sysadmin.tail9af84.ts.net)
+
+A chat page (Homepage > Sysadmin chat; Tailscale plus Authentik like every admin page) where you
+ask the sysadmin questions and ask it to fix things. Sources: `stacks/apps/sysadmin-chat/` (the
+page and its nginx, which forwards `/api/chat` to the workflow's chat webhook and adds the webhook
+token), `stacks/apps/n8n/sysadmin/chat_*.js`, `tool_*.js`, `opsdoor_*.js`.
+
+| Part | Does |
+| --- | --- |
+| Sysadmin agent (n8n AI Agent, Gemini Flash on the same key as Open WebUI) | Answers from tools, never from memory alone: `lab_overview` (open issues, when each VM reported, pool space), `vm_report` (one VM's latest 15-minute report), `recent_fixes`, `ops_lookup` (live `status` or `logs <service>` through the ops door), `propose_fix` |
+| Homelab ops door (second, small workflow) | Host switch plus one SSH node per VM; used by the agent's lookups and by confirmed fixes, so the SSH nodes exist once |
+| Chat memory | Per browser tab ("New chat" starts a fresh one), last 10 turns |
+| Confirm / Cancel | A proposed fix is parked for 15 minutes with the chat session; the Confirm button posts it back and plain code re-checks it (same verbs, never-list and per-target counters as the automatic fixes, plus `CHAT_FIX_PER_HOUR` / `CHAT_FIX_PER_DAY`), logs it in the fix log (the digest's "Fixed" section) and runs it through the ops door. The model never runs anything |
+
+Switches in `settings.js`: `CHAT_FIXES_ENABLED` (false = the chat proposes fixes but Confirm does
+nothing; independent of `FIXES_ENABLED`, which gates the automatic fixes), `CHAT_FIX_PER_HOUR`,
+`CHAT_FIX_PER_DAY`, `CHAT_CONFIRM_MIN`. The model name is `CHAT_MODEL` in `docs/build_sysadmin_workflow.py`.
+
+Prompt injection: container logs and app names pass through the model, so a log line could try to
+talk it into something. It can only read and propose; nothing runs without your Confirm, and the
+ops door only knows its fixed verbs. `journalctl -t homelab-ops` on a VM shows every call, chat or automatic.
+
 ## Credentials in n8n (never in the repo)
 
 | Name | Type | Used by |
 | --- | --- | --- |
 | Gmail SMTP | SMTP | both email nodes (exists since the first digest) |
+| Gemini API key | Google Gemini (PaLM) API, the ai stack's `LLM_API_KEY` | the chat agent's model |
+| Sysadmin chat token | Header Auth `X-Chat-Token`, made by the deploy script and kept in `/opt/appdata/sysadmin-chat/token.env` on the apps VM | the chat webhook |
 | ops edge / media / gpu / apps / ai | SSH private key, user `ops`, host `192.168.1.5x` | the five `ops <vm>` nodes |
 | Proxmox API token | Header Auth, `Authorization: PVEAPIToken=homepage@pve!homepage=<secret>` | PVE nodes |
 | TrueNAS API key | Header Auth, `Authorization: Bearer <key>` | NAS nodes |
