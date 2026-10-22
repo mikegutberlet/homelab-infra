@@ -125,6 +125,16 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Config | `stacks/media/recyclarr/recyclarr.yml`, mounted read-only as a folder (a single-file bind mount kept the stale file after redeploys); API keys from the media secrets |
 | Decision | Goobs chose on 2026-10-21 to let TRaSH **replace** the scores in the existing profiles rather than add new ones. The first attempt clobbered profiles on the wrong instance names and both apps were restored from backups taken minutes earlier; the config now names the exact profiles and `reset_unmatched_scores` is on |
 | Rule | Never let it overwrite a profile Goobs has not assigned to it; "HD and Ultra" and "HD-1080p" in Sonarr are left alone |
+| English dubs | Goobs prefers an English dub over subtitles (2026-10-22). The TRaSH profiles want the original language only (Radarr profile language **Original**, Sonarr "Language: Not Original" −10000), which rejects English-only dubs, so foreign-language titles get their own user-defined profile **Foreign - Prefer English Dub** in both apps: same qualities, language Any (Radarr), Bluray-1080p and WEB 1080p merged in Radarr so a dubbed WEB-DL is not replaced by a subtitles-only Bluray, and three home-lab formats: English Audio +2000, Dubbed or Dual Audio +2000, Not Original or English −10000 |
+| Home-lab formats | JSON in `stacks/media/recyclarr-extra/custom-formats/`, loaded through `recyclarr-extra/settings.yml` (mounted at `/config/extra`; `/opt/appdata/recyclarr/settings.yml` is a symlink to `/config/extra/settings.yml`, because Recyclarr reads settings only from the root of its writable config dir) |
+
+## profile-sorter
+
+| | |
+| --- | --- |
+| Purpose | Radarr and Sonarr cannot choose a profile by language, so once at start and then daily it moves every movie/series whose original language is not English (and not unknown) from the main profile into **Foreign - Prefer English Dub** |
+| Image | `python:3.12-alpine`, runs as 3000, script `stacks/media/profile-sorter/sort_profiles.py` (standard library only) |
+| Rules | Only moves titles off the main profile, never back; skips anything tagged `keep-original`; never starts a search. `DRY_RUN=true` logs without changing, `ONCE=true` exits after one pass |
 
 ## Jellyseerr ("Requests")
 
