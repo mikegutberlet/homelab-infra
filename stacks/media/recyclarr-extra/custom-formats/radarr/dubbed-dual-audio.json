@@ -3,7 +3,7 @@
   "trash_scores": {
     "default": 2000
   },
-  "trash_description": "Title says DUBBED, Dual Audio or ENG DUB, and names no other dub language (Hindi, Latino, German and so on). Radarr and Sonarr do not read DUBBED as English, so this catches English dubs they parse as the original language.",
+  "trash_description": "Title says DUBBED, Dual Audio, ENG DUB or an EN+JA / KOR.ENG style language pair, and names no other dub language (Hindi, Latino, German and so on). Chinese pairs (CHS ENG) are left out because they mean subtitles, and MULTi is not scored because on Usenet it usually means French plus original with no English. The strongest sign of an English dub; scored above the plain English tag.",
   "name": "Homelab: Dubbed or Dual Audio",
   "includeCustomFormatWhenRenaming": false,
   "specifications": [
@@ -13,7 +13,7 @@
       "negate": false,
       "required": true,
       "fields": {
-        "value": "\\b(dubbed|dual[ ._-]?audio|eng(lish)?[ ._-]?dub(bed)?)\\b|[([]dual[])]"
+        "value": "\\b(dubbed|dual[ ._-]?audio|eng(lish)?[ ._-]?dub(bed)?)\\b|[([]dual[])]|\\b(en|eng)[ ._+&-]{1,3}(ja|jp|jpn|ko|kor|fr|fre|fra|de|ger|deu|it|ita|es|spa|ru|rus|hi|hin|da|dan|sv|swe|no|nor|fi|fin|pl|pol|pt|por|nl|dut|tr|tur|th|tha|ar|ara)\\b|\\b(ja|jp|jpn|ko|kor|fr|fre|fra|de|ger|deu|it|ita|es|spa|ru|rus|hi|hin|da|dan|sv|swe|no|nor|fi|fin|pl|pol|pt|por|nl|dut|tr|tur|th|tha|ar|ara)[ ._+&-]{1,3}(en|eng)\\b"
       }
     },
     {
@@ -22,7 +22,7 @@
       "negate": true,
       "required": true,
       "fields": {
-        "value": "\\b(hindi|tamil|telugu|kannada|malayalam|bengali|marathi|punjabi|urdu|dublado|pt[ ._-]?br|latino|castellano|spanish|esp|ita|italian|french|truefrench|vff|vfq|vf2|german|ger|rus|russian|ukr|ukrainian|polish|pl|czech|cz|hun|hundub|turkish|tur|arabic|persian|farsi|thai|vietnamese|indonesian|portuguese|nordic)\\b"
+        "value": "\\b(hindi|tamil|telugu|kannada|malayalam|bengali|marathi|punjabi|urdu|dublado|pt[ ._-]?br|latino|castellano|spanish|esp|ita|italian|french|truefrench|vff|vfq|vf2|german|ger|rus|russian|ukr|ukrainian|polish|pl|czech|cz|hun|hundub|turkish|tur|arabic|persian|farsi|thai|vietnamese|indonesian|portuguese|nordic)[ ._-]?(dub(bed)?|audio)?\\b(?![ ._-]?subs?)"
       }
     }
   ]

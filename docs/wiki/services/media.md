@@ -90,7 +90,10 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Image / port | `lscr.io/linuxserver/bazarr:latest` (config copied from 1.6.2), 6767 |
 | Address | https://bazarr.tail9af84.ts.net (SSO) |
 | Data | `/opt/appdata/bazarr`; media at `/mnt/nfs` |
-| Notes | On the old VM it only ran while someone was logged in to the desktop, so it had been down since the host restart; now it starts on its own. Subtitle provider accounts came over with the config |
+| Languages | Profile **English + Japanese** on every movie and series (Goobs's choice, 2026-10-22) and the default for new titles; **English** only for titles tagged `en-only` in Sonarr/Radarr. Before 2026-10-22 two thirds of the library had no profile and was never searched |
+| Providers | OpenSubtitles.com, Subdl, Addic7ed, Gestdown, Jimaku, YIFY, Embedded Subtitles. Machine-translated subtitles allowed (the only Japanese source for most titles). Minimum score 90 (series) / 70 (movies) |
+| Accuracy | Subsync on (ffsubsync, audio-based) for subtitles scoring below 96 (series) / 86 (movies); upgrades for 7 days, every 12 h |
+| Notes | Backfill runs through Bazarr's 6-hourly wanted search; OpenSubtitles.com free tier is 20 downloads a day. Details and the 2026-10-22 change record in [docs/subtitles.md](../../subtitles.md). On the old VM it only ran while someone was logged in to the desktop; now it starts on its own |
 | Health | `GET /api/system/ping` |
 
 ## SABnzbd
@@ -125,7 +128,7 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Config | `stacks/media/recyclarr/recyclarr.yml`, mounted read-only as a folder (a single-file bind mount kept the stale file after redeploys); API keys from the media secrets |
 | Decision | Goobs chose on 2026-10-21 to let TRaSH **replace** the scores in the existing profiles rather than add new ones. The first attempt clobbered profiles on the wrong instance names and both apps were restored from backups taken minutes earlier; the config now names the exact profiles and `reset_unmatched_scores` is on |
 | Rule | Never let it overwrite a profile Goobs has not assigned to it; "HD and Ultra" and "HD-1080p" in Sonarr are left alone |
-| English dubs | Goobs prefers an English dub over subtitles (2026-10-22). The TRaSH profiles want the original language only (Radarr profile language **Original**, Sonarr "Language: Not Original" −10000), which rejects English-only dubs, so foreign-language titles get their own user-defined profile **Foreign - Prefer English Dub** in both apps: same qualities, language Any (Radarr), Bluray-1080p and WEB 1080p merged in Radarr so a dubbed WEB-DL is not replaced by a subtitles-only Bluray, and three home-lab formats: English Audio +2000, Dubbed or Dual Audio +2000, Not Original or English −10000 |
+| English dubs | Goobs prefers an English dub over subtitles (2026-10-22). The TRaSH profiles want the original language only (Radarr profile language **Original**, Sonarr "Language: Not Original" −10000), which rejects English-only dubs, so foreign-language titles get their own user-defined profile **Foreign - Prefer English Dub** in both apps: same qualities, language Any (Radarr), Bluray-1080p and WEB 1080p merged in Radarr so a dubbed WEB-DL is not replaced by a subtitles-only Bluray, and three home-lab formats: Dubbed or Dual Audio +2000 (DUBBED, Dual Audio, KOR+ENG style pairs; not MULTi, which on Usenet usually means French plus original), English Tag +1000 (ENG/English in the name but not as a subtitle tag; CHS ENG counts as subtitles), Not Original or English −10000. The two positive formats go by the release name only: the Usenet indexers tag nearly every release "English" and Radarr/Sonarr trust that over the name, so a Language condition scored untagged originals as dubs (found in the 2026-10-22 spot check) |
 | Home-lab formats | JSON in `stacks/media/recyclarr-extra/custom-formats/`, loaded through `recyclarr-extra/settings.yml` (mounted at `/config/extra`; `/opt/appdata/recyclarr/settings.yml` is a symlink to `/config/extra/settings.yml`, because Recyclarr reads settings only from the root of its writable config dir) |
 
 ## profile-sorter
@@ -167,6 +170,17 @@ https://audiobooks.tail9af84.ts.net (own login). Libraries `Media/Audiobooks` an
 (folder created 2026-10-21 at Goobs's request). Config and metadata under `/opt/appdata/audiobookshelf`.
 Health `GET /healthcheck`.
 
+## Listenarr and Chaptarr (books)
+
+Added 2026-10-22. `therobbiedavis/listenarr:canary-1.3.11` (audiobooks, port 4545,
+https://listenarr.tail9af84.ts.net, SSO) and `chaptarr/chaptarr:0.9.965` (ebooks, port 8789,
+https://chaptarr.tail9af84.ts.net, SSO), both as 3000 with `/mnt/nfs` mounted like SABnzbd. Readarr
+was retired upstream and its metadata server is gone, so Chaptarr (a Readarr fork with its own
+metadata service, reached by Prowlarr through the Readarr app type) does the ebook job. Root folders
+`Media/Audiobooks` and `Media/Books`, the folders Audiobookshelf and Storyteller already use; nothing
+is moved. SABnzbd/qBittorrent categories `audiobooks` and `books`. Details, limits (Listenarr has no
+delay profile or RSS) and first-run steps in [`docs/books.md`](../../books.md).
+
 ## RomM
 
 `rommapp/romm:4` with `mariadb:11`, port 8095, https://romm.tail9af84.ts.net (SSO). Retro game
@@ -188,5 +202,5 @@ only if `IGDB_CLIENT_ID/SECRET` are filled in (empty as of 2026-10-22). Data in
 ## Health and alerting
 
 Instant email monitors: Sonarr, Radarr, Prowlarr, SABnzbd, qBittorrent (via PIA), Requests. Digest
-monitors: Bazarr, Audiobookshelf, Storyteller, RomM, MeTube. Nightly backup of this VM was 443 MB on
+monitors: Bazarr, Audiobookshelf, Storyteller, RomM, MeTube, Listenarr, Chaptarr. Nightly backup of this VM was 443 MB on
 its first run.

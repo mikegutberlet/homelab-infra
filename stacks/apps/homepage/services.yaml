@@ -111,6 +111,16 @@
           type: prowlarr
           url: "http://192.168.1.51:9696"
           key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"
+    - Listenarr:
+        href: "https://listenarr.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Audiobooks (arr)
+        icon: mdi-headphones
+        siteMonitor: "http://192.168.1.51:4545/"
+    - Chaptarr:
+        href: "https://chaptarr.{{HOMEPAGE_VAR_TAILNET}}"
+        description: Books (arr)
+        icon: readarr.png
+        siteMonitor: "http://192.168.1.51:8789/ping"
     - Bazarr:
         href: "https://bazarr.{{HOMEPAGE_VAR_TAILNET}}"
         description: Subtitles

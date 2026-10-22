@@ -33,6 +33,8 @@ MONITORS = [
     ("qBittorrent (via PIA)", "http://192.168.1.51:8085/api/v2/app/version", True, ["200-299", "300-399", "400-499"]),
     ("Requests (Jellyseerr)", "http://192.168.1.51:5055/api/v1/status", True, None),
     ("Bazarr", "http://192.168.1.51:6767/", False, ["200-299", "300-399"]),
+    ("Listenarr", "http://192.168.1.51:4545/", False, ["200-299", "300-399"]),
+    ("Chaptarr", "http://192.168.1.51:8789/ping", False, None),
     ("Audiobookshelf", "http://192.168.1.51:13378/healthcheck", False, None),
     ("Storyteller", "http://192.168.1.51:8001/", False, ["200-299", "300-399"]),
     ("RomM", "http://192.168.1.51:8095/", False, ["200-299", "300-399"]),

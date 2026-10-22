@@ -33,6 +33,12 @@ audiobooks:
 romm:
   url: http://traefik:80
 
+listenarr:
+  url: http://traefik:80
+
+chaptarr:
+  url: http://traefik:80
+
 plex:
   url: http://traefik:80
 
