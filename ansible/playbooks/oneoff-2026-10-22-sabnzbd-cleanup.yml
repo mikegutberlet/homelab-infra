@@ -1,0 +1,175 @@
+# One-off, 2026-10-22, media VM. Kept for the record; safe to re-run (every step checks first).
+#
+#   ansible-playbook playbooks/oneoff-2026-10-22-sabnzbd-cleanup.yml
+#   ansible-playbook playbooks/oneoff-2026-10-22-sabnzbd-cleanup.yml -e radarr_cleanup=true
+#
+# 1. Undo a bad Sonarr manual import: a ManualImport for "Icons Unearthed" (series 725) was fed
+#    the series' own Season 1 files instead of the download, so Sonarr moved S01E01-06 into
+#    Season 9 as S09E01-06 and told SABnzbd to delete the real S09 download. Move the six files
+#    back to the paths Sonarr still holds for Season 1, rescan, and search Season 9 again.
+# 2. Deletes Goobs approved in the thread ("yes", 16:36 UTC): MobLand S02E05 (not an upgrade;
+#    removed through Sonarr so SABnzbd deletes the files), test_download_100MB, and the old
+#    /mnt/nfs/sabnzb/incomplete folder (orphans, SABnzbd no longer points there).
+# 3. Only with radarr_cleanup=true: drop the three Radarr queue items that are not import
+#    problems (two not upgrades, one matched to the wrong movie), blocklisted, files removed.
+- name: Sonarr fix and approved SABnzbd cleanup
+  hosts: media
+  become: true
+  vars:
+    radarr_cleanup: false
+    sonarr_series_id: 725
+    mobland_queue_id: 396472565
+    old_incomplete: /mnt/nfs/sabnzb/incomplete
+    complete_dir: /mnt/nfs/sabnzb/complete
+    radarr_titles: ["The.Last.Fiction.2019", "28.Years.Later.The.Bone.Template.2026", "A.Very.Harold"]
+  tasks:
+    - name: API keys
+      ansible.builtin.shell: |
+        echo "sonarr=$(sed -n 's:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p' {{ appdata_root }}/sonarr/config.xml | head -1)"
+        echo "radarr=$(sed -n 's:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p' {{ appdata_root }}/radarr/config.xml | head -1)"
+      register: keys
+      changed_when: false
+      no_log: true
+
+    - name: Keys as facts
+      ansible.builtin.set_fact:
+        sonarr_key: "{{ keys.stdout_lines | select('match', '^sonarr=') | first | regex_replace('^sonarr=', '') }}"
+        radarr_key: "{{ keys.stdout_lines | select('match', '^radarr=') | first | regex_replace('^radarr=', '') }}"
+      no_log: true
+
+    # ---- 1. Icons Unearthed: Season 9 files back to their Season 1 paths ----
+    - name: Move the six files back (only when the source exists and the target does not)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        base=http://127.0.0.1:8989/api/v3
+        files=$(curl -fsS -H "X-Api-Key: $SONARR_KEY" "$base/episodefile?seriesId={{ sonarr_series_id }}")
+        for n in 1 2 3 4 5 6; do
+          src=$(jq -r --arg n "$n" '[.[] | select(.seasonNumber==9) | select(.relativePath|test("S09E0"+$n+"[^0-9]";"i")) | .path] | first // empty' <<<"$files")
+          dst=$(jq -r --arg n "$n" '[.[] | select(.seasonNumber==1) | select(.relativePath|test("S01E0"+$n+"[^0-9]";"i")) | .path] | first // empty' <<<"$files")
+          if [ -n "$src" ] && [ -n "$dst" ] && [ -f "$src" ] && [ ! -e "$dst" ]; then
+            mkdir -p "$(dirname "$dst")"
+            mv -n "$src" "$dst" && echo "moved: $src -> $dst"
+          else
+            echo "skip E0$n: src='${src}' dst='${dst}'"
+          fi
+        done
+        # Empty Season 9 folder left behind by the bad import
+        s9=$(jq -r '[.[] | select(.seasonNumber==9) | .path] | first // empty' <<<"$files" | xargs -r dirname)
+        [ -n "$s9" ] && [ -d "$s9" ] && rmdir "$s9" 2>/dev/null && echo "removed empty $s9" || true
+      args:
+        executable: /bin/bash
+      environment:
+        SONARR_KEY: "{{ sonarr_key }}"
+      register: moved
+      changed_when: "'moved:' in moved.stdout"
+
+    - name: Show what moved
+      ansible.builtin.debug:
+        var: moved.stdout_lines
+
+    - name: Sonarr rescans the series (drops the stale S09 records, re-finds S01)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8989/api/v3/command
+        method: POST
+        headers: { X-Api-Key: "{{ sonarr_key }}" }
+        body_format: json
+        body: { name: RescanSeries, seriesId: "{{ sonarr_series_id | int }}" }
+        status_code: [200, 201]
+      changed_when: true
+
+    - name: Give the rescan a moment
+      ansible.builtin.pause:
+        seconds: 20
+
+    - name: Files per season after the rescan
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8989/api/v3/episodefile?seriesId={{ sonarr_series_id }}"
+        headers: { X-Api-Key: "{{ sonarr_key }}" }
+        return_content: true
+      register: after
+
+    - name: Season 1 has its six files back and Season 9 none
+      ansible.builtin.assert:
+        that:
+          - after.json | selectattr('seasonNumber', 'eq', 1) | list | length >= 6
+          - after.json | selectattr('seasonNumber', 'eq', 9) | list | length == 0
+        fail_msg: "season counts: {{ after.json | map(attribute='seasonNumber') | list }}"
+
+    - name: Search Season 9 again (the deleted download)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8989/api/v3/command
+        method: POST
+        headers: { X-Api-Key: "{{ sonarr_key }}" }
+        body_format: json
+        body: { name: SeasonSearch, seriesId: "{{ sonarr_series_id | int }}", seasonNumber: 9 }
+        status_code: [200, 201]
+      changed_when: true
+
+    # ---- 2. Approved deletes ----
+    - name: MobLand S02E05 out of Sonarr's queue, files removed through SABnzbd
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8989/api/v3/queue/{{ mobland_queue_id }}?removeFromClient=true&blocklist=false"
+        method: DELETE
+        headers: { X-Api-Key: "{{ sonarr_key }}" }
+        status_code: [200, 404] # 404 = already gone
+      register: mob
+      changed_when: mob.status == 200
+
+    - name: Leftover MobLand, test file and the old incomplete folder
+      ansible.builtin.shell: |
+        set -u
+        sleep 10
+        for p in {{ complete_dir }}/MobLand.S02E05* {{ complete_dir }}/test_download_100MB; do
+          [ -e "$p" ] && rm -rf "$p" && echo "removed $p"
+        done
+        if grep -q '^download_dir *= */incomplete' {{ appdata_root }}/sabnzbd/sabnzbd.ini && [ -d {{ old_incomplete }} ]; then
+          du -sh {{ old_incomplete }}; rm -rf {{ old_incomplete }} && echo "removed {{ old_incomplete }}"
+        fi
+        true
+      args:
+        executable: /bin/bash
+      register: rmres
+      changed_when: "'removed' in rmres.stdout"
+
+    - name: Deleted
+      ansible.builtin.debug:
+        var: rmres.stdout_lines
+
+    # ---- 3. Radarr queue items that are not import problems (opt-in) ----
+    - name: Radarr queue
+      ansible.builtin.uri:
+        url: http://127.0.0.1:7878/api/v3/queue?pageSize=200
+        headers: { X-Api-Key: "{{ radarr_key }}" }
+        return_content: true
+      register: rq
+      when: radarr_cleanup | bool
+
+    - name: Remove and blocklist the three, files deleted through SABnzbd
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:7878/api/v3/queue/{{ item.id }}?removeFromClient=true&blocklist=true"
+        method: DELETE
+        headers: { X-Api-Key: "{{ radarr_key }}" }
+        status_code: [200, 404]
+      loop: "{{ rq.json.records | selectattr('title', 'search', radarr_titles | join('|')) | list }}"
+      loop_control:
+        label: "{{ item.title }}"
+      when: radarr_cleanup | bool
+      changed_when: true
+
+    - name: Leftover Radarr folders in complete/
+      ansible.builtin.shell: |
+        sleep 10
+        for t in {{ radarr_titles | join(' ') }}; do
+          for p in {{ complete_dir }}/"$t"*; do [ -e "$p" ] && rm -rf "$p" && echo "removed $p"; done
+        done
+        true
+      args:
+        executable: /bin/bash
+      register: rrm
+      changed_when: "'removed' in rrm.stdout"
+      when: radarr_cleanup | bool
+
+    - name: Radarr cleanup result
+      ansible.builtin.debug:
+        var: rrm.stdout_lines
+      when: radarr_cleanup | bool
