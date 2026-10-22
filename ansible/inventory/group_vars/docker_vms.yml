@@ -13,7 +13,10 @@ nfs_shares:
     src: "192.168.1.209:/mnt/DeepData/NAS"
     # Same path as the old Servarr VM, so migrated Sonarr/Radarr root folders keep working.
     path: /mnt/nfs
-    opts: "nfsvers=4.2,hard,noatime,_netdev,x-systemd.automount,x-systemd.mount-timeout=30"
+    # nconnect=4 (2026-10-22): no extra throughput on 1 GbE, but small metadata calls stop
+    # queueing behind 1 MB media reads on one TCP stream. Applies at the next remount or boot.
+    opts: "nfsvers=4.2,nconnect=4,hard,noatime,_netdev,x-systemd.automount,x-systemd.mount-timeout=30"
+nfs_readahead_kb: 4096 # kernel default 128; sequential media reads over 1 GbE (role nfs)
 
 timezone: America/Los_Angeles # same as the Proxmox hosts and TrueNAS
 

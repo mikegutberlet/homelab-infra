@@ -81,3 +81,31 @@
     state: started
     daemon_reload: true
   when: nfs_mounts | default([]) | length > 0
+
+# Read-ahead (2026-10-22): the kernel gives an NFS mount 128 KB of read-ahead, sized for small
+# random reads. Plex streams and Tdarr sources are long sequential reads over 1 GbE that stutter
+# while the pool is busy (scrub, transcode batch). The udev rule covers every future NFS mount
+# (their bdi devices are the only "0:*" ones on these VMs); the live write covers the mounts
+# that exist now, so nothing is remounted. Undo: set nfs_readahead_kb back to 128 and run again.
+- name: NFS read-ahead for future mounts
+  ansible.builtin.copy:
+    dest: /etc/udev/rules.d/99-nfs-readahead.rules
+    mode: "0644"
+    content: |
+      # homelab-infra, role nfs: read-ahead in KiB for NFS mounts (kernel default 128)
+      SUBSYSTEM=="bdi", ACTION=="add", KERNEL=="0:*", ATTR{read_ahead_kb}="{{ nfs_readahead_kb }}"
+  when: nfs_mounts | default([]) | length > 0
+
+- name: NFS read-ahead on the mounts that exist now
+  ansible.builtin.shell: |
+    changed=0
+    for p in {{ nfs_mounts | default([]) | map('extract', nfs_shares, 'path') | join(' ') }}; do
+      findmnt -rn -t nfs,nfs4 --mountpoint "$p" >/dev/null || continue
+      f="/sys/class/bdi/$(mountpoint -d "$p")/read_ahead_kb"
+      [ "$(cat "$f")" = "{{ nfs_readahead_kb }}" ] && continue
+      echo {{ nfs_readahead_kb }} > "$f" && changed=1
+    done
+    echo "$changed"
+  register: nfs_ra
+  changed_when: nfs_ra.stdout_lines[-1] == "1"
+  when: nfs_mounts | default([]) | length > 0
