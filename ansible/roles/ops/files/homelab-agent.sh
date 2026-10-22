@@ -14,6 +14,7 @@ REPORT_URL=${REPORT_URL:-http://192.168.1.53:5678/webhook/homelab/report}
 STACKS=${STACKS:-}
 EXPECTED=${EXPECTED:-}                 # "stack/service stack/service ..." that must be running
 NAS_IP=${NAS_IP:-192.168.1.209}
+NFS_EXPECTED=${NFS_EXPECTED:-true}       # false on VMs without an NFS library mount (edge, ai)
 EXTRA_DISKS=${EXTRA_DISKS:-}           # more mount points to report, e.g. the SABnzbd scratch disk
 APPDATA=/opt/appdata
 AGENT_VERSION=2
@@ -61,18 +62,20 @@ disks_json() {
 }
 
 mounts_json() {
-  local nfs_mounted=false nfs_nonempty=false bk_mounted=false nas_up=false
-  ls /mnt/nfs >/dev/null 2>&1 # triggers the automount
-  findmnt -rn -t nfs,nfs4 --mountpoint /mnt/nfs >/dev/null 2>&1 && nfs_mounted=true
-  [ -n "$(ls -A /mnt/nfs 2>/dev/null)" ] && nfs_nonempty=true
+  local nfs_mounted=false nfs_nonempty=false bk_mounted=false nas_up=false nfs=null
+  if [ "$NFS_EXPECTED" = true ]; then
+    ls /mnt/nfs >/dev/null 2>&1 # triggers the automount
+    findmnt -rn -t nfs,nfs4 --mountpoint /mnt/nfs >/dev/null 2>&1 && nfs_mounted=true
+    [ -n "$(ls -A /mnt/nfs 2>/dev/null)" ] && nfs_nonempty=true
+    nfs="{\"mounted\":$nfs_mounted,\"nonempty\":$nfs_nonempty}"
+  fi
   ls /mnt/backups >/dev/null 2>&1
   findmnt -rn -t nfs,nfs4 --mountpoint /mnt/backups >/dev/null 2>&1 && bk_mounted=true
   timeout 5 bash -c "</dev/tcp/$NAS_IP/2049" 2>/dev/null && nas_up=true
   local wait_nas; wait_nas=$(systemctl is-active wait-nas 2>/dev/null); [ -n "$wait_nas" ] || wait_nas=absent
   [ "$wait_nas" = inactive ] && ! systemctl cat wait-nas >/dev/null 2>&1 && wait_nas=absent
-  j -n --argjson m "$nfs_mounted" --argjson e "$nfs_nonempty" --argjson b "$bk_mounted" \
-    --argjson n "$nas_up" --arg w "$wait_nas" \
-    '{nfs:{mounted:$m, nonempty:$e}, backups_mounted:$b, nas_tcp_2049:$n, wait_nas:$w}'
+  j -n --argjson nfs "$nfs" --argjson b "$bk_mounted" --argjson n "$nas_up" --arg w "$wait_nas" \
+    '{nfs:$nfs, backups_mounted:$b, nas_tcp_2049:$n, wait_nas:$w}'
 }
 
 # ---------- backups ----------
