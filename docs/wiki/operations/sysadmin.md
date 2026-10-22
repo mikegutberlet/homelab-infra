@@ -13,7 +13,7 @@ Per-VM side: Ansible role `ops` (`homelab-agent`, `homelab-ops`).
 
 | Part | Where | Does |
 | --- | --- | --- |
-| `homelab-agent` | every VM, timer `*:0/15` | POSTs the VM's state to `/webhook/homelab/report`: system, disks, NFS and backup mounts, last backup, containers (state, health, restart count), expected services missing, reclaimable Docker space, Sonarr/Radarr health and stuck queue, Prowlarr backoffs, SABnzbd, qBittorrent via gluetun, Tdarr, and on edge Tailscale plus a TLS check of every ts.net name |
+| `homelab-agent` | every VM, timer `*:0/15` | POSTs the VM's state to `/webhook/homelab/report`: system, disks, NFS and backup mounts, last backup, containers (state, health, restart count), expected services missing, reclaimable Docker space, Sonarr/Radarr health and stuck queue, Prowlarr backoffs, SABnzbd, qBittorrent via gluetun, Tdarr, login and API-key fingerprints for Sonarr/Radarr/Prowlarr/SABnzbd and every stored copy of their keys (agent v2, 2026-10-22; no secret leaves the VM), and on edge Tailscale plus a TLS check of every ts.net name |
 | Evaluate report | n8n | Turns one report into issues (critical / warning / info) with a stable key; keeps the previous report, restart samples and an hourly trend point per VM |
 | Every 15 min + Evaluate infra | n8n | Reads Proxmox (`cluster/resources`, `cluster/status`, node status for swap), TrueNAS (`pool`, `pool/dataset/id/DeepData`, `alert/list`) and Scrutiny (`/api/summary`), and flags VMs that have not reported for 40 min |
 | Decide | n8n | Updates the issue store (first seen, resolved), emails new criticals (then every 6 h while they persist), and plans fixes within the limits |

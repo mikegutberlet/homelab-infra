@@ -125,6 +125,51 @@ if (md.tdarr) {
   }
 }
 
+// ---- logins and API keys (agent v2; fingerprints only) ----
+// 2026-10-22: a Sonarr/Radarr password mismatch went unnoticed for hours. Now a changed login,
+// a changed or rejected API key, a consumer holding a stale key, or repeated failed logins are
+// raised the same quarter hour. Nothing here is auto-fixed: credentials are Goobs's call.
+const lg = r.logins || {};
+const plg = (prev && prev.logins) || {};
+const lockedOut = 'Reset steps: wiki operations/locked-out.md (playbooks/arr-auth.yml)';
+for (const app of ['sonarr', 'radarr', 'prowlarr']) {
+  const a = lg[app]; if (!a) continue;
+  const p = plg[app] || null;
+  if (p && (a.auth_method !== p.auth_method || a.auth_required !== p.auth_required))
+    add(`login-mode:${app}`, 'critical', `${app}: login mode changed to ${a.auth_method}/${a.auth_required} (was ${p.auth_method}/${p.auth_required})`, `Only a config.xml edit or a restore does this. ${lockedOut}`);
+  if (p && p.users && a.users && a.users.fp !== p.users.fp)
+    add(`login-users:${app}`, 'critical', `${app}: the web login changed (user${a.users.count === 1 ? '' : 's'} ${a.users.names.join(', ')})`, `Password or username differs from 15 minutes ago. If you did not change it: restore ${app}.db from /mnt/backups. ${lockedOut}`);
+  if (a.auth_method === 'Forms' && a.users && a.users.count === 0)
+    add(`login-nouser:${app}`, 'critical', `${app}: forms login is on but no user exists`, 'The next page load asks to create one; whoever gets there first owns the app');
+  if (p && p.apikey_fp && a.apikey_fp && a.apikey_fp !== p.apikey_fp)
+    add(`apikey:${app}`, 'critical', `${app}: API key changed`, 'Prowlarr, Bazarr, Recyclarr, Jellyseerr, Homepage and the agent all hold the old one; update them or restore config.xml');
+  if (a.api_http != null && a.api_http !== 200)
+    add(`apikey-rejected:${app}`, 'critical', `${app}: rejects its own API key (HTTP ${a.api_http})`, 'config.xml and the running app disagree; a restart usually reloads the file');
+  // Counts are per log file; the first report after a deploy (or a log rotation) sets the baseline.
+  const newFails = p && p.auth_failures != null && a.auth_failures >= p.auth_failures ? a.auth_failures - p.auth_failures : 0;
+  if (newFails >= S.LOGIN_FAILS_CRIT)
+    add(`login-failures:${app}`, 'critical', `${app}: ${newFails} failed web login(s) in the last 15 min`, `Last at ${a.last_failure || '?'} (VM local time). The stored login has ${p && p.users && a.users && a.users.fp === p.users.fp ? 'NOT changed' : 'changed'}; check the password-manager entry (user ${a.users ? a.users.names.join('/') : '?'}). ${lockedOut}`);
+  else if (newFails > 0)
+    add(`login-failures:${app}`, 'info', `${app}: ${newFails} failed web login(s)`, `Last at ${a.last_failure || '?'}`);
+}
+if (lg.sabnzbd) {
+  const a = lg.sabnzbd, p = plg.sabnzbd || null;
+  if (p && a.login_fp !== p.login_fp) add('login-users:sabnzbd', 'critical', `SABnzbd: the web login changed (${a.login_set ? 'set' : 'none'})`, `Was ${p.login_set ? 'set' : 'none'} 15 minutes ago. ${lockedOut}`);
+  if (p && p.apikey_fp && a.apikey_fp && a.apikey_fp !== p.apikey_fp) add('apikey:sabnzbd', 'critical', 'SABnzbd: API key changed', 'Sonarr, Radarr, Listenarr, Chaptarr, Homepage and the agent hold the old one');
+  if (a.api_http != null && a.api_http !== 200) add('apikey-rejected:sabnzbd', 'critical', `SABnzbd: rejects its own API key (HTTP ${a.api_http})`, 'sabnzbd.ini and the running app disagree');
+}
+// Consumers: every stored copy of an arr key must match the app's own key. Copies on another VM
+// (Homepage on apps) are compared against the media VM's last report.
+const own = {};
+for (const h of [...new Set([host, ...Object.keys(sd.last)])]) for (const app of ['sonarr', 'radarr', 'prowlarr', 'sabnzbd']) {
+  const x = ((h === host ? lg : (sd.last[h].logins || {}))[app]) || null;
+  if (x && x.apikey_fp) own[app] = x.apikey_fp;
+}
+for (const [who, fpv] of Object.entries(lg.consumers || {})) {
+  const [consumer, app] = who.split(':');
+  if (own[app] && fpv !== own[app]) add(`apikey-stale:${who}`, 'critical', `${consumer} holds a stale ${app} API key`, `${consumer}'s copy differs from ${app}'s config; its calls fail with 401. Paste the current key into ${consumer}'s settings`);
+}
+
 // ---- edge: Tailscale and certificates ----
 if (r.edge) {
   const ts = r.edge.tailscale || {};

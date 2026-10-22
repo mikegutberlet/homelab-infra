@@ -5,6 +5,7 @@
 | Email | From | Means | Do |
 | --- | --- | --- | --- |
 | "[Uptime Kuma] <monitor> DOWN/UP" immediately | the lab's alert Gmail account via Kuma | One of the 8 critical media monitors failed a check (Plex, Emby, Sonarr, Radarr, Prowlarr, SABnzbd, qBittorrent via PIA, Requests) | Open `status.tail9af84.ts.net`; if the whole VM is down, check Proxmox; autoheal usually fixes single containers within a minute |
+| "[CRITICAL] <app>: login changed / API key changed / holds a stale key / failed web login(s)" at once | n8n sysadmin | The 15-minute reporter saw a credential move or 3+ failed form logins in a quarter hour; the text says whether the stored login changed | [Locked out of an app](locked-out.md) |
 | "Homelab digest <date>" at 8:00 Pacific | n8n | Yesterday's non-critical outages, Diun image updates, Scrutiny disk warnings, backup errors; or "nothing to report" | Skim; act on disk warnings and backup errors; schedule image updates as PRs |
 | healthchecks.io "RicksGarage is down" (once configured) | healthchecks.io | That host has not pinged for 10 minutes: power cut, network down, or host frozen | Physically check; see [Power outage](power-outage.md) |
 
