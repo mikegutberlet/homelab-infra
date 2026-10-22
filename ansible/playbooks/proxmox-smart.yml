@@ -1,0 +1,69 @@
+# SMART self-tests for the USB DAS disks (2026-10-22). TrueNAS sees virtual disks, so the only
+# place that can test the five Exos drives is the Proxmox host that owns the USB bridges. None
+# of them had ever run a self-test; the Oct 2 uncorrectable read on ZVTAM9MF is the reason.
+# Read-only for the pool: a self-test runs inside the drive and yields to real I/O.
+# Schedule per disk: a short test once a week (Mon..Fri, 02:00) and a long test once a month,
+# five days apart so two 20 TB long tests (about 30 h each) never overlap. Results land in the
+# host journal (smartd) and in Scrutiny (playbooks/proxmox-scrutiny.yml).
+# Undo: remove /etc/smartd.conf.d/homelab-das.conf... no: restore /etc/smartd.conf to DEVICESCAN
+# (the Debian default) and restart smartmontools.
+- name: SMART self-tests on the USB DAS
+  hosts: proxmox
+  vars:
+    # This disk's long test runs first each month (day 1).
+    smart_long_first: ZVTAM9MF
+    smart_short_hour: "02"
+    smart_long_hour: "03"
+  tasks:
+    - name: USB disks by ID (whole disks only)
+      ansible.builtin.find:
+        paths: /dev/disk/by-id
+        patterns: "usb-*"
+        excludes: "*-part*"
+        file_type: link
+      register: usb_disks
+
+    - name: No USB disks here
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} has no USB disks; smartd left as it is."
+      when: usb_disks.files | length == 0
+
+    - name: Order the disks, long-test-first disk in front
+      ansible.builtin.set_fact:
+        das_disks: >-
+          {{ (usb_disks.files | map(attribute='path') | select('search', smart_long_first) | list)
+             + (usb_disks.files | map(attribute='path') | reject('search', smart_long_first) | sort) }}
+      when: usb_disks.files | length > 0
+
+    - name: smartmontools present
+      ansible.builtin.apt:
+        name: [smartmontools]
+      when: usb_disks.files | length > 0
+
+    - name: smartd config for the DAS
+      ansible.builtin.copy:
+        dest: /etc/smartd.conf
+        mode: "0644"
+        content: |
+          # homelab-infra, playbooks/proxmox-smart.yml. Debian default was a single DEVICESCAN line.
+          # -d sat: SMART through the ASM235CM USB bridges. -a: monitor everything. -W: warn at 45 C,
+          # alert at 50 C. -s: short test weekly (S/../../<weekday>/HH), long test monthly
+          # (L/../<day>/./HH). Mail goes to root if the host ever gets a working MTA.
+          {% for disk in das_disks %}
+          {{ disk }} -d sat -a -W 4,45,50 -s (S/../../{{ loop.index }}/{{ smart_short_hour }}|L/../{{ '%02d' | format(1 + (loop.index0 * 5)) }}/./{{ smart_long_hour }}) -m root -M exec /usr/share/smartmontools/smartd-runner
+          {% endfor %}
+      when: usb_disks.files | length > 0
+      notify: Restart smartd
+
+    - name: smartd enabled
+      ansible.builtin.service:
+        name: smartmontools
+        enabled: true
+        state: started
+      when: usb_disks.files | length > 0
+
+  handlers:
+    - name: Restart smartd
+      ansible.builtin.service:
+        name: smartmontools
+        state: restarted
