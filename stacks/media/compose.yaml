@@ -105,6 +105,8 @@ services:
     volumes:
       - /opt/appdata/gluetun:/gluetun
 
+  # Fallback to Usenet only (docs/torrent-fallback.md): Sonarr/Radarr reach it at gluetun:8085,
+  # downloads go to /mnt/nfs/sabnzb/torrents (same export as the libraries, so hardlinks).
   qbittorrent:
     <<: *common
     image: lscr.io/linuxserver/qbittorrent:latest
@@ -117,9 +119,24 @@ services:
       - /mnt/nfs:/mnt/nfs
     depends_on:
       gluetun: {condition: service_healthy}
+    # Checks the internet through the tunnel, not just the WebUI: when gluetun restarts, this
+    # container is left in a dead network namespace (localhost still answers), and only an
+    # unhealthy status makes autoheal restart it so it re-joins gluetun. Six misses = 3 minutes,
+    # enough for a PIA reconnect.
     healthcheck:
       <<: *arr-health
-      test: ["CMD", "curl", "-fsS", "http://localhost:8085/api/v2/app/version"]
+      test: ["CMD", "curl", "-fsS", "--max-time", "10", "https://api.ipify.org"]
+      retries: 6
+
+  # Solves Cloudflare challenges for Prowlarr (1337x, EZTV). Only Prowlarr talks to it, on the
+  # compose network (http://flaresolverr:8191); no published port. Headless Chromium, so
+  # 300-500 MB RAM. Added 2026-10-22 on Goobs's OK.
+  flaresolverr:
+    <<: *common
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    environment:
+      TZ: ${TZ}
+      LOG_LEVEL: info
 
   recyclarr:
     <<: *common

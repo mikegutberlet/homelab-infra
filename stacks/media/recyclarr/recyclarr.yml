@@ -5,6 +5,14 @@
 # "web-1080p" (Sonarr) and "hd-bluray-web" (Radarr) templates; a profile's default
 # custom-format groups come with it.
 # Both top out at 1080p (no 4K, by choice).
+#
+# Quality floor (Goobs, 2026-10-22): the guide profiles allow only 1080p (Sonarr) or
+# 1080p/720p Bluray (Radarr), so anything else stayed missing. Goobs wants a 480p floor
+# instead, torrents being a fallback for obscure titles, and never a cam/telesync/screener.
+# The `qualities` lists below override the guide's: same top tiers and cutoff, then 720p and
+# the SD tiers down to 480p, and everything below 480p, 4K, remuxes and discs disabled.
+# "No CAM/TS/Screener" is a hand-made custom format in both apps (release-title regex,
+# score -10000); it is kept out of reset_unmatched_scores so the daily sync leaves it alone.
 sonarr:
   sonarr: # v8: instance names must be unique across Sonarr and Radarr
     base_url: http://sonarr:8989
@@ -17,6 +25,41 @@ sonarr:
         name: "Anything Not Terrible "
         reset_unmatched_scores:
           enabled: true
+          except: ["No CAM/TS/Screener"]
+        upgrade:
+          allowed: true
+          until_quality: WEB 1080p
+          until_score: 10000
+        qualities:
+          - name: WEB 1080p
+            qualities: [WEBDL-1080p, WEBRip-1080p]
+          - name: Bluray-1080p
+          - name: HDTV-1080p
+          - name: Bluray-720p
+          - name: WEB 720p
+            qualities: [WEBDL-720p, WEBRip-720p]
+          - name: HDTV-720p
+          - name: Bluray-576p
+          - name: Bluray-480p
+          - name: WEB 480p
+            qualities: [WEBDL-480p, WEBRip-480p]
+          - name: DVD
+          - name: SDTV
+          - name: Bluray-2160p Remux
+            enabled: false
+          - name: Bluray-2160p
+            enabled: false
+          - name: WEB 2160p
+            enabled: false
+            qualities: [WEBDL-2160p, WEBRip-2160p]
+          - name: HDTV-2160p
+            enabled: false
+          - name: Bluray-1080p Remux
+            enabled: false
+          - name: Raw-HD
+            enabled: false
+          - name: Unknown
+            enabled: false
 
 radarr:
   radarr:
@@ -29,6 +72,59 @@ radarr:
         name: Anything Not terrible
         reset_unmatched_scores:
           enabled: true
+          except: ["No CAM/TS/Screener"]
+        upgrade:
+          allowed: true
+          until_quality: Bluray-1080p
+          until_score: 10000
+        qualities:
+          - name: Bluray-1080p
+          - name: WEB 1080p
+            qualities: [WEBDL-1080p, WEBRip-1080p]
+          - name: Bluray-720p
+          - name: WEB 720p
+            qualities: [WEBDL-720p, WEBRip-720p]
+          - name: HDTV-1080p
+          - name: HDTV-720p
+          - name: Bluray-576p
+          - name: Bluray-480p
+          - name: WEB 480p
+            qualities: [WEBDL-480p, WEBRip-480p]
+          - name: DVD
+          - name: SDTV
+          # Everything below is off: 4K, remuxes and discs (no 4K; Roku/phone can't play them),
+          # DVD-R images, and the cam-era junk Goobs never wants.
+          - name: Remux-2160p
+            enabled: false
+          - name: Bluray-2160p
+            enabled: false
+          - name: WEB 2160p
+            enabled: false
+            qualities: [WEBDL-2160p, WEBRip-2160p]
+          - name: HDTV-2160p
+            enabled: false
+          - name: Remux-1080p
+            enabled: false
+          - name: BR-DISK
+            enabled: false
+          - name: Raw-HD
+            enabled: false
+          - name: DVD-R
+            enabled: false
+          - name: DVDSCR
+            enabled: false
+          - name: REGIONAL
+            enabled: false
+          - name: TELECINE
+            enabled: false
+          - name: TELESYNC
+            enabled: false
+          - name: CAM
+            enabled: false
+          - name: WORKPRINT
+            enabled: false
+          - name: Unknown
+            enabled: false
     custom_formats:
       # Tdarr re-encodes H.264 movies to HEVC (2026-10-21), so the TRaSH "x265 (HD)" penalty
       # (-10000) would make Radarr try to replace those files. Score it 0 instead.
