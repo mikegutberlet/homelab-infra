@@ -82,10 +82,15 @@ if CREATE:
     for k in (json.loads(keys) if keys.strip() else []):
         if k.get("name") == "homepage":
             subprocess.run(["ssh", NAS, f"midclt call api_key.delete {k['id']}"], capture_output=True)
-    # An empty allowlist denies everything; GET on every resource is all the widget needs.
-    out = subprocess.run(["ssh", NAS, "midclt call api_key.create "
-                          "'{\"name\":\"homepage\",\"allowlist\":[{\"method\":\"GET\",\"resource\":\"*\"}]}'"],
-                         capture_output=True, text=True).stdout
+    # SCALE 24.10+ keys belong to a user (username required); on 23.10 a key carries an
+    # allowlist instead, and an empty one denies everything (the 403s of the first run).
+    out = ""
+    for body in ('{"name":"homepage","username":"root"}',
+                 '{"name":"homepage","allowlist":[{"method":"GET","resource":"*"}]}'):
+        r = subprocess.run(["ssh", NAS, f"midclt call api_key.create '{body}'"], capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip():
+            out = r.stdout
+            break
     need("HOMEPAGE_TRUENAS_KEY", json.loads(out).get("key", "") if out.strip() else "")
     # Nextcloud serverinfo token (its only purpose is this read-only endpoint).
     nc = secrets.token_hex(32)
