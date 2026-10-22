@@ -38,8 +38,8 @@ const SETTINGS = {
   TZ: 'America/Los_Angeles',
   // Chat page (sysadmin.<tailnet>). CHAT_FIXES_ENABLED lets a fix proposed in chat run after Goobs
   // presses Confirm; it is separate from FIXES_ENABLED, which gates the automatic ones.
-  // Off until Goobs decides (2026-10-22): with it off, chat proposes fixes but does not run them.
-  CHAT_FIXES_ENABLED: false,
+  // On since 2026-10-22 20:32Z (Goobs: "CHAT_FIXES_ENABLED on"); false = chat proposes but Confirm does nothing.
+  CHAT_FIXES_ENABLED: true,
   CHAT_FIX_PER_HOUR: 2,                      // per target, counting automatic fixes too
   CHAT_FIX_PER_DAY: 10,                      // all chat fixes together
   CHAT_CONFIRM_MIN: 15,                      // a proposal expires after this
