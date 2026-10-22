@@ -1,6 +1,7 @@
 # RomM config (mounted read-only at /romm/config/config.yml). The library is NAS/Media/Games/ROMs,
 # mounted as /romm/library/roms, so each top-level folder there is one console. Goobs's folder
-# names are mapped to RomM platform slugs here; nothing is renamed on the NAS.
+# names are mapped to RomM platform slugs here; nothing is renamed on the NAS. (2026-10-22: the
+# loose per-game folders were moved into these console folders on Goobs's OK; N64 was added then.)
 # Folders that match no platform (the loose per-game folders, "BIOS files", archives) are skipped;
 # to add a console, create a folder here or on the NAS with a slug RomM knows.
 system:
@@ -9,6 +10,7 @@ system:
     GB: gb
     GBColor: gbc
     NDS: nds
+    N64: n64
     PS1: psx
     PS2: ps2
     PSP: psp

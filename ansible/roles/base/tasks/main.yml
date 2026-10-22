@@ -62,3 +62,32 @@
       APT::Periodic::Update-Package-Lists "1";
       APT::Periodic::Unattended-Upgrade "1";
     mode: "0644"
+
+# The cloud image has no swap. Without it, the media VM nearly ran out of memory on 2026-10-22
+# (load >100, SSH frozen for minutes). A small swap file absorbs short spikes; swappiness 10
+# keeps the apps in RAM the rest of the time.
+- name: Swap file
+  ansible.builtin.shell: |
+    fallocate -l {{ swap_mb }}M /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+  args:
+    creates: /swapfile
+
+- name: Swap file in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^/swapfile "
+    line: "/swapfile none swap sw 0 0"
+
+- name: Swap file on
+  ansible.builtin.command: swapon /swapfile
+  register: swapon
+  changed_when: swapon.rc == 0
+  failed_when: swapon.rc != 0 and 'busy' not in swapon.stderr
+
+- name: Prefer RAM over swap
+  ansible.posix.sysctl:
+    name: vm.swappiness
+    value: "10"
+    sysctl_file: /etc/sysctl.d/90-swap.conf

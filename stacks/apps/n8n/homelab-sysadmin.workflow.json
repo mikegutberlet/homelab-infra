@@ -1,0 +1,1152 @@
+{
+  "name": "Homelab sysadmin",
+  "nodes": [
+    {
+      "id": "5910f1c2-80e0-506c-a15c-6e54da124883",
+      "name": "report",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/report",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "ca198309-eb7b-513c-8aa9-42f35dac0c94"
+    },
+    {
+      "id": "60012604-c64a-5fff-a8de-524a213d0fc1",
+      "name": "Evaluate report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Shared constants for the \"Homelab sysadmin\" workflow. docs/build_sysadmin_workflow.py pastes\n// this file at the top of every Code node, so change it here and rebuild, not inside n8n.\nconst SETTINGS = {\n  // Round one runs report-only: fixes are decided and logged as \"would run\", nothing is executed.\n  FIXES_ENABLED: false,\n  // arr-blocklist stays off until arr-retry has run clean for a week (Goobs, 2026-10-22).\n  BLOCKLIST_ENABLED: false,\n  // VMs that must report; a silent one is itself a critical issue.\n  HOSTS: ['edge', 'media', 'gpu', 'apps', 'ai'],\n  HOST_IP: { edge: '192.168.1.50', media: '192.168.1.51', gpu: '192.168.1.52', apps: '192.168.1.53', ai: '192.168.1.54' },\n  SILENT_AFTER_MIN: 40,\n  // Per target (host + verb + name): at most one fix an hour and three a day.\n  FIX_PER_HOUR: 1,\n  FIX_PER_DAY: 3,\n  // Services the ops door never restarts (mirrors ops_never in ansible group_vars).\n  NEVER_RESTART: ['n8n', 'postgres', 'redis', 'autoheal', 'tailscale', 'immich-db', 'immich-redis', 'romm-db', 'authentik-db', 'authentik-redis', 'scrutiny-influx'],\n  // Critical issues are emailed at once, then again only every 6 hours while they persist.\n  EMAIL_REPEAT_H: 6,\n  // Thresholds\n  POOL_WARN_TB: 4, POOL_CRIT_TB: 3,          // DeepData free; Tdarr pauses below 3 TB\n  DISK_WARN: 80, DISK_CRIT: 90,              // percent used, VM disks and Proxmox storage\n  MEM_WARN: 90, MEM_CRIT: 95,                // percent used\n  SWAP_WARN_BYTES: 256 * 1024 * 1024,\n  LOAD_FACTOR: 2,                            // 15-min load over this x cores = warning\n  BACKUP_WARN_H: 26, BACKUP_CRIT_H: 50,\n  RESTARTS_WARN: 3, RESTARTS_CRIT: 10,       // per container per hour\n  RECLAIM_WARN_GB: 20,\n  QUEUE_CRIT: 20,                            // stuck arr items\n  STUCK_RETRY_H: 24, STUCK_BLOCKLIST_H: 48,\n  SAB_DISK_CRIT_GB: 100,\n  TDARR_IDLE_H: 6,\n  KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,\n  SCRUB_WARN_DAYS: 45,\n  PVE_EXPECT_RUNNING: [110, 201, 202, 203, 204, 205],\n  PVE_EXPECT_STOPPED: [113, 117],\n  TZ: 'America/Los_Angeles',\n};\nconst TB = 1e12, GB = 1e9, H = 3600e3;\nconst now = Date.now();\nconst fmtT = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: SETTINGS.TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });\nconst gb = (b) => `${(b / GB).toFixed(1)} GB`;\nconst tb = (b) => `${(b / TB).toFixed(2)} TB`;\nconst ago = (ms) => { const h = (now - ms) / H; return h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };\n// One issue: key is stable across runs so the store can track first/last seen and emails.\nconst issue = (host, key, sev, title, detail, fix) => ({ host, key: `${host}:${key}`, sev, title, detail: detail || '', fix: fix || null });\n\n// Evaluate report: one VM's homelab-agent report in, the list of issues it raises out.\n// Reads and updates the per-host history in static data (previous report, restart samples,\n// hourly trend points). Rules live here; the decision about emails and fixes is in Decide.\nconst sd = $getWorkflowStaticData('global');\nsd.last = sd.last || {}; sd.rs = sd.rs || {}; sd.trends = sd.trends || {}; sd.tdarr = sd.tdarr || {};\nconst r = $input.first().json.body || $input.first().json;\nconst host = r.host;\nif (!host || !r.system) return [{ json: { host: 'unknown', issues: [], ignored: true } }];\nconst prev = sd.last[host] || null;\nconst issues = [];\nconst add = (...a) => issues.push(issue(host, ...a));\nconst S = SETTINGS;\nconst sys = r.system || {};\n\n// ---- system ----\nif (sys.mem && sys.mem.used_pct >= S.MEM_CRIT) add('mem', 'critical', `${host}: memory ${sys.mem.used_pct}% used`, `${gb(sys.mem.available)} available of ${gb(sys.mem.total)}`);\nelse if (sys.mem && sys.mem.used_pct >= S.MEM_WARN) add('mem', 'warning', `${host}: memory ${sys.mem.used_pct}% used`, `${gb(sys.mem.available)} available`);\nif (sys.swap && sys.swap.used > S.SWAP_WARN_BYTES) add('swap', 'warning', `${host}: ${gb(sys.swap.used)} of swap in use`, 'The VM is short of RAM; check its balloon floor in Proxmox');\nif (sys.load && sys.cores && sys.load[2] > S.LOAD_FACTOR * sys.cores) add('load', 'warning', `${host}: 15-min load ${sys.load[2]} on ${sys.cores} cores`, 'Sustained for at least 15 minutes');\nif (sys.uptime_s != null && sys.uptime_s < 1200) add('rebooted', 'warning', `${host} restarted ${Math.round(sys.uptime_s / 60)} min ago`, 'Unplanned unless you did it; check the Proxmox task log');\nif (sys.reboot_required) add('reboot-required', 'info', `${host}: a kernel or libc update is waiting for a reboot`, 'Power off cleanly from Proxmox when convenient (NUC hosts: never a host reboot)');\nif (sys.pending_updates > 0) add('updates', 'info', `${host}: ${sys.pending_updates} package update(s) pending`, 'unattended-upgrades installs security fixes; the rest wait for apt upgrade');\nif (sys.clock_synced === false) add('clock', 'warning', `${host}: clock not NTP-synced`, 'Certificates and Tailscale depend on correct time');\n\n// ---- disks and mounts ----\nfor (const d of r.disks || []) {\n  if (d.used_pct >= S.DISK_CRIT) add(`disk:${d.mount}`, 'critical', `${host}: ${d.mount} is ${d.used_pct}% full`, `${gb(d.avail)} left; app databases live here`);\n  else if (d.used_pct >= S.DISK_WARN) add(`disk:${d.mount}`, 'warning', `${host}: ${d.mount} is ${d.used_pct}% full`, `${gb(d.avail)} left`);\n}\nconst m = r.mounts || {};\nif (m.nfs && !(m.nfs.mounted && m.nfs.nonempty)) {\n  if (m.nas_tcp_2049) add('nfs', 'critical', `${host}: /mnt/nfs is ${m.nfs.mounted ? 'mounted but empty' : 'not mounted'} while the NAS is up`, 'Apps are running against an empty library path', { verb: 'remount-nas', target: 'nfs' });\n  else add('nfs', 'critical', `${host}: /mnt/nfs is not available and TrueNAS does not answer on 2049`, 'Waiting for the NAS; nothing to fix from here');\n}\nif (m.backups_mounted === false && m.nas_tcp_2049) add('backups-mount', 'warning', `${host}: /mnt/backups is not mounted`, 'Tonight\\'s backup will fail unless the automount comes back');\n\n// ---- backups ----\nconst b = r.backup || {};\nif (b.last_success) {\n  const h = (now / 1000 - b.last_success) / 3600;\n  if (h > S.BACKUP_CRIT_H) add('backup-age', 'critical', `${host}: last good backup ${Math.round(h)} h ago`, `Newest folder ${b.newest || 'none'}; check journalctl -u homelab-backup`);\n  else if (h > S.BACKUP_WARN_H) add('backup-age', 'warning', `${host}: last good backup ${Math.round(h)} h ago`, 'The 03:30 timer may have been missed');\n} else if (prev) add('backup-none', 'warning', `${host}: no successful backup in the journal`, 'Expected after a fresh VM or a journal rotation; otherwise run homelab-backup by hand');\nif (b.last_rc && b.last_rc !== 0) add('backup-rc', 'warning', `${host}: the last backup run exited ${b.last_rc}`, 'Details are in the digest\\'s Backups section and journalctl -u homelab-backup');\nif (b.newest_bytes && b.previous_bytes && b.newest_bytes < b.previous_bytes / 2) add('backup-size', 'warning', `${host}: newest backup is ${gb(b.newest_bytes)}, previous was ${gb(b.previous_bytes)}`, 'A backup that halved usually skipped something');\n\n// ---- containers ----\nconst dk = r.docker || {};\nsd.rs[host] = sd.rs[host] || {};\nconst prevHealth = {};\nfor (const c of (prev && prev.docker && prev.docker.containers) || []) prevHealth[c.name] = c.health;\nlet restartsTotal = 0;\nfor (const c of dk.containers || []) {\n  restartsTotal += c.restarts || 0;\n  const svc = c.service || c.name;\n  const canFix = !S.NEVER_RESTART.includes(svc);\n  // Restart samples over the last 70 minutes.\n  const samples = (sd.rs[host][c.name] || []).filter((s) => now - s.t < 70 * 60e3);\n  samples.push({ t: now, r: c.restarts || 0 });\n  sd.rs[host][c.name] = samples;\n  const delta = samples.length > 1 ? (c.restarts || 0) - samples[0].r : 0;\n  if (delta >= S.RESTARTS_CRIT) add(`crashloop:${c.name}`, 'critical', `${host}: ${c.name} restarted ${delta} times in the last hour`, `State ${c.state}, exit code ${c.exit_code}; stopping beats hammering the NAS`, canFix ? { verb: 'stop', target: svc, escalate: 'restart' } : null);\n  else if (delta >= S.RESTARTS_WARN) add(`restarts:${c.name}`, 'warning', `${host}: ${c.name} restarted ${delta} times in the last hour`, `State ${c.state}, health ${c.health}`);\n  if (c.health === 'unhealthy') {\n    if (prevHealth[c.name] === 'unhealthy') add(`unhealthy:${c.name}`, 'critical', `${host}: ${c.name} unhealthy for 30 minutes`, 'autoheal has not brought it back', canFix ? { verb: 'restart', target: svc } : null);\n    else add(`unhealthy:${c.name}`, 'warning', `${host}: ${c.name} is unhealthy`, 'autoheal gets one more interval');\n  }\n}\nfor (const missing of dk.missing || []) {\n  const svc = missing.split('/')[1];\n  const c = (dk.containers || []).find((x) => x.service === svc);\n  const state = c ? `${c.state} (exit ${c.exit_code})` : 'no container';\n  add(`missing:${svc}`, 'critical', `${host}: ${svc} should be running but is ${state}`, 'Expected by stack_services / the compose file', S.NEVER_RESTART.includes(svc) ? null : { verb: 'restart', target: svc });\n}\nif (dk.reclaimable_bytes > S.RECLAIM_WARN_GB * GB) add('docker-space', 'warning', `${host}: ${gb(dk.reclaimable_bytes)} of dangling images and build cache`, 'docker image prune (dangling only) frees it', { verb: 'docker-prune', target: 'docker' });\n\n// ---- media apps ----\nconst md = r.media || {};\nfor (const app of ['sonarr', 'radarr']) {\n  const a = md[app]; if (!a) continue;\n  for (const hc of a.health || []) if (hc.type === 'error') add(`${app}-health:${hc.source}`, 'warning', `${app}: ${hc.message}`, hc.source);\n  const stuck = a.stuck || [];\n  if (stuck.length > S.QUEUE_CRIT) add(`${app}-queue`, 'critical', `${app}: ${stuck.length} queue items stuck or failed`, stuck.slice(0, 5).map((q) => q.title).join('; '));\n  for (const q of stuck) {\n    const msg = (q.messages || []).join(' | ');\n    const retryable = /no files found|not found|missing|does not exist|was not found/i.test(msg);\n    if ((q.tdstate === 'importBlocked' || q.tdstate === 'importPending' || q.status === 'failed' || q.tds === 'error') && (q.age_h || 0) >= S.STUCK_RETRY_H)\n      add(`${app}-stuck:${q.id}`, 'warning', `${app}: \"${q.title}\" ${q.tdstate || q.status} for ${q.age_h} h`, msg || 'no message', retryable ? { verb: 'arr-retry', target: `${app} ${q.id}`, app, id: q.id } : null);\n    else if (q.tds === 'warning' && (q.age_h || 0) >= S.STUCK_RETRY_H)\n      add(`${app}-stuck:${q.id}`, 'warning', `${app}: \"${q.title}\" needs a decision (${q.age_h} h)`, msg || 'no message');\n    else if (q.tdstate === 'downloading' && (q.age_h || 0) >= S.STUCK_BLOCKLIST_H && q.size && q.sizeleft === q.size)\n      add(`${app}-dead:${q.id}`, 'warning', `${app}: \"${q.title}\" has downloaded nothing in ${q.age_h} h`, `${q.protocol}; blocklist and search again`, S.BLOCKLIST_ENABLED ? { verb: 'arr-blocklist', target: `${app} ${q.id}`, app, id: q.id } : null);\n  }\n}\nif (md.prowlarr) {\n  for (const hc of md.prowlarr.health || []) if (hc.type === 'error') add(`prowlarr-health:${hc.source}`, 'warning', `prowlarr: ${hc.message}`, hc.source);\n  for (const ix of md.prowlarr.stuck || []) {\n    const till = ix.disabled_till ? Date.parse(ix.disabled_till) : 0;\n    const major = /gingadaddy|nzbgeek|nzbplanet/i.test(ix.name);\n    add(`prowlarr-indexer:${ix.indexer_id}`, major ? 'critical' : 'warning', `prowlarr: indexer ${ix.name} disabled by backoff`, `until ${fmtT(till)}; last failure ${ix.failures ? fmtT(Date.parse(ix.failures)) : '?'}`, till && till < now ? { verb: 'prowlarr-test', target: String(ix.indexer_id) } : null);\n  }\n}\nif (md.sabnzbd) {\n  const s = md.sabnzbd;\n  if (s.diskspace_gb != null && s.diskspace_gb < S.SAB_DISK_CRIT_GB) add('sab-disk', 'critical', `SABnzbd sees only ${s.diskspace_gb} GB free`, 'Downloads will pause; check the NAS and the sabnzb folder');\n  if (s.paused && s.queue_count > 0) add('sab-paused', 'warning', `SABnzbd is paused with ${s.queue_count} item(s) queued`, s.pause_int && s.pause_int !== '0' ? `timed pause, ${s.pause_int} min left` : 'manual or disk pause');\n  if ((s.failed_24h || []).length) add('sab-failed', 'warning', `SABnzbd: ${s.failed_24h.length} failed download(s) in 24 h`, s.failed_24h.slice(0, 5).map((f) => `${f.name}: ${f.fail_message || ''}`).join('; '));\n}\nif (md.qbittorrent) {\n  const q = md.qbittorrent;\n  if (q.exit_ip && q.vpn_ok === false) add('qb-vpn', 'critical', 'qBittorrent is NOT behind the VPN', `exit IP ${q.exit_ip} equals the home IP`, { verb: 'restart', target: 'gluetun', then: 'qbittorrent' });\n  else if (!q.exit_ip) add('qb-vpn', 'warning', 'gluetun has no internet through PIA', 'tunnel down or reconnecting', { verb: 'restart', target: 'gluetun', then: 'qbittorrent' });\n  if (q.exit_ip && q.vpn_ok && q.forwarded_port == null) add('qb-port', 'warning', 'PIA forwarded port missing', 'Seeding and torrent speed suffer', { verb: 'restart', target: 'gluetun', then: 'qbittorrent' });\n  if ((q.errored || []).length) add('qb-errored', 'warning', `qBittorrent: ${q.errored.length} torrent(s) in error`, q.errored.slice(0, 5).map((t) => `${t.name} (${t.state})`).join('; '));\n  if ((q.stalled_3d || []).length) add('qb-stalled', 'info', `qBittorrent: ${q.stalled_3d.length} torrent(s) stalled over 3 days`, q.stalled_3d.slice(0, 5).map((t) => t.name).join('; '));\n}\nif (md.tdarr) {\n  const t = md.tdarr; const pt = sd.tdarr[host] || {};\n  if (t.errored != null && pt.errored != null && t.errored > pt.errored) add('tdarr-errors', 'warning', `Tdarr: ${t.errored - pt.errored} new transcode error(s) (total ${t.errored})`, 'See Tdarr > Transcode errors; originals are untouched on error');\n  if (t.nodes && t.nodes.length && t.nodes.every((n) => n.paused)) add('tdarr-paused', 'info', 'Tdarr: all nodes paused', 'Normal 17:00-23:00 PT or when the 3 TB guard holds');\n  if (t.done != null) {\n    if (pt.done !== t.done || !pt.doneAt) sd.tdarr[host] = { ...pt, done: t.done, doneAt: now, errored: t.errored };\n    else { sd.tdarr[host].errored = t.errored; if (t.queued > 0 && !(t.nodes || []).every((n) => n.paused) && now - pt.doneAt > S.TDARR_IDLE_H * H) add('tdarr-idle', 'warning', `Tdarr: no file finished in ${Math.round((now - pt.doneAt) / H)} h with ${t.queued} queued`, 'Workers may be stuck; check the Tdarr node page'); }\n  }\n}\n\n// ---- edge: Tailscale and certificates ----\nif (r.edge) {\n  const ts = r.edge.tailscale || {};\n  if (ts.online === false) add('ts-offline', 'critical', 'Tailscale subnet router is offline', 'Remote access is down (Plex port-forward still works)');\n  if (ts.key_days_left != null && ts.key_days_left < S.KEY_WARN_DAYS) add('ts-key', ts.key_days_left < 3 ? 'critical' : 'warning', `Tailscale node key expires in ${ts.key_days_left} day(s)`, 'Re-authenticate the lab-router node or disable key expiry in the Tailscale admin console');\n  if (ts.online && !(ts.routes || []).includes('192.168.1.0/24')) add('ts-route', 'critical', 'Tailscale is up but the 192.168.1.0/24 route is not advertised or approved', 'Approve the subnet route in the admin console');\n  for (const c of r.edge.certs || []) {\n    if (!c.ok) add(`cert:${c.host}`, 'critical', `${c.host}: no valid certificate`, 'TSDProxy could not get or renew it; check the tsdproxy logs');\n    else if (c.days_left < S.CERT_WARN_DAYS) add(`cert:${c.host}`, 'warning', `${c.host}: certificate expires in ${c.days_left} day(s)`, 'TSDProxy renews automatically; watch it');\n  }\n}\n\n// ---- trend point once an hour, kept 7 days ----\nconst tr = sd.trends[host] = (sd.trends[host] || []).filter((p) => now - p.t < 7 * 24 * H);\nif (!tr.length || now - tr[tr.length - 1].t >= H - 60e3) {\n  tr.push({ t: now, mem: sys.mem ? sys.mem.used_pct : null, restarts: restartsTotal, backup: b.newest_bytes || null,\n    tdarr_done: md.tdarr ? md.tdarr.done : null, tdarr_queued: md.tdarr ? md.tdarr.queued : null,\n    stuck: ['sonarr', 'radarr'].reduce((n, a) => n + ((md[a] && md[a].stuck) || []).length, 0) });\n}\n// Keep the report (minus bulky lists) as the previous one for the next run.\nconst compact = JSON.parse(JSON.stringify(r));\nif (compact.docker && compact.docker.containers) compact.docker.containers = compact.docker.containers.map((c) => ({ name: c.name, service: c.service, state: c.state, health: c.health, restarts: c.restarts }));\ncompact.received = now;\nsd.last[host] = compact;\nreturn [{ json: { host, scope: host, ts: now, issues } }];\n"
+      }
+    },
+    {
+      "id": "51700e23-1e2b-5ed5-b828-8a8498e4e0c4",
+      "name": "Every 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "7/15 * * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c1a7e1d3-f702-549a-b498-8a972ab9daf7",
+      "name": "PVE resources",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://192.168.1.137:8006/api2/json/cluster/resources",
+        "options": {
+          "timeout": 15000,
+          "allowUnauthorizedCerts": true
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "864bbd2b-8a64-5a71-955e-70112aa63612",
+      "name": "PVE cluster status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://192.168.1.137:8006/api2/json/cluster/status",
+        "options": {
+          "timeout": 15000,
+          "allowUnauthorizedCerts": true
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "9befe6e8-2c6d-5c30-839b-2d7e035b168d",
+      "name": "NAS pools",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://192.168.1.209/api/v2.0/pool",
+        "options": {
+          "timeout": 15000,
+          "allowUnauthorizedCerts": true
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "ef0bc4e3-7a1c-5eeb-9cf0-eba82c2dc283",
+      "name": "NAS dataset",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://192.168.1.209/api/v2.0/pool/dataset/id/DeepData",
+        "options": {
+          "timeout": 15000,
+          "allowUnauthorizedCerts": true
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "2b86b46c-476d-5915-b4b3-143377fc52ff",
+      "name": "NAS alerts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://192.168.1.209/api/v2.0/alert/list",
+        "options": {
+          "timeout": 15000,
+          "allowUnauthorizedCerts": true
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "81a7c208-a0fb-5d72-8b5f-57a84f3a587d",
+      "name": "Scrutiny",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "http://scrutiny:8080/api/summary",
+        "options": {
+          "timeout": 15000,
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "efbeee16-92ef-527e-bbc8-b60582ce914a",
+      "name": "PVE node list",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        300
+      ],
+      "parameters": {
+        "jsCode": "let nodes = [];\ntry { nodes = ($('PVE cluster status').first().json.data || []).filter(n => n.type === 'node' && n.online); } catch (e) {}\nif (!nodes.length) return [{ json: { node: null } }];\nreturn nodes.map(n => ({ json: { node: n.name, ip: n.ip } }));"
+      }
+    },
+    {
+      "id": "b6a714fc-7aeb-5940-93fa-e49c6cec5dea",
+      "name": "PVE node status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://{{ $json.ip }}:8006/api2/json/nodes/{{ $json.node }}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000,
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "6b4c1291-e77e-56f0-8d8a-13608130c908",
+      "name": "Evaluate infra",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Shared constants for the \"Homelab sysadmin\" workflow. docs/build_sysadmin_workflow.py pastes\n// this file at the top of every Code node, so change it here and rebuild, not inside n8n.\nconst SETTINGS = {\n  // Round one runs report-only: fixes are decided and logged as \"would run\", nothing is executed.\n  FIXES_ENABLED: false,\n  // arr-blocklist stays off until arr-retry has run clean for a week (Goobs, 2026-10-22).\n  BLOCKLIST_ENABLED: false,\n  // VMs that must report; a silent one is itself a critical issue.\n  HOSTS: ['edge', 'media', 'gpu', 'apps', 'ai'],\n  HOST_IP: { edge: '192.168.1.50', media: '192.168.1.51', gpu: '192.168.1.52', apps: '192.168.1.53', ai: '192.168.1.54' },\n  SILENT_AFTER_MIN: 40,\n  // Per target (host + verb + name): at most one fix an hour and three a day.\n  FIX_PER_HOUR: 1,\n  FIX_PER_DAY: 3,\n  // Services the ops door never restarts (mirrors ops_never in ansible group_vars).\n  NEVER_RESTART: ['n8n', 'postgres', 'redis', 'autoheal', 'tailscale', 'immich-db', 'immich-redis', 'romm-db', 'authentik-db', 'authentik-redis', 'scrutiny-influx'],\n  // Critical issues are emailed at once, then again only every 6 hours while they persist.\n  EMAIL_REPEAT_H: 6,\n  // Thresholds\n  POOL_WARN_TB: 4, POOL_CRIT_TB: 3,          // DeepData free; Tdarr pauses below 3 TB\n  DISK_WARN: 80, DISK_CRIT: 90,              // percent used, VM disks and Proxmox storage\n  MEM_WARN: 90, MEM_CRIT: 95,                // percent used\n  SWAP_WARN_BYTES: 256 * 1024 * 1024,\n  LOAD_FACTOR: 2,                            // 15-min load over this x cores = warning\n  BACKUP_WARN_H: 26, BACKUP_CRIT_H: 50,\n  RESTARTS_WARN: 3, RESTARTS_CRIT: 10,       // per container per hour\n  RECLAIM_WARN_GB: 20,\n  QUEUE_CRIT: 20,                            // stuck arr items\n  STUCK_RETRY_H: 24, STUCK_BLOCKLIST_H: 48,\n  SAB_DISK_CRIT_GB: 100,\n  TDARR_IDLE_H: 6,\n  KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,\n  SCRUB_WARN_DAYS: 45,\n  PVE_EXPECT_RUNNING: [110, 201, 202, 203, 204, 205],\n  PVE_EXPECT_STOPPED: [113, 117],\n  TZ: 'America/Los_Angeles',\n};\nconst TB = 1e12, GB = 1e9, H = 3600e3;\nconst now = Date.now();\nconst fmtT = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: SETTINGS.TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });\nconst gb = (b) => `${(b / GB).toFixed(1)} GB`;\nconst tb = (b) => `${(b / TB).toFixed(2)} TB`;\nconst ago = (ms) => { const h = (now - ms) / H; return h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };\n// One issue: key is stable across runs so the store can track first/last seen and emails.\nconst issue = (host, key, sev, title, detail, fix) => ({ host, key: `${host}:${key}`, sev, title, detail: detail || '', fix: fix || null });\n\n// Evaluate infra: every 15 minutes, the read-only views that no VM agent has: Proxmox\n// (cluster/resources, cluster/status, per-node status), TrueNAS (pool, DeepData dataset,\n// alerts), Scrutiny (SMART summary), and which VMs have gone silent.\nconst sd = $getWorkflowStaticData('global');\nsd.last = sd.last || {}; sd.trends = sd.trends || {};\nconst S = SETTINGS;\nconst issues = [];\nconst add = (...a) => issues.push(issue('infra', ...a));\nconst grab = (name) => { try { return $(name).first().json; } catch (e) { return null; } };\nconst failed = (j) => !j || j.error;\n// n8n keeps the HTTP node's error on the item when \"continue on error\" is set.\nconst errText = (j) => (j && j.error && (j.error.message || JSON.stringify(j.error).slice(0, 200))) || 'no answer';\n\n// ---- silent VMs ----\nfor (const h of S.HOSTS) {\n  const last = sd.last[h];\n  const age = last && last.received ? (now - last.received) / 60e3 : null;\n  if (age == null) add(`silent:${h}`, 'warning', `${h} has never reported`, 'The homelab-agent timer is not deployed there yet, or cannot reach n8n');\n  else if (age > S.SILENT_AFTER_MIN) add(`silent:${h}`, 'critical', `${h} has not reported for ${Math.round(age)} min`, 'VM down, Docker stuck, or the timer failed; check Proxmox and journalctl -u homelab-agent');\n}\n\n// ---- Proxmox ----\nconst res = grab('PVE resources');\nif (failed(res)) add('pve-api', 'warning', 'Proxmox API not answering', errText(res));\nelse {\n  const data = res.data || [];\n  for (const n of data.filter((x) => x.type === 'node')) {\n    if (n.status !== 'online') add(`pve-node:${n.node}`, 'critical', `Proxmox host ${n.node} is ${n.status}`, 'Cluster is 2-node; VMs on it are down and the other host may lose quorum');\n    const pct = n.maxmem ? Math.round(100 * n.mem / n.maxmem) : 0;\n    if (pct >= S.MEM_WARN) add(`pve-mem:${n.node}`, 'warning', `${n.node}: host RAM ${pct}% used`, `${gb(n.maxmem - n.mem)} free of ${gb(n.maxmem)}; balloon floors are the lever`);\n  }\n  for (const v of data.filter((x) => x.type === 'qemu')) {\n    if (S.PVE_EXPECT_RUNNING.includes(v.vmid) && v.status !== 'running') add(`vm-down:${v.vmid}`, 'critical', `VM ${v.vmid} ${v.name} is ${v.status} on ${v.node}`, 'Start it from the Proxmox UI (TrueNAS first if it is 110); nothing here starts VMs');\n    if (S.PVE_EXPECT_STOPPED.includes(v.vmid) && v.status === 'running') add(`vm-up:${v.vmid}`, 'warning', `Old VM ${v.vmid} ${v.name} is running`, 'It should stay stopped (kept for rollback)');\n  }\n  for (const s of data.filter((x) => x.type === 'storage' && x.maxdisk)) {\n    const pct = Math.round(100 * s.disk / s.maxdisk);\n    const key = `pve-storage:${s.node}:${s.storage}`;\n    if (pct >= S.DISK_CRIT) add(key, 'critical', `${s.node} storage ${s.storage} is ${pct}% full`, `${gb(s.maxdisk - s.disk)} free; VM disks and backups live here`);\n    else if (pct >= S.DISK_WARN) add(key, 'warning', `${s.node} storage ${s.storage} is ${pct}% full`, `${gb(s.maxdisk - s.disk)} free`);\n  }\n}\nconst cs = grab('PVE cluster status');\nif (!failed(cs)) {\n  const cl = (cs.data || []).find((x) => x.type === 'cluster');\n  if (cl && !cl.quorate) add('pve-quorum', 'critical', 'Proxmox cluster has lost quorum', 'No VM can start or migrate until both NUCs see each other (pvecm status)');\n  for (const n of (cs.data || []).filter((x) => x.type === 'node' && !x.online)) add(`pve-offline:${n.name}`, 'critical', `Proxmox node ${n.name} offline in the cluster view`, n.ip || '');\n}\n// The HTTP node answers in the same order as the node list it ran for.\nlet nodeStatus = [], nodeList = [];\ntry { nodeStatus = $('PVE node status').all().map((i) => i.json); nodeList = $('PVE node list').all().map((i) => i.json); } catch (e) { nodeStatus = []; }\nfor (const [idx, st] of nodeStatus.entries()) {\n  const d = st.data; if (!d || !d.swap) continue;\n  const name = (nodeList[idx] && nodeList[idx].node) || '?';\n  if (d.swap.used > S.SWAP_WARN_BYTES) add(`pve-swap:${name}`, 'warning', `Proxmox host ${name} is using ${gb(d.swap.used)} of swap`, 'RicksGarage runs TrueNAS 16 GB + edge + media; lower a balloon floor or move a VM');\n}\n\n// ---- TrueNAS ----\nconst pools = grab('NAS pools');\nif (failed(pools)) add('nas-api', 'warning', 'TrueNAS API not answering', errText(pools));\nelse {\n  const list = Array.isArray(pools) ? pools : (pools.data || []);\n  for (const p of list) {\n    if (p.status !== 'ONLINE' || p.healthy === false) add(`pool-state:${p.name}`, 'critical', `Pool ${p.name} is ${p.status}${p.healthy === false ? ' (unhealthy)' : ''}`, 'A disk may have dropped; look at zpool status before touching anything (RAIDZ1, one disk of margin)');\n    const sc = p.scan || {};\n    if (sc.errors > 0) add(`scrub-errors:${p.name}`, 'critical', `Scrub on ${p.name} found ${sc.errors} error(s)`, `state ${sc.state}, function ${sc.function}`);\n    if (sc.state === 'SCANNING') add(`scrub-running:${p.name}`, 'info', `Scrub on ${p.name} ${Math.round(sc.percentage || 0)}% done`, sc.total_secs_left ? `about ${Math.round(sc.total_secs_left / 3600)} h left` : '');\n    const end = sc.end_time && (sc.end_time.$date || Date.parse(sc.end_time));\n    if (sc.state !== 'SCANNING' && end && now - end > S.SCRUB_WARN_DAYS * 24 * H) add(`scrub-old:${p.name}`, 'warning', `Last scrub on ${p.name} finished ${ago(end)} ago`, 'TrueNAS runs one every 35 days by default; check the scrub task');\n  }\n}\nconst ds = grab('NAS dataset');\nif (!failed(ds) && ds.available) {\n  const free = ds.available.parsed || Number(ds.available.rawvalue) || 0;\n  const used = ds.used && (ds.used.parsed || Number(ds.used.rawvalue)) || 0;\n  if (free < S.POOL_CRIT_TB * TB) add('pool-free', 'critical', `DeepData has ${tb(free)} free`, `Below the 3 TB Tdarr guard; ${tb(used)} used. Clear the holding folders or stop downloads`);\n  else if (free < S.POOL_WARN_TB * TB) add('pool-free', 'warning', `DeepData has ${tb(free)} free`, `${tb(used)} used; the Tdarr guard pauses at 3 TB`);\n  const tr = sd.trends.infra = (sd.trends.infra || []).filter((p) => now - p.t < 7 * 24 * H);\n  if (!tr.length || now - tr[tr.length - 1].t >= H - 60e3) tr.push({ t: now, pool_free: free, pool_used: used });\n}\nconst al = grab('NAS alerts');\nif (!failed(al) && Array.isArray(al)) {\n  for (const a of al.filter((x) => !x.dismissed)) {\n    const sev = a.level === 'CRITICAL' || a.level === 'ALERT' || a.level === 'EMERGENCY' ? 'critical' : a.level === 'WARNING' || a.level === 'ERROR' ? 'warning' : 'info';\n    add(`nas-alert:${a.id || a.klass || a.formatted.slice(0, 40)}`, sev, `TrueNAS ${a.level}: ${(a.formatted || '').split('\\n')[0].slice(0, 120)}`, a.klass || '');\n  }\n}\n\n// ---- Scrutiny (SMART) ----\nconst sc = grab('Scrutiny');\nif (!failed(sc) && sc.data && sc.data.summary) {\n  for (const [wwn, s] of Object.entries(sc.data.summary)) {\n    const d = s.device || {}; const st = d.device_status || 0;\n    const label = `${d.device_name || wwn} ${d.serial_number || ''} (${d.host_id || ''})`.trim();\n    if (st & 1) add(`smart:${d.serial_number || wwn}`, 'critical', `Disk ${label}: SMART reports failure`, 'Plan a replacement; the pool is RAIDZ1');\n    else if (st & 2) add(`smart:${d.serial_number || wwn}`, 'warning', `Disk ${label}: Scrutiny thresholds exceeded`, 'Rising reallocated/pending sectors or command timeouts; keep watching');\n    const temp = s.smart && s.smart.temp;\n    if (temp && temp >= 55) add(`temp:${d.serial_number || wwn}`, 'warning', `Disk ${label} at ${temp} C`, 'DAS airflow');\n  }\n}\nreturn [{ json: { host: 'infra', scope: 'infra', ts: now, issues } }];\n"
+      }
+    },
+    {
+      "id": "dd321dd7-c40f-5ca3-b043-41919937bb14",
+      "name": "Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2300,
+        150
+      ],
+      "parameters": {
+        "jsCode": "// Shared constants for the \"Homelab sysadmin\" workflow. docs/build_sysadmin_workflow.py pastes\n// this file at the top of every Code node, so change it here and rebuild, not inside n8n.\nconst SETTINGS = {\n  // Round one runs report-only: fixes are decided and logged as \"would run\", nothing is executed.\n  FIXES_ENABLED: false,\n  // arr-blocklist stays off until arr-retry has run clean for a week (Goobs, 2026-10-22).\n  BLOCKLIST_ENABLED: false,\n  // VMs that must report; a silent one is itself a critical issue.\n  HOSTS: ['edge', 'media', 'gpu', 'apps', 'ai'],\n  HOST_IP: { edge: '192.168.1.50', media: '192.168.1.51', gpu: '192.168.1.52', apps: '192.168.1.53', ai: '192.168.1.54' },\n  SILENT_AFTER_MIN: 40,\n  // Per target (host + verb + name): at most one fix an hour and three a day.\n  FIX_PER_HOUR: 1,\n  FIX_PER_DAY: 3,\n  // Services the ops door never restarts (mirrors ops_never in ansible group_vars).\n  NEVER_RESTART: ['n8n', 'postgres', 'redis', 'autoheal', 'tailscale', 'immich-db', 'immich-redis', 'romm-db', 'authentik-db', 'authentik-redis', 'scrutiny-influx'],\n  // Critical issues are emailed at once, then again only every 6 hours while they persist.\n  EMAIL_REPEAT_H: 6,\n  // Thresholds\n  POOL_WARN_TB: 4, POOL_CRIT_TB: 3,          // DeepData free; Tdarr pauses below 3 TB\n  DISK_WARN: 80, DISK_CRIT: 90,              // percent used, VM disks and Proxmox storage\n  MEM_WARN: 90, MEM_CRIT: 95,                // percent used\n  SWAP_WARN_BYTES: 256 * 1024 * 1024,\n  LOAD_FACTOR: 2,                            // 15-min load over this x cores = warning\n  BACKUP_WARN_H: 26, BACKUP_CRIT_H: 50,\n  RESTARTS_WARN: 3, RESTARTS_CRIT: 10,       // per container per hour\n  RECLAIM_WARN_GB: 20,\n  QUEUE_CRIT: 20,                            // stuck arr items\n  STUCK_RETRY_H: 24, STUCK_BLOCKLIST_H: 48,\n  SAB_DISK_CRIT_GB: 100,\n  TDARR_IDLE_H: 6,\n  KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,\n  SCRUB_WARN_DAYS: 45,\n  PVE_EXPECT_RUNNING: [110, 201, 202, 203, 204, 205],\n  PVE_EXPECT_STOPPED: [113, 117],\n  TZ: 'America/Los_Angeles',\n};\nconst TB = 1e12, GB = 1e9, H = 3600e3;\nconst now = Date.now();\nconst fmtT = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: SETTINGS.TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });\nconst gb = (b) => `${(b / GB).toFixed(1)} GB`;\nconst tb = (b) => `${(b / TB).toFixed(2)} TB`;\nconst ago = (ms) => { const h = (now - ms) / H; return h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };\n// One issue: key is stable across runs so the store can track first/last seen and emails.\nconst issue = (host, key, sev, title, detail, fix) => ({ host, key: `${host}:${key}`, sev, title, detail: detail || '', fix: fix || null });\n\n// Decide: takes one evaluator's issue list, updates the issue store (first/last seen,\n// resolved), and emits what should happen now: at most one critical email and the fixes the\n// policy allows. With FIXES_ENABLED false the fixes are logged as \"would run\" instead.\nconst sd = $getWorkflowStaticData('global');\nsd.issues = sd.issues || {}; sd.resolved = sd.resolved || []; sd.fixlog = sd.fixlog || []; sd.wouldfix = sd.wouldfix || [];\nconst S = SETTINGS;\nconst { host, scope, issues } = $input.first().json;\nif (!scope) return [];\nconst out = [];\nconst active = new Set(issues.map((i) => i.key));\n\n// Resolved: keys of this scope that were open and are gone now.\nfor (const [key, it] of Object.entries(sd.issues)) {\n  if (it.host === scope && !active.has(key)) {\n    sd.resolved.push({ key, title: it.title, sev: it.sev, first: it.first, resolved_at: now });\n    delete sd.issues[key];\n  }\n}\nsd.resolved = sd.resolved.slice(-200);\n\n// Upsert the active ones.\nconst toEmail = [];\nfor (const i of issues) {\n  const prev = sd.issues[i.key];\n  const it = prev ? { ...prev, ...i, first: prev.first, count: (prev.count || 0) + 1, last: now } : { ...i, first: now, last: now, count: 1 };\n  if (i.sev === 'critical' && (!it.emailed_at || now - it.emailed_at > S.EMAIL_REPEAT_H * H)) { toEmail.push(it); it.emailed_at = now; }\n  sd.issues[i.key] = it;\n}\n\n// Fix policy: one per target per hour, three per day; crash loops escalate from restart to stop.\nsd.fixlog = sd.fixlog.filter((f) => now - f.t < 7 * 24 * H);\nconst planned = [];\nfor (const i of issues) {\n  if (!i.fix) continue;\n  let { verb, target } = i.fix;\n  if (verb === 'stop' && i.fix.escalate) {\n    // First two crash-loop rounds try a restart; the third stops it.\n    const tried = sd.fixlog.filter((f) => f.host === host && f.target === target && f.verb === 'restart' && now - f.t < 24 * H).length;\n    if (tried < 2) verb = 'restart';\n  }\n  const tkey = `${host}:${verb}:${target}`;\n  const lastHour = sd.fixlog.filter((f) => f.tkey === tkey && now - f.t < H).length;\n  const lastDay = sd.fixlog.filter((f) => f.tkey === tkey && now - f.t < 24 * H).length;\n  if (lastHour >= S.FIX_PER_HOUR || lastDay >= S.FIX_PER_DAY) { sd.issues[i.key].fix_held = `limit reached (${lastDay} today)`; continue; }\n  const cmd = `${verb} ${target}`;\n  const entry = { t: now, host, verb, target, tkey, cmd, key: i.key, title: i.title, status: S.FIXES_ENABLED ? 'started' : 'would-run' };\n  if (S.FIXES_ENABLED) {\n    sd.fixlog.push(entry);\n    planned.push({ kind: 'fix', host, ip: S.HOST_IP[host], cmd, key: i.key, title: i.title, then: i.fix.then || null });\n  } else {\n    sd.wouldfix.push(entry); sd.wouldfix = sd.wouldfix.slice(-300);\n  }\n  sd.issues[i.key].fix_planned = cmd;\n}\n\n// One email for all new criticals of this run.\nif (toEmail.length) {\n  const lines = toEmail.map((it) => {\n    const plan = it.fix_planned ? (S.FIXES_ENABLED ? `\\n    Doing now: ${it.fix_planned}` : `\\n    Would do (fixes off): ${it.fix_planned}`) : '';\n    return `- ${it.title}\\n    ${it.detail}\\n    since ${fmtT(it.first)}${plan}`;\n  });\n  const subject = toEmail.length === 1 ? `[Homelab] ${toEmail[0].title}` : `[Homelab] ${toEmail.length} critical issues (${scope})`;\n  const text = `${lines.join('\\n')}\\n\\nOpen issues right now: ${Object.keys(sd.issues).length}. Fixes ${S.FIXES_ENABLED ? 'enabled' : 'in report-only mode'}.\\nThe morning digest has the full picture.`;\n  out.push({ json: { kind: 'email', subject, text } });\n}\nfor (const p of planned) out.push({ json: p });\nreturn out;\n"
+      }
+    },
+    {
+      "id": "0842be47-cc12-5018-bfb2-1a8cd25d4858",
+      "name": "Email or fix",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2520,
+        150
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "email",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "email"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "fix",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "fix"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "33538053-ddce-5297-b37a-fd5f23c777e3",
+      "name": "Email critical",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2780,
+        40
+      ],
+      "parameters": {
+        "fromEmail": "Homelab <filingbin69@gmail.com>",
+        "toEmail": "mikegutberlet@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a353a38c-bf49-5bff-a4ed-41d46b4fb8c6",
+      "name": "Route fix by host",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2780,
+        260
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.host }}",
+                    "rightValue": "edge",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "edge"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.host }}",
+                    "rightValue": "media",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "media"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.host }}",
+                    "rightValue": "gpu",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "gpu"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.host }}",
+                    "rightValue": "apps",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "apps"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.host }}",
+                    "rightValue": "ai",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ai"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8cf6dd65-94eb-51a8-875e-aebcd93a59ad",
+      "name": "ops edge",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        3040,
+        160
+      ],
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "authentication": "privateKey",
+        "command": "={{ $json.cmd }}",
+        "cwd": "/"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "4c63e925-37ab-5968-aee8-dcb7f0df066a",
+      "name": "ops media",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        3040,
+        270
+      ],
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "authentication": "privateKey",
+        "command": "={{ $json.cmd }}",
+        "cwd": "/"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "9fe45cae-5fbb-5110-8b68-8e3c69ad9010",
+      "name": "ops gpu",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        3040,
+        380
+      ],
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "authentication": "privateKey",
+        "command": "={{ $json.cmd }}",
+        "cwd": "/"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "e5929311-5ab2-5ceb-a4cd-05634e75ba41",
+      "name": "ops apps",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        3040,
+        490
+      ],
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "authentication": "privateKey",
+        "command": "={{ $json.cmd }}",
+        "cwd": "/"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "f7dece88-5980-5b1f-a7fa-8fa011768c15",
+      "name": "ops ai",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        3040,
+        600
+      ],
+      "parameters": {
+        "resource": "command",
+        "operation": "execute",
+        "authentication": "privateKey",
+        "command": "={{ $json.cmd }}",
+        "cwd": "/"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "f2aa11b3-2b0b-53e8-a417-49619c00bb0f",
+      "name": "Record fix result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Shared constants for the \"Homelab sysadmin\" workflow. docs/build_sysadmin_workflow.py pastes\n// this file at the top of every Code node, so change it here and rebuild, not inside n8n.\nconst SETTINGS = {\n  // Round one runs report-only: fixes are decided and logged as \"would run\", nothing is executed.\n  FIXES_ENABLED: false,\n  // arr-blocklist stays off until arr-retry has run clean for a week (Goobs, 2026-10-22).\n  BLOCKLIST_ENABLED: false,\n  // VMs that must report; a silent one is itself a critical issue.\n  HOSTS: ['edge', 'media', 'gpu', 'apps', 'ai'],\n  HOST_IP: { edge: '192.168.1.50', media: '192.168.1.51', gpu: '192.168.1.52', apps: '192.168.1.53', ai: '192.168.1.54' },\n  SILENT_AFTER_MIN: 40,\n  // Per target (host + verb + name): at most one fix an hour and three a day.\n  FIX_PER_HOUR: 1,\n  FIX_PER_DAY: 3,\n  // Services the ops door never restarts (mirrors ops_never in ansible group_vars).\n  NEVER_RESTART: ['n8n', 'postgres', 'redis', 'autoheal', 'tailscale', 'immich-db', 'immich-redis', 'romm-db', 'authentik-db', 'authentik-redis', 'scrutiny-influx'],\n  // Critical issues are emailed at once, then again only every 6 hours while they persist.\n  EMAIL_REPEAT_H: 6,\n  // Thresholds\n  POOL_WARN_TB: 4, POOL_CRIT_TB: 3,          // DeepData free; Tdarr pauses below 3 TB\n  DISK_WARN: 80, DISK_CRIT: 90,              // percent used, VM disks and Proxmox storage\n  MEM_WARN: 90, MEM_CRIT: 95,                // percent used\n  SWAP_WARN_BYTES: 256 * 1024 * 1024,\n  LOAD_FACTOR: 2,                            // 15-min load over this x cores = warning\n  BACKUP_WARN_H: 26, BACKUP_CRIT_H: 50,\n  RESTARTS_WARN: 3, RESTARTS_CRIT: 10,       // per container per hour\n  RECLAIM_WARN_GB: 20,\n  QUEUE_CRIT: 20,                            // stuck arr items\n  STUCK_RETRY_H: 24, STUCK_BLOCKLIST_H: 48,\n  SAB_DISK_CRIT_GB: 100,\n  TDARR_IDLE_H: 6,\n  KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,\n  SCRUB_WARN_DAYS: 45,\n  PVE_EXPECT_RUNNING: [110, 201, 202, 203, 204, 205],\n  PVE_EXPECT_STOPPED: [113, 117],\n  TZ: 'America/Los_Angeles',\n};\nconst TB = 1e12, GB = 1e9, H = 3600e3;\nconst now = Date.now();\nconst fmtT = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: SETTINGS.TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });\nconst gb = (b) => `${(b / GB).toFixed(1)} GB`;\nconst tb = (b) => `${(b / TB).toFixed(2)} TB`;\nconst ago = (ms) => { const h = (now - ms) / H; return h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };\n// One issue: key is stable across runs so the store can track first/last seen and emails.\nconst issue = (host, key, sev, title, detail, fix) => ({ host, key: `${host}:${key}`, sev, title, detail: detail || '', fix: fix || null });\n\n// Record fix result: the ops door answered (or SSH failed). Updates the fix log entry and\n// emails at once if a fix failed, since a failed fix means the issue is still there.\nconst sd = $getWorkflowStaticData('global');\nsd.fixlog = sd.fixlog || [];\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  let fix = null;\n  try { fix = $('Route fix by host').item.json; } catch (e) { fix = null; }\n  const host = (fix && fix.host) || ($prevNode.name || '').replace('ops ', '') || '?';\n  let answer = null;\n  try { answer = JSON.parse((j.stdout || '').trim().split('\\n').pop()); } catch (e) { answer = null; }\n  const ok = !j.error && answer && answer.result === 'ok';\n  const detail = answer ? `${answer.result}: ${answer.detail}` : (j.error ? `ssh failed: ${j.error.message || JSON.stringify(j.error).slice(0, 200)}` : (j.stderr || j.stdout || 'no answer').toString().slice(0, 300));\n  // Newest log entry for this host and command.\n  const entry = [...sd.fixlog].reverse().find((f) => f.host === host && (!fix || f.cmd === fix.cmd) && f.status === 'started');\n  if (entry) { entry.status = ok ? 'ok' : 'failed'; entry.detail = detail; entry.done = now; }\n  if (!ok) out.push({ json: { kind: 'email', subject: `[Homelab] fix failed on ${host}: ${fix ? fix.cmd : 'unknown command'}`, text: `${fix ? fix.title : ''}\\n\\nTried: ${fix ? fix.cmd : '?'}\\nAnswer: ${detail}\\n\\nUndo or next step: see the ops door's output above; nothing else was changed.` } });\n  else if (fix && fix.then) out.push({ json: { kind: 'fix', host, ip: fix.ip, cmd: `restart ${fix.then}`, key: fix.key, title: fix.title, then: null, delay: true } });\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "5acac870-c909-552e-983e-9a913898c5ea",
+      "name": "Failed or follow-up",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        3520,
+        380
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "email",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "email"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "fix",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "fix"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "68469259-9b8d-50b9-9f7f-b3e19725f6a4",
+      "name": "Wait 60 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3760,
+        480
+      ],
+      "parameters": {
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "webhookId": "225ac712-61d9-5153-b564-ff5719aedd42"
+    },
+    {
+      "id": "c5a74d47-2897-5f08-9693-fbb396087515",
+      "name": "Every day 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        900
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e9335eb6-e8d6-5df7-bcb2-e5636bae83f8",
+      "name": "Build digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        900
+      ],
+      "parameters": {
+        "jsCode": "// Shared constants for the \"Homelab sysadmin\" workflow. docs/build_sysadmin_workflow.py pastes\n// this file at the top of every Code node, so change it here and rebuild, not inside n8n.\nconst SETTINGS = {\n  // Round one runs report-only: fixes are decided and logged as \"would run\", nothing is executed.\n  FIXES_ENABLED: false,\n  // arr-blocklist stays off until arr-retry has run clean for a week (Goobs, 2026-10-22).\n  BLOCKLIST_ENABLED: false,\n  // VMs that must report; a silent one is itself a critical issue.\n  HOSTS: ['edge', 'media', 'gpu', 'apps', 'ai'],\n  HOST_IP: { edge: '192.168.1.50', media: '192.168.1.51', gpu: '192.168.1.52', apps: '192.168.1.53', ai: '192.168.1.54' },\n  SILENT_AFTER_MIN: 40,\n  // Per target (host + verb + name): at most one fix an hour and three a day.\n  FIX_PER_HOUR: 1,\n  FIX_PER_DAY: 3,\n  // Services the ops door never restarts (mirrors ops_never in ansible group_vars).\n  NEVER_RESTART: ['n8n', 'postgres', 'redis', 'autoheal', 'tailscale', 'immich-db', 'immich-redis', 'romm-db', 'authentik-db', 'authentik-redis', 'scrutiny-influx'],\n  // Critical issues are emailed at once, then again only every 6 hours while they persist.\n  EMAIL_REPEAT_H: 6,\n  // Thresholds\n  POOL_WARN_TB: 4, POOL_CRIT_TB: 3,          // DeepData free; Tdarr pauses below 3 TB\n  DISK_WARN: 80, DISK_CRIT: 90,              // percent used, VM disks and Proxmox storage\n  MEM_WARN: 90, MEM_CRIT: 95,                // percent used\n  SWAP_WARN_BYTES: 256 * 1024 * 1024,\n  LOAD_FACTOR: 2,                            // 15-min load over this x cores = warning\n  BACKUP_WARN_H: 26, BACKUP_CRIT_H: 50,\n  RESTARTS_WARN: 3, RESTARTS_CRIT: 10,       // per container per hour\n  RECLAIM_WARN_GB: 20,\n  QUEUE_CRIT: 20,                            // stuck arr items\n  STUCK_RETRY_H: 24, STUCK_BLOCKLIST_H: 48,\n  SAB_DISK_CRIT_GB: 100,\n  TDARR_IDLE_H: 6,\n  KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,\n  SCRUB_WARN_DAYS: 45,\n  PVE_EXPECT_RUNNING: [110, 201, 202, 203, 204, 205],\n  PVE_EXPECT_STOPPED: [113, 117],\n  TZ: 'America/Los_Angeles',\n};\nconst TB = 1e12, GB = 1e9, H = 3600e3;\nconst now = Date.now();\nconst fmtT = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: SETTINGS.TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });\nconst gb = (b) => `${(b / GB).toFixed(1)} GB`;\nconst tb = (b) => `${(b / TB).toFixed(2)} TB`;\nconst ago = (ms) => { const h = (now - ms) / H; return h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };\n// One issue: key is stable across runs so the store can track first/last seen and emails.\nconst issue = (host, key, sev, title, detail, fix) => ({ host, key: `${host}:${key}`, sev, title, detail: detail || '', fix: fix || null });\n\n// Build digest: the 08:00 email. Open issues, what was fixed (or would have been), what\n// resolved itself, trends over 24 h and 7 d, the legacy webhook events, and what is quiet.\nconst sd = $getWorkflowStaticData('global');\nconst S = SETTINGS;\nconst issues = Object.values(sd.issues || {});\nconst day = new Date().toLocaleDateString('en-US', { timeZone: S.TZ, dateStyle: 'medium' });\nconst order = { critical: 0, warning: 1, info: 2 };\nconst since = now - 24 * H;\nlet text = '';\nconst section = (title, lines) => { if (lines.length) text += `${title}\\n${lines.map((l) => `  ${l}`).join('\\n')}\\n\\n`; };\n\n// Needs you: open criticals and warnings.\nconst open = issues.filter((i) => i.sev !== 'info').sort((a, b) => order[a.sev] - order[b.sev] || a.first - b.first);\nsection(`NEEDS YOU (${open.length})`, open.map((i) => `[${i.sev.toUpperCase()}] ${i.title}\\n      ${i.detail}\\n      since ${fmtT(i.first)}${i.fix_held ? `; fix held: ${i.fix_held}` : ''}${i.fix_planned && !S.FIXES_ENABLED ? `; would run: ${i.fix_planned}` : ''}`));\n\n// Fixed overnight.\nconst fixed = (sd.fixlog || []).filter((f) => f.t > since);\nsection(`FIXED IN THE LAST 24 H (${fixed.length})`, fixed.map((f) => `${fmtT(f.t)}  ${f.host}: ${f.cmd} -> ${f.status}${f.detail ? ` (${f.detail})` : ''}  [${f.title}]`));\nconst would = (sd.wouldfix || []).filter((f) => f.t > since);\nif (!S.FIXES_ENABLED) section(`WOULD HAVE FIXED, REPORT-ONLY MODE (${would.length})`, would.map((f) => `${fmtT(f.t)}  ${f.host}: ${f.cmd}  [${f.title}]`));\nsd.wouldfix = (sd.wouldfix || []).filter((f) => f.t > since);\n\n// Resolved since the last digest.\nconst resolved = sd.resolved || [];\nsection(`RESOLVED SINCE YESTERDAY (${resolved.length})`, resolved.map((r) => `${r.title} (open ${ago(r.first)}, cleared ${fmtT(r.resolved_at)})`));\nsd.resolved = [];\n\n// Info-level notes.\nconst info = issues.filter((i) => i.sev === 'info');\nsection(`FOR INFORMATION (${info.length})`, info.map((i) => `${i.title}${i.detail ? `: ${i.detail}` : ''}`));\n\n// Trends.\nconst tl = [];\nconst pick = (arr, msAgo) => { const t = now - msAgo; let best = null; for (const p of arr || []) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p; return best; };\nconst infra = (sd.trends || {}).infra || [];\nif (infra.length) {\n  const a = infra[infra.length - 1], d1 = pick(infra, 24 * H), d7 = pick(infra, 7 * 24 * H);\n  tl.push(`DeepData free: ${tb(a.pool_free)} now${d1 ? `, ${tb(d1.pool_free)} yesterday` : ''}${d7 && d7 !== d1 ? `, ${tb(d7.pool_free)} a week ago` : ''}`);\n}\nfor (const h of S.HOSTS) {\n  const tr = (sd.trends || {})[h] || []; if (!tr.length) continue;\n  const a = tr[tr.length - 1], d1 = pick(tr, 24 * H);\n  const parts = [`mem ${a.mem}%`];\n  if (d1 && a.restarts != null && d1.restarts != null) parts.push(`${Math.max(0, a.restarts - d1.restarts)} container restarts in 24 h`);\n  if (a.backup) parts.push(`backup ${gb(a.backup)}`);\n  if (a.tdarr_done != null) parts.push(`Tdarr ${d1 && d1.tdarr_done != null ? a.tdarr_done - d1.tdarr_done : a.tdarr_done} files done in 24 h, ${a.tdarr_queued} queued`);\n  if (a.stuck) parts.push(`${a.stuck} stuck arr items`);\n  tl.push(`${h}: ${parts.join(', ')}`);\n}\nsection('TRENDS', tl);\n\n// Legacy webhook events (Kuma digest monitors, Diun, Scrutiny, backup script).\nconst ev = sd.events || []; sd.events = [];\nconst names = { kuma: 'App status (non-critical)', diun: 'Image updates available', scrutiny: 'Disk health', backup: 'Backups', other: 'Other' };\nconst groups = {};\nfor (const e of ev) (groups[e.source] = groups[e.source] || []).push(e);\nfor (const [src, items] of Object.entries(groups)) section(`${(names[src] || src).toUpperCase()} (${items.length})`, items.map((e) => `${fmtT(Date.parse(e.t))}  ${e.line}`));\n\n// Quiet.\nconst reporting = S.HOSTS.filter((h) => sd.last && sd.last[h] && now - sd.last[h].received < S.SILENT_AFTER_MIN * 60e3);\ntext += `QUIET\\n  ${reporting.length} of ${S.HOSTS.length} VMs reporting (${reporting.join(', ') || 'none'}); fixes ${S.FIXES_ENABLED ? 'enabled' : 'report-only'}.\\n`;\n\nconst nothing = !open.length && !fixed.length && !would.length && !resolved.length && !ev.length;\nconst subject = nothing ? `Homelab digest ${day}: all quiet` : `Homelab digest ${day}: ${open.filter((i) => i.sev === 'critical').length} critical, ${open.filter((i) => i.sev === 'warning').length} warnings, ${fixed.length} fixed`;\nreturn [{ json: { subject, text } }];\n"
+      }
+    },
+    {
+      "id": "f6719324-82ec-502d-989c-bcff1a2f950c",
+      "name": "Email digest",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        520,
+        900
+      ],
+      "parameters": {
+        "fromEmail": "Homelab <filingbin69@gmail.com>",
+        "toEmail": "mikegutberlet@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "71feb91e-b866-5f27-b867-3802b8ed7ee9",
+      "name": "Store event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        1200
+      ],
+      "parameters": {
+        "jsCode": "// Store one homelab event for the 08:00 digest. POST /webhook/homelab/<diun|kuma|scrutiny|backup|other>;\n// the source is the name of the webhook node that fired (fixed paths: n8n prefixes\n// paths that contain :params with the webhook id).\nconst sd = $getWorkflowStaticData('global');\nsd.events = sd.events || [];\nconst q = $json.query || {};\nconst b = $json.body || {};\nconst source = $prevNode.name || 'other';\nlet line;\nif (source === 'diun') {\n  line = `Image update: ${b.image || ''} (${b.status || 'new'}) on ${b.hostname || 'unknown host'}`;\n} else if (source === 'kuma') {\n  const st = b.heartbeat ? (b.heartbeat.status === 0 ? 'DOWN' : b.heartbeat.status === 1 ? 'UP' : '') : '';\n  line = `${(b.monitor && b.monitor.name) || 'monitor'} ${st}: ${b.msg || ''}`.trim();\n} else {\n  line = b.message || b.title || JSON.stringify(b).slice(0, 300);\n}\nsd.events.push({ t: new Date().toISOString(), source, line });\nif (sd.events.length > 500) sd.events = sd.events.slice(-500);\nreturn [{ json: { stored: true } }];\n"
+      }
+    },
+    {
+      "id": "4ebc9a8c-a17c-54b6-8aa8-03a2ed744f30",
+      "name": "diun",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1100
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/diun",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "6a630034-d409-5a16-b2c2-fa326f1d2754"
+    },
+    {
+      "id": "76f2c514-9671-5d51-a355-6500baa6f920",
+      "name": "kuma",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1190
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/kuma",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "30d4f660-d45c-515f-99a7-55a178a4417e"
+    },
+    {
+      "id": "618f831d-defa-5298-a504-f6bc89771ffc",
+      "name": "scrutiny",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1280
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/scrutiny",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "e4f522c6-2e12-5ae9-8681-4bf8a1aa5952"
+    },
+    {
+      "id": "b1c9e9fc-91b3-5d95-a178-4d70d572fcc3",
+      "name": "backup",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1370
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/backup",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "03375229-004f-5eaf-b6a7-4610d075b4f9"
+    },
+    {
+      "id": "90cdd5a3-b626-5180-9358-57ce41eddd52",
+      "name": "other",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1460
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "homelab/other",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "553a6a6c-d777-5c3d-b967-a64314bdab1e"
+    }
+  ],
+  "connections": {
+    "report": {
+      "main": [
+        [
+          {
+            "node": "Evaluate report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 15 min": {
+      "main": [
+        [
+          {
+            "node": "PVE resources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PVE resources": {
+      "main": [
+        [
+          {
+            "node": "PVE cluster status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PVE cluster status": {
+      "main": [
+        [
+          {
+            "node": "NAS pools",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NAS pools": {
+      "main": [
+        [
+          {
+            "node": "NAS dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NAS dataset": {
+      "main": [
+        [
+          {
+            "node": "NAS alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NAS alerts": {
+      "main": [
+        [
+          {
+            "node": "Scrutiny",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrutiny": {
+      "main": [
+        [
+          {
+            "node": "PVE node list",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PVE node list": {
+      "main": [
+        [
+          {
+            "node": "PVE node status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PVE node status": {
+      "main": [
+        [
+          {
+            "node": "Evaluate infra",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate report": {
+      "main": [
+        [
+          {
+            "node": "Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate infra": {
+      "main": [
+        [
+          {
+            "node": "Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide": {
+      "main": [
+        [
+          {
+            "node": "Email or fix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email or fix": {
+      "main": [
+        [
+          {
+            "node": "Email critical",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route fix by host",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route fix by host": {
+      "main": [
+        [
+          {
+            "node": "ops edge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ops media",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ops gpu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ops apps",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ops ai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ops edge": {
+      "main": [
+        [
+          {
+            "node": "Record fix result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ops media": {
+      "main": [
+        [
+          {
+            "node": "Record fix result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ops gpu": {
+      "main": [
+        [
+          {
+            "node": "Record fix result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ops apps": {
+      "main": [
+        [
+          {
+            "node": "Record fix result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ops ai": {
+      "main": [
+        [
+          {
+            "node": "Record fix result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record fix result": {
+      "main": [
+        [
+          {
+            "node": "Failed or follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed or follow-up": {
+      "main": [
+        [
+          {
+            "node": "Email critical",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 60 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 60 s": {
+      "main": [
+        [
+          {
+            "node": "Route fix by host",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every day 08:00": {
+      "main": [
+        [
+          {
+            "node": "Build digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build digest": {
+      "main": [
+        [
+          {
+            "node": "Email digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "diun": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "kuma": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "scrutiny": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "backup": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "other": {
+      "main": [
+        [
+          {
+            "node": "Store event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Los_Angeles",
+    "saveExecutionProgress": false
+  }
+}

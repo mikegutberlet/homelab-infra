@@ -51,6 +51,11 @@ docs/       gen_routes.py regenerates Traefik and TSDProxy routes; torrent-fallb
   VMs (which includes the Traefik/Tailscale path); open to the whole LAN: Plex 32400, Emby
   8096, Jellyseerr 5055 (and SMB/NFS on TrueNAS). Open WebUI 3010 only from the edge VM.
 - Disk health: Scrutiny collectors on both Proxmox hosts (`playbooks/proxmox-scrutiny.yml`).
+- Junior sysadmin (role `ops`): every VM POSTs its state (containers, disks, NFS mount, backups,
+  arr queues, Tdarr, Tailscale) to n8n every 15 min (`homelab-agent`), and n8n can act only through
+  the "ops door": an `ops` SSH user whose key is pinned to `homelab-ops`, a fixed set of verbs
+  (restart/stop a listed container, retry or blocklist an arr queue item, re-test a Prowlarr
+  indexer, prune dangling images, remount the NAS). It never reboots anything or touches `/mnt/nfs`.
 - Downloads: Usenet first; torrents (qBittorrent via PIA) only after 24 h with nothing on Usenet,
   public trackers, seed to 1.0 or 3 days, hardlinked imports. Details in `docs/torrent-fallback.md`.
 
@@ -81,5 +86,9 @@ Things learned the hard way:
   Each Proxmox host pings healthchecks.io every 5 min (`playbooks/proxmox-heartbeat.yml`), which is
   the only alert that works while the lab is dark. Set the NUC BIOS to "After Power Failure: Power On".
   A UPS with NUT for a clean shutdown is the plan; see the "Power outage plan" doc.
-- RicksGarage is tight on RAM (TrueNAS 16 GB + edge 3 + media 6): media's balloon floor
-  is 5 GB because 3 GB starved it.
+- RAM per host (sized 2026-10-22 from live use): RicksGarage = TrueNAS 16 + edge 4 + media 8
+  (fixed, no ballooning) = 28 of 31 GiB; RicksShip = gpu 10 + apps 10 + ai 4 = 24 of 31 GiB, the
+  spare kept for Ollama/Kasm later. The old VMs 113 (8 GB) and 117 (12 GB) must stay off: either one
+  overcommits its host. Every Docker VM has a swap file (media 4 GB, others 2 GB, swappiness 10)
+  and the biggest containers have `mem_limit` caps. Measure inside the VM with `free -m`:
+  Proxmox's memory graph counts page cache.

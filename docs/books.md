@@ -77,14 +77,24 @@ ansible-playbook playbooks/site.yml --limit apps  --tags stacks   # Homepage; th
 
 First run (done over SSH/API from the Mac on 2026-10-22, see the change log):
 
-1. Listenarr: admin login on, API key noted into `~/.config/homelab/listenarr-api` on the Mac; root
-   folder, SABnzbd + qBittorrent clients (category `audiobooks`), Prowlarr import, quality profile,
-   folder pattern, hardlink file action, failed-download handling on.
-2. Chaptarr: Authentication "forms" (Goobs's login) with API key noted into
-   `~/.config/homelab/chaptarr-api`; root folder, download clients (category `books`), delay
-   profile 1440 min for torrents, Prowlarr app entry.
-3. Both: Audiobookshelf rescans its library on its own schedule; a Listenarr notification can trigger
-   a rescan once Listenarr adds an Audiobookshelf connection (on its roadmap, not there yet).
+1. Listenarr: login screen off (Authentik and lanfw in front), API key in
+   `~/.config/homelab/listenarr-api` on the Mac; root folder, SABnzbd + qBittorrent clients
+   (category `audiobooks`, removed after import), Prowlarr import (8 indexers, Usenet priority 1,
+   torrents 50, GingaDADDY disabled to match Prowlarr), default "Audiobook" profile (M4B, AAC, MP3
+   from 320 kbps down; FLAC/OPUS off), folder pattern `{Author}/{Title}`, Hardlink/Copy, failed
+   download handling with auto-search, metadata processing on. Its built-in `/app` root folder is
+   still listed (no longer the default); delete it in the UI.
+2. Chaptarr: authentication External with no login for local addresses (same reason; set a forms
+   login under Settings → General if wanted; the pre-change config is `config.xml.bak-20261022`),
+   API key in `~/.config/homelab/chaptarr-api`; root folder with the built-in E-Book profile and
+   "Ebook Default" metadata profile, SABnzbd (priority 1) and qBittorrent (priority 2) with category
+   `books`, delay profile 1440 min for torrents, Prowlarr app "Chaptarr" (Readarr type, full sync,
+   7000-7060) which brought 1337x, Knaben, NZBgeek and NzbPlanet. A first sync raced and duplicated
+   two indexers; they were deleted and the sync re-run.
+3. SABnzbd's `complete/books` and `complete/audiobooks` were created as root over NFS (mapped to
+   `nobody`) and set to 777 rather than recreated; SABnzbd's write test passed.
+4. Audiobookshelf rescans its library on its own schedule; a Listenarr → Audiobookshelf
+   notification is on Listenarr's roadmap, not there yet.
 
 ## Not done / open
 

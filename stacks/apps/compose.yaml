@@ -2,6 +2,10 @@
 # Monitoring lives here, on the other host from TrueNAS and the edge VM, so it can
 # still alert when RicksGarage is down.
 
+# mem_limit/cpus (2026-10-22): caps sit above each container's measured peak, so one runaway app
+# gets restarted instead of starving the whole VM. Page cache counts toward the cap and is
+# reclaimed first, so a cap below a cache-heavy peak (SABnzbd, Tdarr) is fine.
+
 x-common: &common
   restart: unless-stopped
   labels:
@@ -81,6 +85,7 @@ services:
   paperless:
     <<: *common
     image: ghcr.io/paperless-ngx/paperless-ngx:2.20 # no floating ":2" tag is published
+    mem_limit: 2g
     environment:
       USERMAP_UID: ${PUID}
       USERMAP_GID: ${PGID}
@@ -113,10 +118,12 @@ services:
   tika:
     <<: *common
     image: apache/tika:latest
+    mem_limit: 1g
 
   stirling-pdf:
     <<: *common
     image: stirlingtools/stirling-pdf:latest
+    mem_limit: 2g
     environment:
       DOCKER_ENABLE_SECURITY: "false" # Authentik handles login
     ports: ["8070:8080"]
@@ -126,6 +133,7 @@ services:
   n8n:
     <<: *common
     image: docker.n8n.io/n8nio/n8n:latest
+    mem_limit: 1536m
     environment:
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
@@ -148,6 +156,7 @@ services:
   huginn:
     <<: *common
     image: ghcr.io/huginn/huginn:latest
+    mem_limit: 1536m
     environment:
       DATABASE_ADAPTER: postgresql
       DATABASE_HOST: postgres

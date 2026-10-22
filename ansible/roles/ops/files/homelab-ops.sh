@@ -1,0 +1,123 @@
+#!/bin/bash
+# The "ops door": the only thing the n8n sysadmin workflow can run on this VM. It arrives as
+# the ops user over SSH (forced command, see homelab-ops-door) and is run through sudo. Each
+# verb is fixed, logged to the journal (tag homelab-ops) and answers one JSON line.
+#
+# Verbs (container = compose service name in /etc/homelab-ops.allow, never arbitrary):
+#   status                          docker ps summary
+#   logs <service> [lines<=200]     last log lines of a container
+#   restart <service>               compose up -d (if missing) or restart (if running)
+#   stop <service>                  stop a crash-looping container
+#   arr-retry <sonarr|radarr> <queue id>      remove from queue (file kept) and search again
+#   arr-blocklist <sonarr|radarr> <queue id>  blocklist that release and search again
+#   prowlarr-test <indexer id>      test an indexer, which re-enables a backed-off one
+#   docker-prune                    dangling images and build cache only
+#   remount-nas                     re-trigger the NAS automount, then recreate the stack
+#
+# Never: reboot, poweroff, anything under /mnt/nfs, compose pull, settings changes.
+set -uo pipefail
+ALLOW=/etc/homelab-ops.allow            # "stack/service" per line, written by Ansible
+CONF=/etc/homelab-agent.conf
+# shellcheck disable=SC1090
+[ -r "$CONF" ] && . "$CONF"
+NAS_IP=${NAS_IP:-192.168.1.209}
+APPDATA=/opt/appdata
+
+verb=${1:-}; shift || true
+log() { logger -t homelab-ops "$verb ${*:-}"; }
+out() { jq -c -n --arg verb "$verb" --arg result "$1" --arg detail "${2:-}" '{verb:$verb, result:$result, detail:$detail}'; }
+die() { log "refused: $1"; out refused "$1"; exit 2; }
+
+# Resolve a service name to its stack and container name through the allow-list.
+resolve() {
+  local svc=$1 line
+  [[ "$svc" =~ ^[a-z0-9-]+$ ]] || die "bad service name"
+  line=$(grep -x -m1 "[a-z0-9-]*/$svc" "$ALLOW" 2>/dev/null) || die "service $svc is not on the allow-list"
+  stack=${line%%/*}; container="$stack-$svc-1"
+}
+arr_key() { sed -n 's:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p' "$APPDATA/$1/config.xml" 2>/dev/null | head -1; }
+arr_base() { case "$1" in sonarr) echo "http://127.0.0.1:8989/api/v3";; radarr) echo "http://127.0.0.1:7878/api/v3";; *) die "app must be sonarr or radarr";; esac; }
+arr_search() { # app ref-id
+  local app=$1 ref=$2 cmd ids
+  case "$app" in sonarr) cmd=SeriesSearch; ids="\"seriesId\":$ref";; radarr) cmd=MoviesSearch; ids="\"movieIds\":[$ref]";; esac
+  curl -fsS -m 20 -H "X-Api-Key: $(arr_key "$app")" -H 'Content-Type: application/json' \
+    -X POST "$(arr_base "$app")/command" -d "{\"name\":\"$cmd\",$ids}" >/dev/null
+}
+
+case "$verb" in
+  status)
+    log
+    docker ps -a --format '{{json .}}' | jq -s -c 'map({name:.Names, status:.Status, image:.Image})'
+    ;;
+
+  logs)
+    resolve "${1:-}"; n=${2:-100}; [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -le 200 ] || n=100
+    log "$container $n"
+    docker logs --tail "$n" "$container" 2>&1 | jq -R -s -c --arg c "$container" '{container:$c, log:.}'
+    ;;
+
+  restart)
+    resolve "${1:-}"
+    before=$(docker inspect -f '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || echo absent)
+    log "$container (was $before)"
+    if [ "${before%%/*}" = running ]; then
+      (cd "/opt/stacks/$stack" && docker compose restart -t 30 "${1}") >/dev/null 2>&1 || { out failed "compose restart $1 failed"; exit 1; }
+    else
+      (cd "/opt/stacks/$stack" && docker compose up -d --no-deps "${1}") >/dev/null 2>&1 || { out failed "compose up $1 failed"; exit 1; }
+    fi
+    sleep 5
+    after=$(docker inspect -f '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || echo absent)
+    out ok "$container: $before -> $after"
+    ;;
+
+  stop)
+    resolve "${1:-}"
+    log "$container"
+    docker stop -t 30 "$container" >/dev/null 2>&1 && out ok "$container stopped; undo: ssh goobs@$(hostname -I | cut -d' ' -f1) 'cd /opt/stacks/$stack && sudo docker compose up -d $1'" || out failed "stop failed"
+    ;;
+
+  arr-retry|arr-blocklist)
+    app=${1:-}; id=${2:-}
+    [[ "$id" =~ ^[0-9]+$ ]] || die "queue id must be a number"
+    base=$(arr_base "$app"); key=$(arr_key "$app"); [ -n "$key" ] || die "no API key for $app"
+    item=$(curl -fsS -m 20 -H "X-Api-Key: $key" "$base/queue/details?pageSize=500" 2>/dev/null | jq -c --argjson id "$id" 'map(select(.id==$id)) | .[0] // empty')
+    [ -n "$item" ] || item=$(curl -fsS -m 20 -H "X-Api-Key: $key" "$base/queue?pageSize=500" 2>/dev/null | jq -c --argjson id "$id" '(.records // []) | map(select(.id==$id)) | .[0] // empty')
+    [ -n "$item" ] || die "queue item $id not found in $app"
+    title=$(jq -r '.title // "?"' <<<"$item"); ref=$(jq -r '.movieId // .seriesId // empty' <<<"$item")
+    if [ "$verb" = arr-retry ]; then q="removeFromClient=false&blocklist=false"; else q="removeFromClient=true&blocklist=true"; fi
+    log "$app $id '$title'"
+    curl -fsS -m 20 -H "X-Api-Key: $key" -X DELETE "$base/queue/$id?$q" >/dev/null 2>&1 || { out failed "queue delete $id failed"; exit 1; }
+    [ -n "$ref" ] && arr_search "$app" "$ref"
+    out ok "$app queue $id '$title' removed ($q); search triggered for ${ref:-nothing}"
+    ;;
+
+  prowlarr-test)
+    id=${1:-}; [[ "$id" =~ ^[0-9]+$ ]] || die "indexer id must be a number"
+    key=$(arr_key prowlarr); [ -n "$key" ] || die "no API key for prowlarr"
+    body=$(curl -fsS -m 20 -H "X-Api-Key: $key" "http://127.0.0.1:9696/api/v1/indexer/$id" 2>/dev/null) || die "indexer $id not found"
+    name=$(jq -r '.name' <<<"$body"); log "$id $name"
+    if curl -fsS -m 60 -H "X-Api-Key: $key" -H 'Content-Type: application/json' -X POST "http://127.0.0.1:9696/api/v1/indexer/test" -d "$body" >/dev/null 2>&1; then
+      out ok "indexer $name tested fine (backoff cleared)"
+    else out failed "indexer $name still failing"; fi
+    ;;
+
+  docker-prune)
+    log
+    a=$(docker image prune -f 2>/dev/null | tail -1); b=$(docker builder prune -f 2>/dev/null | tail -1)
+    out ok "images: ${a:-nothing}; build cache: ${b:-nothing}"
+    ;;
+
+  remount-nas)
+    timeout 5 bash -c "</dev/tcp/$NAS_IP/2049" 2>/dev/null || die "NAS does not answer on 2049; nothing to remount"
+    log
+    umount -l /mnt/nfs 2>/dev/null; sleep 2; ls /mnt/nfs >/dev/null 2>&1
+    if findmnt -rn -t nfs,nfs4 --mountpoint /mnt/nfs >/dev/null && [ -n "$(ls -A /mnt/nfs 2>/dev/null)" ]; then
+      # Bind mounts inside the containers still point at the old mount: recreate the stacks.
+      for s in ${STACKS:-}; do (cd "/opt/stacks/$s" && docker compose up -d --force-recreate) >/dev/null 2>&1; done
+      out ok "/mnt/nfs remounted and non-empty; stacks recreated: ${STACKS:-none}"
+    else out failed "/mnt/nfs still not mounted or empty"; fi
+    ;;
+
+  ""|help) die "no verb given";;
+  *) die "unknown verb $verb";;
+esac
