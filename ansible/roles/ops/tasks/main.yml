@@ -35,6 +35,8 @@
       STACKS="{{ stacks | default([]) | join(' ') }}"
       EXPECTED="{{ ops_expected | join(' ') }}"
       NAS_IP=192.168.1.209
+      # Only VMs with nfs_mounts in hosts.yml have /mnt/nfs; the rest skip that check.
+      NFS_EXPECTED={{ (nfs_mounts | default([]) | length > 0) | lower }}
       EXTRA_DISKS="{{ ops_extra_disks | default([]) | join(' ') }}"
 
 - name: Scripts

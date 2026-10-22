@@ -28,6 +28,7 @@ for (const d of r.disks || []) {
   else if (d.used_pct >= S.DISK_WARN) add(`disk:${d.mount}`, 'warning', `${host}: ${d.mount} is ${d.used_pct}% full`, `${gb(d.avail)} left`);
 }
 const m = r.mounts || {};
+// m.nfs is null on VMs without an NFS library mount (edge, ai); the agent only reports it where hosts.yml has nfs_mounts.
 if (m.nfs && !(m.nfs.mounted && m.nfs.nonempty)) {
   if (m.nas_tcp_2049) add('nfs', 'critical', `${host}: /mnt/nfs is ${m.nfs.mounted ? 'mounted but empty' : 'not mounted'} while the NAS is up`, 'Apps are running against an empty library path', { verb: 'remount-nas', target: 'nfs' });
   else add('nfs', 'critical', `${host}: /mnt/nfs is not available and TrueNAS does not answer on 2049`, 'Waiting for the NAS; nothing to fix from here');
