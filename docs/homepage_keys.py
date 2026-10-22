@@ -57,9 +57,13 @@ need("HOMEPAGE_JELLYSEERR_KEY",
 need("HOMEPAGE_TAUTULLI_KEY", ssh(APPS, "sed -n 's/^api_key *= *//p' /opt/appdata/tautulli/config.ini"))
 need("HOMEPAGE_PLEX_TOKEN",
      ssh(GPU, "grep -o 'PlexOnlineToken=\"[^\"]*\"' '/opt/appdata/plex/Library/Application Support/Plex Media Server/Preferences.xml' | cut -d'\"' -f2"))
-# Audiobookshelf only has a token once the first-run admin exists.
-need("HOMEPAGE_AUDIOBOOKSHELF_KEY",
-     ssh(MEDIA, "sqlite3 /opt/appdata/audiobookshelf/config/absdatabase.sqlite \"select token from users where type='root' limit 1\""))
+# Audiobookshelf only has a token once the first-run admin exists. Read through the container's
+# own sqlite (the VM's sqlite3 is too old for the database's triggers).
+abs_js = ('const s=require("sqlite3");const db=new s.Database("/config/absdatabase.sqlite",s.OPEN_READONLY);'
+          'db.get("select token from users where type=?",["root"],(e,r)=>console.log(r?r.token:""))')
+r = subprocess.run(["ssh", "-o", "BatchMode=yes", MEDIA, f"sudo docker exec -w /app media-audiobookshelf-1 node -e '{abs_js}'"],
+                   capture_output=True, text=True)
+need("HOMEPAGE_AUDIOBOOKSHELF_KEY", r.stdout.strip().splitlines()[-1].strip() if r.stdout.strip() else "")
 apps_vals["HOMEPAGE_QBITTORRENT_USER"] = "admin"
 apps_vals["HOMEPAGE_QBITTORRENT_PASSWORD"] = "bypass"  # the apps VM is on qBittorrent's auth-bypass list
 apps_vals["HOMEPAGE_PROXMOX_TOKEN_ID"] = "homepage@pve!homepage"
@@ -97,18 +101,13 @@ if CREATE:
     r = subprocess.run(["ssh", APPS, f"sudo docker exec -u www-data apps-nextcloud-1 php occ config:app:set serverinfo token --value {nc}"],
                        capture_output=True, text=True)
     need("HOMEPAGE_NEXTCLOUD_TOKEN", nc if r.returncode == 0 else "")
-    # Paperless API token for the superuser (drf_create_token returns the existing one on re-runs).
-    r = subprocess.run(["ssh", APPS, "sudo docker exec apps-paperless-1 python3 manage.py shell -c "
-                        "\"from django.contrib.auth.models import User; print('SUPERUSER=' + User.objects.filter(is_superuser=True).first().username)\""],
+    # Paperless API token for the superuser (get_or_create: the same token on every run).
+    pl = ("from rest_framework.authtoken.models import Token; from django.contrib.auth.models import User; "
+          "t,_=Token.objects.get_or_create(user=User.objects.filter(is_superuser=True).first()); print('TOKEN='+t.key)")
+    r = subprocess.run(["ssh", APPS, f'sudo docker exec apps-paperless-1 python3 manage.py shell -c "{pl}"'],
                        capture_output=True, text=True)
-    m = re.search(r"SUPERUSER=(\S+)", r.stdout)
-    tok = ""
-    if m:
-        r = subprocess.run(["ssh", APPS, f"sudo docker exec apps-paperless-1 python3 manage.py drf_create_token {m.group(1)}"],
-                           capture_output=True, text=True)
-        t = re.search(r"\b[0-9a-f]{40}\b", r.stdout)  # "Generated token <hex> for user <name>"
-        tok = t.group(0) if t else ""
-    need("HOMEPAGE_PAPERLESS_TOKEN", tok)
+    m = re.search(r"TOKEN=(\S+)", r.stdout)
+    need("HOMEPAGE_PAPERLESS_TOKEN", m.group(1) if m else "")
     # qBittorrent: let the apps VM (Homepage) read the queue without a login. Done from inside
     # qBittorrent's own network namespace, where localhost needs no password. No restart.
     prefs = json.dumps({"bypass_auth_subnet_whitelist_enabled": True, "bypass_auth_subnet_whitelist": "192.168.1.53/32"})
