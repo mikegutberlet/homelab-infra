@@ -116,7 +116,7 @@ def build_ops_door(cred_ids=None, cred_names=None):
     link("Parse", "By host")
     for i, h in enumerate(HOSTS):
         c = cred("sshPrivateKey", f"ops {h}")
-        node(f"ops {h}", "n8n-nodes-base.ssh", 1, (800, -220 + 110 * i), {"resource": "command", "operation": "execute", "authentication": "privateKey", "command": "={{ $json.cmd }}", "cwd": "/"}, onError="continueRegularOutput", **({"credentials": c} if c else {}))
+        node(f"ops {h}", "n8n-nodes-base.ssh", 1, (800, -220 + 110 * i), {"resource": "command", "operation": "execute", "authentication": "privateKey", "command": "={{ $json.cmd }}", "cwd": ""}, onError="continueRegularOutput", **({"credentials": c} if c else {}))
         link("By host", f"ops {h}", i)
         link(f"ops {h}", "Answer")
     link("By host", "Answer", len(HOSTS))  # unknown host or bad query: Parse's error goes straight back
@@ -192,8 +192,9 @@ def _build(ops_door_id=OPS_DOOR_ID):
     link("Email or fix", "Route fix by host", 1)
     for i, h in enumerate(HOSTS):
         # The SSH credential "ops <vm>" carries host, port and user; the command is what Decide planned.
+        # cwd must stay empty: with the default "/" node-ssh sends "cd '/' ; <cmd>", which the door refuses.
         c = cred("sshPrivateKey", f"ops {h}")
-        node(f"ops {h}", "n8n-nodes-base.ssh", 1, (3040, 160 + 110 * i), {"resource": "command", "operation": "execute", "authentication": "privateKey", "command": "={{ $json.cmd }}", "cwd": "/"}, onError="continueRegularOutput", **({"credentials": c} if c else {}))
+        node(f"ops {h}", "n8n-nodes-base.ssh", 1, (3040, 160 + 110 * i), {"resource": "command", "operation": "execute", "authentication": "privateKey", "command": "={{ $json.cmd }}", "cwd": ""}, onError="continueRegularOutput", **({"credentials": c} if c else {}))
         link("Route fix by host", f"ops {h}", i)
         link(f"ops {h}", "Record fix result")
     node("Record fix result", "n8n-nodes-base.code", 2, (3300, 380), {"jsCode": code("record_fix.js")})

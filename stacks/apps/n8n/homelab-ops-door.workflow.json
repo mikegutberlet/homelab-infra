@@ -171,7 +171,7 @@
         "operation": "execute",
         "authentication": "privateKey",
         "command": "={{ $json.cmd }}",
-        "cwd": "/"
+        "cwd": ""
       },
       "onError": "continueRegularOutput"
     },
@@ -189,7 +189,7 @@
         "operation": "execute",
         "authentication": "privateKey",
         "command": "={{ $json.cmd }}",
-        "cwd": "/"
+        "cwd": ""
       },
       "onError": "continueRegularOutput"
     },
@@ -207,7 +207,7 @@
         "operation": "execute",
         "authentication": "privateKey",
         "command": "={{ $json.cmd }}",
-        "cwd": "/"
+        "cwd": ""
       },
       "onError": "continueRegularOutput"
     },
@@ -225,7 +225,7 @@
         "operation": "execute",
         "authentication": "privateKey",
         "command": "={{ $json.cmd }}",
-        "cwd": "/"
+        "cwd": ""
       },
       "onError": "continueRegularOutput"
     },
@@ -243,7 +243,7 @@
         "operation": "execute",
         "authentication": "privateKey",
         "command": "={{ $json.cmd }}",
-        "cwd": "/"
+        "cwd": ""
       },
       "onError": "continueRegularOutput"
     },
