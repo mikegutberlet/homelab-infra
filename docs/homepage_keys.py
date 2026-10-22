@@ -16,9 +16,9 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
-import tempfile
 
 MEDIA, GPU, APPS = "goobs@192.168.1.51", "goobs@192.168.1.52", "goobs@192.168.1.53"
 PVE, NAS = "root@192.168.1.137", "root@192.168.1.209"
@@ -67,33 +67,41 @@ apps_vals["HOMEPAGE_PROXMOX_TOKEN_ID"] = "homepage@pve!homepage"
 if CREATE:
     print("Creating read-only tokens (skipped when they already exist)...")
     # Proxmox: cluster-wide user with the auditor role. Undo: pveum user delete homepage@pve
+    # The token secret is shown once, at creation, so an existing token is replaced.
     users = subprocess.run(["ssh", PVE, "pveum user list --output-format json"], capture_output=True, text=True).stdout
     if '"homepage@pve"' not in users:
         subprocess.run(["ssh", PVE, 'pveum user add homepage@pve --comment "Homepage dashboard, read-only" '
                         "&& pveum acl modify / -user homepage@pve -role PVEAuditor"], check=True, capture_output=True)
-        out = subprocess.run(["ssh", PVE, "pveum user token add homepage@pve homepage --privsep 0 --output-format json"],
-                             capture_output=True, text=True).stdout
-        need("HOMEPAGE_PROXMOX_TOKEN_SECRET", json.loads(out).get("value", "") if out.strip() else "")
-    else:
-        print("  Proxmox user homepage@pve exists; token left as is")
+    subprocess.run(["ssh", PVE, "pveum user token remove homepage@pve homepage"], capture_output=True)
+    out = subprocess.run(["ssh", PVE, "pveum user token add homepage@pve homepage --privsep 0 --output-format json"],
+                         capture_output=True, text=True).stdout
+    need("HOMEPAGE_PROXMOX_TOKEN_SECRET", json.loads(out).get("value", "") if out.strip() else "")
     # TrueNAS API key (SCALE 23.10 keys are full access; the widget only reads). Undo: midclt call api_key.delete <id>
+    # Also shown once, so an existing "homepage" key is deleted and made again.
     keys = subprocess.run(["ssh", NAS, "midclt call api_key.query"], capture_output=True, text=True).stdout
-    if not re.search(r'"name":\s*"homepage"', keys):
-        out = subprocess.run(["ssh", NAS, "midclt call api_key.create '{\"name\":\"homepage\"}'"],
-                             capture_output=True, text=True).stdout
-        need("HOMEPAGE_TRUENAS_KEY", json.loads(out).get("key", "") if out.strip() else "")
-    else:
-        print("  TrueNAS key homepage exists; left as is")
+    for k in (json.loads(keys) if keys.strip() else []):
+        if k.get("name") == "homepage":
+            subprocess.run(["ssh", NAS, f"midclt call api_key.delete {k['id']}"], capture_output=True)
+    out = subprocess.run(["ssh", NAS, "midclt call api_key.create '{\"name\":\"homepage\"}'"],
+                         capture_output=True, text=True).stdout
+    need("HOMEPAGE_TRUENAS_KEY", json.loads(out).get("key", "") if out.strip() else "")
     # Nextcloud serverinfo token (its only purpose is this read-only endpoint).
     nc = secrets.token_hex(32)
     r = subprocess.run(["ssh", APPS, f"sudo docker exec -u www-data apps-nextcloud-1 php occ config:app:set serverinfo token --value {nc}"],
                        capture_output=True, text=True)
     need("HOMEPAGE_NEXTCLOUD_TOKEN", nc if r.returncode == 0 else "")
     # Paperless API token for the superuser (drf_create_token returns the existing one on re-runs).
-    user = ssh(APPS, "docker exec apps-paperless-1 python3 manage.py shell -c "
-                     "'from django.contrib.auth.models import User; print(User.objects.filter(is_superuser=True).first().username)'")
-    tok = ssh(APPS, f"docker exec apps-paperless-1 python3 manage.py drf_create_token {user}") if user else ""
-    need("HOMEPAGE_PAPERLESS_TOKEN", tok.split()[-1] if tok else "")
+    r = subprocess.run(["ssh", APPS, "sudo docker exec apps-paperless-1 python3 manage.py shell -c "
+                        "'from django.contrib.auth.models import User; print(\"SUPERUSER=\" + User.objects.filter(is_superuser=True).first().username)'"],
+                       capture_output=True, text=True)
+    m = re.search(r"SUPERUSER=(\S+)", r.stdout)
+    tok = ""
+    if m:
+        r = subprocess.run(["ssh", APPS, f"sudo docker exec apps-paperless-1 python3 manage.py drf_create_token {m.group(1)}"],
+                           capture_output=True, text=True)
+        t = re.search(r"\b[0-9a-f]{40}\b", r.stdout)  # "Generated token <hex> for user <name>"
+        tok = t.group(0) if t else ""
+    need("HOMEPAGE_PAPERLESS_TOKEN", tok)
     # qBittorrent: let the apps VM (Homepage) read the queue without a login. Done from inside
     # qBittorrent's own network namespace, where localhost needs no password. No restart.
     prefs = json.dumps({"bypass_auth_subnet_whitelist_enabled": True, "bypass_auth_subnet_whitelist": "192.168.1.53/32"})
@@ -113,29 +121,39 @@ for path, prefix, store in ((f"{HOME}/.config/homelab/homepage-keys.env", "HOMEP
                 print(f"  {k}: from {os.path.basename(path)}")
 
 
+SOPS = next((p for p in [shutil.which("sops"), "/usr/local/bin/sops", "/opt/homebrew/bin/sops",
+                         f"{HOME}/.local/bin/sops", f"{HOME}/go/bin/sops"] if p and os.path.exists(p)), None)
+
+
+def sops(args, stdin):
+    """Run sops on the file given on stdin: locally when installed, else on the apps VM, which has
+    sops and the age key (/root/.config/sops/age/keys.txt) for the Ansible deploys. Nothing is
+    written to disk either way."""
+    if SOPS:
+        cmd = [SOPS, *args, "/dev/stdin"]
+    else:
+        cmd = ["ssh", "-o", "BatchMode=yes", APPS,
+               "sudo SOPS_AGE_KEY_FILE=/root/.config/sops/age/keys.txt sops " + " ".join(args) + " /dev/stdin"]
+    r = subprocess.run(cmd, input=stdin, capture_output=True, text=True)
+    if r.returncode:
+        sys.exit(f"sops failed ({'local' if SOPS else 'on the apps VM'}): {r.stderr.strip()[-300:]}")
+    return r.stdout
+
+
 def update_secrets(path, vals):
-    """Replace keys inside a sops dotenv file; the plaintext never touches the repo."""
+    """Replace keys inside a sops dotenv file; the plaintext never touches the repo or a disk."""
     if not vals:
         return
     enc = open(path).read()
     recips = ",".join(re.findall(r"^sops_age__list_\d+__map_recipient=(.*)$", enc, re.M))
-    plain = subprocess.run(["sops", "--decrypt", "--input-type", "dotenv", "--output-type", "dotenv", path],
-                           capture_output=True, text=True, check=True).stdout
+    plain = sops(["--decrypt", "--input-type", "dotenv", "--output-type", "dotenv"], enc)
     lines = [ln for ln in plain.splitlines() if ln.partition("=")[0] not in vals]
     lines += [f"{k}={v}" for k, v in vals.items()]
-    fd, tmp = tempfile.mkstemp(prefix=".secrets.", dir=f"{HOME}/.config/homelab")
-    try:
-        with os.fdopen(fd, "w") as f:
-            f.write("\n".join(lines) + "\n")
-        out = subprocess.run(["sops", "--encrypt", "--age", recips, "--input-type", "dotenv", "--output-type", "dotenv", tmp],
-                             capture_output=True, text=True, check=True).stdout
-        open(path, "w").write(out)
-    finally:
-        os.remove(tmp)
+    out = sops(["--encrypt", "--age", recips, "--input-type", "dotenv", "--output-type", "dotenv"], "\n".join(lines) + "\n")
+    open(path, "w").write(out)
     print(f"Updated {path} ({len(vals)} keys)")
 
 
-os.makedirs(f"{HOME}/.config/homelab", exist_ok=True)
 update_secrets("stacks/apps/secrets.sops.env", apps_vals)
 update_secrets("stacks/media/secrets.sops.env", media_vals)
 for p in (f"{HOME}/.config/homelab/homepage-keys.env", f"{HOME}/.config/homelab/igdb.env"):
