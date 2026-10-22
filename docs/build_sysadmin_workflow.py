@@ -192,8 +192,8 @@ def _build(ops_door_id=OPS_DOOR_ID):
     link("Email or fix", "Route fix by host", 1)
     for i, h in enumerate(HOSTS):
         # The SSH credential "ops <vm>" carries host, port and user; the command is what Decide planned.
-        # cwd is a required parameter (n8n refuses "" as missing); node-ssh turns "/" into "cd '/' ; <cmd>",
-        # and homelab-ops-door.sh strips exactly that prefix before its character check.
+        # cwd is a required parameter (n8n refuses "" as missing); node-ssh turns "/" into "cd / ; <cmd>"
+        # (quoted "cd '/' ; " in other versions), and homelab-ops-door.sh strips that prefix before its check.
         c = cred("sshPrivateKey", f"ops {h}")
         node(f"ops {h}", "n8n-nodes-base.ssh", 1, (3040, 160 + 110 * i), {"resource": "command", "operation": "execute", "authentication": "privateKey", "command": "={{ $json.cmd }}", "cwd": "/"}, onError="continueRegularOutput", **({"credentials": c} if c else {}))
         link("Route fix by host", f"ops {h}", i)
