@@ -156,6 +156,7 @@
         widget:
           type: tdarr
           url: "http://192.168.1.52:8265"
+          key: "{{HOMEPAGE_VAR_TDARR_KEY}}" # Tdarr has its login on: an API key from its settings
     - Unmanic:
         href: "https://unmanic.{{HOMEPAGE_VAR_TAILNET}}"
         description: Library optimiser (no libraries yet)
@@ -212,7 +213,7 @@
     - Piper:
         description: Text to speech (Wyoming, port 10200, no web page)
         icon: mdi-account-voice
-        siteMonitor: "tcp://192.168.1.54:10200"
+        ping: 192.168.1.54 # siteMonitor can't do plain TCP; the ai VM answering is close enough
 
 - Lab:
     - Status:

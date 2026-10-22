@@ -49,8 +49,8 @@ print("Reading existing keys...")
 for app in ("sonarr", "radarr", "prowlarr"):
     need(f"HOMEPAGE_{app.upper()}_KEY",
          ssh(MEDIA, f"sed -n 's:.*<ApiKey>\\(.*\\)</ApiKey>.*:\\1:p' /opt/appdata/{app}/config.xml"))
-need("HOMEPAGE_BAZARR_KEY",
-     ssh(MEDIA, "awk '/^auth:/{f=1} f && /apikey:/{print $2; exit}' /opt/appdata/bazarr/config/config.yaml"))
+need("HOMEPAGE_BAZARR_KEY",  # the apikey line inside the auth: block (no $ here: sh -c would expand it)
+     ssh(MEDIA, "sed -n '/^auth:/,/^[^ ]/{s/^ *apikey: *//p;}' /opt/appdata/bazarr/config/config.yaml").strip("'\""))
 need("HOMEPAGE_SABNZBD_KEY", ssh(MEDIA, "sed -n 's/^api_key *= *//p' /opt/appdata/sabnzbd/sabnzbd.ini"))
 need("HOMEPAGE_JELLYSEERR_KEY",
      ssh(MEDIA, "python3 -c 'import json;print(json.load(open(\"/opt/appdata/jellyseerr/settings.json\"))[\"main\"][\"apiKey\"])'"))
@@ -82,7 +82,9 @@ if CREATE:
     for k in (json.loads(keys) if keys.strip() else []):
         if k.get("name") == "homepage":
             subprocess.run(["ssh", NAS, f"midclt call api_key.delete {k['id']}"], capture_output=True)
-    out = subprocess.run(["ssh", NAS, "midclt call api_key.create '{\"name\":\"homepage\"}'"],
+    # An empty allowlist denies everything; GET on every resource is all the widget needs.
+    out = subprocess.run(["ssh", NAS, "midclt call api_key.create "
+                          "'{\"name\":\"homepage\",\"allowlist\":[{\"method\":\"GET\",\"resource\":\"*\"}]}'"],
                          capture_output=True, text=True).stdout
     need("HOMEPAGE_TRUENAS_KEY", json.loads(out).get("key", "") if out.strip() else "")
     # Nextcloud serverinfo token (its only purpose is this read-only endpoint).
@@ -92,7 +94,7 @@ if CREATE:
     need("HOMEPAGE_NEXTCLOUD_TOKEN", nc if r.returncode == 0 else "")
     # Paperless API token for the superuser (drf_create_token returns the existing one on re-runs).
     r = subprocess.run(["ssh", APPS, "sudo docker exec apps-paperless-1 python3 manage.py shell -c "
-                        "'from django.contrib.auth.models import User; print(\"SUPERUSER=\" + User.objects.filter(is_superuser=True).first().username)'"],
+                        "\"from django.contrib.auth.models import User; print('SUPERUSER=' + User.objects.filter(is_superuser=True).first().username)\""],
                        capture_output=True, text=True)
     m = re.search(r"SUPERUSER=(\S+)", r.stdout)
     tok = ""
@@ -110,7 +112,7 @@ if CREATE:
                        capture_output=True, text=True)
     print("  qBittorrent: 192.168.1.53 on the auth-bypass list" if r.returncode == 0 else "  qBittorrent: FAILED")
 
-# Hand-added keys from the Mac (Emby, Immich, RomM user/password; IGDB for the media stack).
+# Hand-added keys from the Mac (Emby, Immich, Tdarr, RomM user/password; IGDB for the media stack).
 for path, prefix, store in ((f"{HOME}/.config/homelab/homepage-keys.env", "HOMEPAGE_", apps_vals),
                             (f"{HOME}/.config/homelab/igdb.env", "IGDB_", media_vals)):
     if os.path.exists(path):
