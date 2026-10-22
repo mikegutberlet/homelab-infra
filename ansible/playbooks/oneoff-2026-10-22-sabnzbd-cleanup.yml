@@ -26,6 +26,20 @@
     old_incomplete: /mnt/nfs/sabnzb/incomplete
     complete_dir: /mnt/nfs/sabnzb/complete
     radarr_titles: ["The.Last.Fiction.2019", "28.Years.Later.The.Bone.Template.2026", "A.Very.Harold"]
+    # The NFS export squashes root (mv/rm as root fail with "Permission denied"), so every write
+    # under /mnt/nfs runs as the app user, the same way the containers do.
+    nas_user: "{{ app_user }}"
+    icons_dir: "/mnt/nfs/Media/TVShows/Icons Unearthed (2022)"
+    icons_prefix: "Icons Unearthed (2022) - "
+    icons_suffix: " WEBRip-1080p.mkv"
+    # Names as Sonarr held them before the bad import (its old S01 episodefile records).
+    icons_renames:
+      - { from: "S09E01 - The Kids Are In Charge", to: "S01E01 - A New Hope Part I" }
+      - { from: "S09E02 - A Race to the Finish", to: "S01E02 - A New Hope Part II" }
+      - { from: "S09E03 - A Dark Turn", to: "S01E03 - The Empire Strikes Back" }
+      - { from: "S09E04 - A Hero Unprepared", to: "S01E04 - Return of the Jedi" }
+      - { from: "S09E05 - Growing Up", to: "S01E05 - The Phantom Menace" }
+      - { from: "S09E06 - Pushing the Boundaries", to: "S01E06 - Attack of the Clones Revenge of the Sith" }
   tasks:
     - name: API keys
       ansible.builtin.shell: |
@@ -44,33 +58,45 @@
     # ---- 1. Icons Unearthed: Season 9 files back to their Season 1 paths ----
     - name: Move the six files back (only when the source exists and the target does not)
       ansible.builtin.shell: |
-        base=http://127.0.0.1:8989/api/v3
-        files=$(curl -sS -m 20 -H "X-Api-Key: $SONARR_KEY" "$base/episodefile?seriesId={{ sonarr_series_id }}") || { echo "curl failed rc=$?"; exit 1; }
-        echo "episodefile records: $(jq 'length' <<<"$files" 2>/dev/null || echo "not json: ${files:0:200}")"
-        jq -r '.[] | "  S\(.seasonNumber) \(.path)"' <<<"$files"
-        for n in 1 2 3 4 5 6; do
-          src=$(jq -r --arg n "$n" '[.[] | select(.seasonNumber==9) | select(.relativePath|test("S09E0"+$n+"[^0-9]";"i")) | .path] | first // empty' <<<"$files")
-          dst=$(jq -r --arg n "$n" '[.[] | select(.seasonNumber==1) | select(.relativePath|test("S01E0"+$n+"[^0-9]";"i")) | .path] | first // empty' <<<"$files")
-          if [ -n "$src" ] && [ -n "$dst" ] && [ -f "$src" ] && [ ! -e "$dst" ]; then
-            mkdir -p "$(dirname "$dst")"
-            mv -n "$src" "$dst" && echo "moved: $src -> $dst"
-          else
-            echo "skip E0$n: src='${src}' (exists: $([ -f "$src" ] && echo y || echo n)) dst='${dst}' (exists: $([ -e "$dst" ] && echo y || echo n))"
-          fi
-        done
-        s9=$(jq -r '[.[] | select(.seasonNumber==9) | .path] | first // empty' <<<"$files")
-        if [ -n "$s9" ]; then s9=$(dirname "$s9"); [ -d "$s9" ] && rmdir "$s9" 2>/dev/null && echo "removed empty $s9"; fi
-        exit 0
+        src="{{ icons_dir }}/Season 9/{{ icons_prefix }}{{ item.from }}{{ icons_suffix }}"
+        dst="{{ icons_dir }}/Season 1/{{ icons_prefix }}{{ item.to }}{{ icons_suffix }}"
+        if [ -f "$src" ] && [ ! -e "$dst" ]; then
+          sudo -n -u {{ nas_user }} mkdir -p "{{ icons_dir }}/Season 1"
+          sudo -n -u {{ nas_user }} mv -n "$src" "$dst" && echo "moved: {{ item.from }} -> {{ item.to }}"
+        else
+          echo "skip {{ item.to }}: src exists=$([ -f "$src" ] && echo y || echo n), dst exists=$([ -e "$dst" ] && echo y || echo n)"
+        fi
       args:
         executable: /bin/bash
-      environment:
-        SONARR_KEY: "{{ sonarr_key }}"
+      loop: "{{ icons_renames }}"
+      loop_control:
+        label: "{{ item.to }}"
       register: moved
       changed_when: "'moved:' in moved.stdout"
 
+    - name: Empty Season 9 folder gone
+      ansible.builtin.shell: |
+        d="{{ icons_dir }}/Season 9"
+        [ -d "$d" ] && [ -z "$(ls -A "$d")" ] && sudo -n -u {{ nas_user }} rmdir "$d" && echo "removed $d"
+        true
+      args:
+        executable: /bin/bash
+      register: s9
+      changed_when: "'removed' in s9.stdout"
+
+    - name: Season 1 on disk
+      ansible.builtin.command: ls -l "{{ icons_dir }}/Season 1"
+      changed_when: false
+      register: s1ls
+
+    - name: Six files in Season 1
+      ansible.builtin.assert:
+        that: s1ls.stdout_lines | select('search', 'S01E0[1-6]') | list | length == 6
+        fail_msg: "{{ s1ls.stdout }}"
+
     - name: Show what moved
       ansible.builtin.debug:
-        var: moved.stdout_lines
+        msg: "{{ moved.results | map(attribute='stdout') | list }}"
 
     - name: Sonarr rescans the series (drops the stale S09 records, re-finds S01)
       ansible.builtin.uri:
@@ -125,10 +151,10 @@
         set -u
         sleep 10
         for p in {{ complete_dir }}/MobLand.S02E05* {{ complete_dir }}/test_download_100MB; do
-          [ -e "$p" ] && rm -rf "$p" && echo "removed $p"
+          [ -e "$p" ] && sudo -n -u {{ nas_user }} rm -rf "$p" && echo "removed $p"
         done
         if grep -q '^download_dir *= */incomplete' {{ appdata_root }}/sabnzbd/sabnzbd.ini && [ -d {{ old_incomplete }} ]; then
-          du -sh {{ old_incomplete }}; rm -rf {{ old_incomplete }} && echo "removed {{ old_incomplete }}"
+          du -sh {{ old_incomplete }}; sudo -n -u {{ nas_user }} rm -rf {{ old_incomplete }} && echo "removed {{ old_incomplete }}"
         fi
         true
       args:
@@ -197,7 +223,7 @@
       ansible.builtin.shell: |
         sleep 10
         for t in {{ radarr_titles | join(' ') }}; do
-          for p in {{ complete_dir }}/"$t"*; do [ -e "$p" ] && rm -rf "$p" && echo "removed $p"; done
+          for p in {{ complete_dir }}/"$t"*; do [ -e "$p" ] && sudo -n -u {{ nas_user }} rm -rf "$p" && echo "removed $p"; done
         done
         true
       args:
