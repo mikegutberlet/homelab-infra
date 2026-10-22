@@ -35,6 +35,13 @@ const SETTINGS = {
   PVE_EXPECT_RUNNING: [110, 201, 202, 203, 204, 205],
   PVE_EXPECT_STOPPED: [113, 117],
   TZ: 'America/Los_Angeles',
+  // Chat page (sysadmin.<tailnet>). CHAT_FIXES_ENABLED lets a fix proposed in chat run after Goobs
+  // presses Confirm; it is separate from FIXES_ENABLED, which gates the automatic ones.
+  // Off until Goobs decides (2026-10-22): with it off, chat proposes fixes but does not run them.
+  CHAT_FIXES_ENABLED: false,
+  CHAT_FIX_PER_HOUR: 2,                      // per target, counting automatic fixes too
+  CHAT_FIX_PER_DAY: 10,                      // all chat fixes together
+  CHAT_CONFIRM_MIN: 15,                      // a proposal expires after this
 };
 const TB = 1e12, GB = 1e9, H = 3600e3;
 const now = Date.now();

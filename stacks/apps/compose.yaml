@@ -153,6 +153,22 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
 
+  # Chat page for the n8n sysadmin (sysadmin.<tailnet>, behind Authentik): a static page plus a
+  # proxy to the workflow's chat webhook. The webhook token lives in token.env (written by
+  # docs/sysadmin_deploy.py, never in the repo) and is added server-side, so the browser never sees it.
+  sysadmin-chat:
+    <<: *common
+    image: nginx:1.27-alpine
+    environment:
+      NGINX_ENVSUBST_FILTER: ^CHAT_TOKEN$$ # only this variable is substituted into the template
+    env_file:
+      - {path: /opt/appdata/sysadmin-chat/token.env, required: false}
+    ports: ["3003:80"]
+    volumes:
+      - ./sysadmin-chat/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./sysadmin-chat/index.html:/usr/share/nginx/html/index.html:ro
+    depends_on: [n8n]
+
   huginn:
     <<: *common
     image: ghcr.io/huginn/huginn:latest
