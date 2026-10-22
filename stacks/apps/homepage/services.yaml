@@ -12,6 +12,8 @@
     - Sonarr: {href: "https://sonarr.{{HOMEPAGE_VAR_TAILNET}}", icon: sonarr.png, siteMonitor: "http://192.168.1.51:8989/ping"}
     - Radarr: {href: "https://radarr.{{HOMEPAGE_VAR_TAILNET}}", icon: radarr.png, siteMonitor: "http://192.168.1.51:7878/ping"}
     - Prowlarr: {href: "https://prowlarr.{{HOMEPAGE_VAR_TAILNET}}", icon: prowlarr.png, siteMonitor: "http://192.168.1.51:9696/ping"}
+    - Listenarr: {href: "https://listenarr.{{HOMEPAGE_VAR_TAILNET}}", icon: mdi-headphones, siteMonitor: "http://192.168.1.51:4545/"}
+    - Chaptarr: {href: "https://chaptarr.{{HOMEPAGE_VAR_TAILNET}}", icon: readarr.png, siteMonitor: "http://192.168.1.51:8789/ping"}
     - Bazarr: {href: "https://bazarr.{{HOMEPAGE_VAR_TAILNET}}", icon: bazarr.png, siteMonitor: "http://192.168.1.51:6767/"}
     - SABnzbd: {href: "https://sabnzbd.{{HOMEPAGE_VAR_TAILNET}}", icon: sabnzbd.png, siteMonitor: "http://192.168.1.51:8080/"}
     - qBittorrent: {href: "https://qbittorrent.{{HOMEPAGE_VAR_TAILNET}}", icon: qbittorrent.png, siteMonitor: "http://192.168.1.51:8085/"}

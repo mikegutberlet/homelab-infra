@@ -170,6 +170,17 @@ https://audiobooks.tail9af84.ts.net (own login). Libraries `Media/Audiobooks` an
 (folder created 2026-10-21 at Goobs's request). Config and metadata under `/opt/appdata/audiobookshelf`.
 Health `GET /healthcheck`.
 
+## Listenarr and Chaptarr (books)
+
+Added 2026-10-22. `therobbiedavis/listenarr:canary-1.3.19` (audiobooks, port 4545,
+https://listenarr.tail9af84.ts.net, SSO) and `chaptarr/chaptarr:0.9.965` (ebooks, port 8789,
+https://chaptarr.tail9af84.ts.net, SSO), both as 3000 with `/mnt/nfs` mounted like SABnzbd. Readarr
+was retired upstream and its metadata server is gone, so Chaptarr (a Readarr fork with its own
+metadata service, reached by Prowlarr through the Readarr app type) does the ebook job. Root folders
+`Media/Audiobooks` and `Media/Books`, the folders Audiobookshelf and Storyteller already use; nothing
+is moved. SABnzbd/qBittorrent categories `audiobooks` and `books`. Details, limits (Listenarr has no
+delay profile or RSS) and first-run steps in [`docs/books.md`](../../books.md).
+
 ## RomM
 
 `rommapp/romm:4` with `mariadb:11`, port 8095, https://romm.tail9af84.ts.net (SSO). Retro game
@@ -187,5 +198,5 @@ the MariaDB is dumped nightly by the backup script.
 ## Health and alerting
 
 Instant email monitors: Sonarr, Radarr, Prowlarr, SABnzbd, qBittorrent (via PIA), Requests. Digest
-monitors: Bazarr, Audiobookshelf, Storyteller, RomM, MeTube. Nightly backup of this VM was 443 MB on
+monitors: Bazarr, Audiobookshelf, Storyteller, RomM, MeTube, Listenarr, Chaptarr. Nightly backup of this VM was 443 MB on
 its first run.

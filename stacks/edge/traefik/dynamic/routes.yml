@@ -61,6 +61,16 @@ http:
       entryPoints: [web]
       service: romm
       middlewares: [authentik]
+    listenarr:
+      rule: Host(`listenarr.{{ env "TS_TAILNET" }}`)
+      entryPoints: [web]
+      service: listenarr
+      middlewares: [authentik]
+    chaptarr:
+      rule: Host(`chaptarr.{{ env "TS_TAILNET" }}`)
+      entryPoints: [web]
+      service: chaptarr
+      middlewares: [authentik]
     plex:
       rule: Host(`plex.{{ env "TS_TAILNET" }}`)
       entryPoints: [web]
@@ -206,6 +216,14 @@ http:
       loadBalancer:
         servers:
           - url: http://192.168.1.51:8095
+    listenarr:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.51:4545
+    chaptarr:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.51:8789
     plex:
       loadBalancer:
         servers:
