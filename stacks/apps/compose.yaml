@@ -166,6 +166,7 @@ services:
     ports: ["3003:80"]
     volumes:
       - ./sysadmin-chat/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./sysadmin-chat/00-chat-token.envsh:/docker-entrypoint.d/00-chat-token.envsh:ro
       - ./sysadmin-chat/index.html:/usr/share/nginx/html/index.html:ro
     depends_on: [n8n]
 

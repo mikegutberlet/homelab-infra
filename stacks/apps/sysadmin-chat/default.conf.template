@@ -22,7 +22,7 @@ server {
         proxy_set_header X-Chat-Token "${CHAT_TOKEN}";
         proxy_set_header X-authentik-username $http_x_authentik_username;
         proxy_set_header Content-Type application/json;
-        proxy_read_timeout 150s;
+        proxy_read_timeout 300s; # the agent can take minutes when Gemini is slow
     }
     location / {
         return 404;
