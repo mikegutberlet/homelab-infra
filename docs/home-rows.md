@@ -1,7 +1,7 @@
 # Curated home screen rows (Plex and Emby)
 
 Set up 2026-10-22. Goal (Goobs): Netflix-style rows of movies and shows on the Plex and Emby
-home screens. Goobs picked all 25 rows from the menu, with these defaults: no poster badges,
+home screens. Goobs picked all 25 rows from the menu (2026-10-22 20:45 UTC: more rows on Home, and Continue Watching, New Releases and Recently Added at the top), with these defaults: no poster badges,
 nothing is ever downloaded because of a list, and only the top rows go on Home.
 
 ## How it works
@@ -13,8 +13,10 @@ nothing is ever downloaded because of a list, and only the top rows go on Home.
 | Home Screen Companion (HSC) | Emby plugin catalog | its own sync 04:00 + when home-rows asks | Keeps the Emby collections, home rows and "Your Next Watch" playlists |
 
 - Plex rows live in `movies.yml` and `shows.yml`. `HomeRow` rows go on Home in file order
-  (`auto_sort_hubs: configured`); `Row` rows are on each library's Recommended tab and under
-  Collections. Franchise boxed sets come from Kometa's `franchise` default (2+ owned films).
+  (`auto_sort_hubs: configured`, New Releases pinned first with `hub_priority: 1`); `Row` rows
+  are on each library's Recommended tab and under Collections. Plex's own Continue Watching and
+  Recently Added rows always sit above the Kometa rows. Franchise boxed sets come from Kometa's
+  `franchise` default (2+ owned films).
 - Emby rows are listed in `ROWS` in `home_rows.py`. Rule rows (genres, decades, studios,
   networks, Family Night, Quick Watches, New Releases) use Emby's own metadata. List rows
   (Trending, Popular, Top Rated, seasonal, Oscars, Hidden Gems, International, Sitcoms, Limited
@@ -22,7 +24,10 @@ nothing is ever downloaded because of a list, and only the top rows go on Home.
   servers show the same titles. A Plex collection that is missing (a seasonal row out of season)
   switches the Emby row off, and HSC removes its collection and home row until it returns.
 - Every Emby row is a collection; Home rows are on every user's home screen, the rest are under
-  Collections. Emby users also get **Your Next Watch** (HSC's per-user picks, computed on the
+  Collections. After each HSC sync, home-rows puts every user's Home in this order: Continue
+  Watching, New Releases, Latest Media, Your Next Watch, then the Home rows in `ROWS` order
+  (`reorder_home`, through HSC's `Hsc/UserSections` API); rows it does not know keep their place
+  below. A row a user drags by hand is put back at the next sync. Emby users also get **Your Next Watch** (HSC's per-user picks, computed on the
   server, no internet). home-rows only edits HSC sources named `homelab: ...`.
 - Seasonal rows: Halloween 10/01-10/31, Thanksgiving 11/01-11/30, Christmas 12/01-12/31,
   Valentine's Day 02/01-02/14.

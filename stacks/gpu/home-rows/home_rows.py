@@ -52,35 +52,60 @@ def rule(*criteria, any_of=False):
 MOVIE, SERIES = rule("MediaType:Movie"), rule("MediaType:Series")
 
 # (row name, home row?, source). Source: ("plex", library) copies the Plex collection of that
-# name; ("rules", [groups]) is an HSC smart rule. Home rows appear in this order. Sort "Random"
+# name; ("rules", [groups]) is an HSC smart rule. Home rows appear in this order, after Emby's
+# own Continue Watching, New Releases and Latest Media rows (see reorder_home). Sort "Random"
 # shuffles a row on every load; list rows keep Emby's default order.
 ROWS = [
+    # ---- Home: movies ----
+    ("New Releases", True, ("rules", [MOVIE, rule("Year:>=:{last_year}")])),
     ("Trending This Week", True, ("plex", MOVIES)),
     ("Popular Right Now", True, ("plex", MOVIES)),
-    ("New Releases", True, ("rules", [MOVIE, rule("Year:>=:{last_year}")])),
+    ("Top Rated of All Time", True, ("plex", MOVIES)),
     ("Halloween Movies", True, ("plex", MOVIES)),
     ("Thanksgiving Movies", True, ("plex", MOVIES)),
     ("Christmas Movies", True, ("plex", MOVIES)),
     ("Valentine's Day Movies", True, ("plex", MOVIES)),
+    ("Highly Rated, Not Yet Watched", True, ("rules", [MOVIE, rule("IsPlayed:__any__:=:Unwatched", "CommunityRating:>=:7.5")])),
+    ("Hidden Gems", True, ("plex", MOVIES)),
     ("Family Night", True, ("rules", [MOVIE, rule("ContentRating:exact:G", "ContentRating:exact:PG", any_of=True)])),
-    ("Top Rated of All Time", True, ("plex", MOVIES)),
+    ("Oscar Winners", True, ("plex", MOVIES)),
+    ("Action Movies", True, ("rules", [MOVIE, rule("Genre:exact:Action")])),
+    ("Comedy Movies", True, ("rules", [MOVIE, rule("Genre:exact:Comedy")])),
+    ("Horror Movies", True, ("rules", [MOVIE, rule("Genre:exact:Horror")])),
+    ("Sci-Fi Movies", True, ("rules", [MOVIE, rule("Genre:Science Fiction", "Genre:Sci-Fi", any_of=True)])),
+    ("Animated Movies", True, ("rules", [MOVIE, rule("Genre:exact:Animation")])),
+    ("Superhero Movies", True, ("plex", MOVIES)),
+    ("Based on a True Story", True, ("plex", MOVIES)),
+    ("90s Movies", True, ("rules", [MOVIE, rule("Year:>=:1990", "Year:<=:1999")])),
+    # ---- Home: shows ----
     ("Trending Shows", True, ("plex", SHOWS)),
     ("Popular Shows", True, ("plex", SHOWS)),
-    ("Hidden Gems", False, ("plex", MOVIES)),
+    ("New Episodes This Week", True, ("plex", SHOWS)),
+    ("Top Rated Shows", True, ("plex", SHOWS)),
+    ("Limited Series", True, ("plex", SHOWS)),
+    ("Sitcoms", True, ("plex", SHOWS)),
+    ("Crime and Mystery", True, ("rules", [SERIES, rule("Genre:exact:Crime", "Genre:exact:Mystery", any_of=True)])),
+    ("Animated Shows", True, ("rules", [SERIES, rule("Genre:exact:Animation")])),
+    ("Kids Shows", True, ("rules", [SERIES, rule("Genre:Children", "ContentRating:exact:TV-Y",
+                                                 "ContentRating:exact:TV-Y7", any_of=True)])),
+    # ---- Collections only: movies ----
     ("International Films in English", False, ("plex", MOVIES)),
-    ("Oscar Winners", False, ("plex", MOVIES)),
     ("Quick Watches", False, ("rules", [MOVIE, rule("Runtime:>=:60", "Runtime:<=:95")])),
-    ("Action Movies", False, ("rules", [MOVIE, rule("Genre:exact:Action")])),
-    ("Comedy Movies", False, ("rules", [MOVIE, rule("Genre:exact:Comedy")])),
-    ("Horror Movies", False, ("rules", [MOVIE, rule("Genre:exact:Horror")])),
-    ("Sci-Fi Movies", False, ("rules", [MOVIE, rule("Genre:Science Fiction", "Genre:Sci-Fi", any_of=True)])),
+    ("Classics", False, ("rules", [MOVIE, rule("Year:<=:1979", "CommunityRating:>=:7")])),
+    ("Rom-Coms", False, ("rules", [MOVIE, rule("Genre:exact:Romance", "Genre:exact:Comedy")])),
+    ("Time Travel", False, ("plex", MOVIES)),
     ("Thrillers", False, ("rules", [MOVIE, rule("Genre:exact:Thriller")])),
     ("Romance Movies", False, ("rules", [MOVIE, rule("Genre:exact:Romance")])),
-    ("Animated Movies", False, ("rules", [MOVIE, rule("Genre:exact:Animation")])),
     ("Documentaries", False, ("rules", [MOVIE, rule("Genre:exact:Documentary")])),
     ("Crime Movies", False, ("rules", [MOVIE, rule("Genre:exact:Crime")])),
+    ("Drama Movies", False, ("rules", [MOVIE, rule("Genre:exact:Drama")])),
+    ("Adventure Movies", False, ("rules", [MOVIE, rule("Genre:exact:Adventure")])),
+    ("Fantasy Movies", False, ("rules", [MOVIE, rule("Genre:exact:Fantasy")])),
+    ("Mystery Movies", False, ("rules", [MOVIE, rule("Genre:exact:Mystery")])),
+    ("War Movies", False, ("rules", [MOVIE, rule("Genre:exact:War")])),
+    ("Westerns", False, ("rules", [MOVIE, rule("Genre:exact:Western")])),
+    ("Family Movies", False, ("rules", [MOVIE, rule("Genre:exact:Family")])),
     ("80s Movies", False, ("rules", [MOVIE, rule("Year:>=:1980", "Year:<=:1989")])),
-    ("90s Movies", False, ("rules", [MOVIE, rule("Year:>=:1990", "Year:<=:1999")])),
     ("2000s Movies", False, ("rules", [MOVIE, rule("Year:>=:2000", "Year:<=:2009")])),
     ("2010s Movies", False, ("rules", [MOVIE, rule("Year:>=:2010", "Year:<=:2019")])),
     ("Pixar", False, ("rules", [MOVIE, rule("Studio:Pixar")])),
@@ -88,14 +113,13 @@ ROWS = [
     ("DreamWorks", False, ("rules", [MOVIE, rule("Studio:DreamWorks")])),
     ("Marvel Studios", False, ("rules", [MOVIE, rule("Studio:exact:Marvel Studios")])),
     ("A24", False, ("rules", [MOVIE, rule("Studio:exact:A24")])),
-    ("Top Rated Shows", False, ("plex", SHOWS)),
-    ("Sitcoms", False, ("plex", SHOWS)),
-    ("Limited Series", False, ("plex", SHOWS)),
+    # ---- Collections only: shows ----
+    ("Currently Airing", False, ("plex", SHOWS)),
     ("Finished Series", False, ("plex", SHOWS)),
-    ("Crime and Mystery", False, ("rules", [SERIES, rule("Genre:exact:Crime", "Genre:exact:Mystery", any_of=True)])),
     ("Reality TV", False, ("rules", [SERIES, rule("Genre:Reality")])),
-    ("Kids Shows", False, ("rules", [SERIES, rule("Genre:Kids", "Genre:Children", "ContentRating:exact:TV-Y",
-                                                  "ContentRating:exact:TV-Y7", any_of=True)])),
+    ("Drama Shows", False, ("rules", [SERIES, rule("Genre:exact:Drama")])),
+    ("Comedy Shows", False, ("rules", [SERIES, rule("Genre:exact:Comedy")])),
+    ("Documentary Series", False, ("rules", [SERIES, rule("Genre:exact:Documentary")])),
     # Emby keeps networks in a series' studios.
     ("HBO", False, ("rules", [SERIES, rule("Studio:HBO", "Studio:exact:Max", any_of=True)])),
     ("Netflix Originals", False, ("rules", [SERIES, rule("Studio:Netflix")])),
@@ -105,6 +129,11 @@ ROWS = [
     ("Cartoon Network", False, ("rules", [SERIES, rule("Studio:Cartoon Network")])),
     ("Disney TV", False, ("rules", [SERIES, rule("Studio:Disney")])),
 ]
+# Emby's own rows that stay at the very top of Home, matched on their section type or title.
+TOP_BUILTIN = [("resume", "continue watching"), ("latest", "latest media"), ("latest", "recently added")]
+# Full Home order: Continue Watching, New Releases, Latest Media, Your Next Watch, then ROWS.
+TOP_ORDER = ["continue watching", "new releases", "latest media", "your next watch"] + \
+    [name.lower() for name, home, _ in ROWS if home and name != "New Releases"]
 RANDOM_SORT = {name for name, _, (kind, _) in ROWS if kind == "rules" and name != "New Releases"}
 
 state = {"last_sync": None, "last_error": None, "rows": 0, "rows_off": []}
@@ -218,9 +247,59 @@ def sync():
     if task:
         emby(f"/ScheduledTasks/Running/{task['Id']}", "POST")
         print("Started the Home Screen Companion sync")
+        wait_for_task(task["Id"])
+        for uid in users:
+            reorder_home(uid)
     else:
         print("Home Screen Companion's sync task not found: is the plugin installed?")
     return len(wanted), off
+
+
+def wait_for_task(task_id, limit=3600):
+    """Block until HSC's sync task is idle again (it makes the rows this script then orders)."""
+    time.sleep(10)
+    for _ in range(limit // 10):
+        t = emby(f"/ScheduledTasks/{task_id}")
+        if t and t.get("State") == "Idle":
+            return True
+        time.sleep(10)
+    print("Home Screen Companion sync still running after an hour; rows not reordered", file=sys.stderr)
+    return False
+
+
+def section_name(sec):
+    """A home section's name as users see it, lower case: its custom title, else Emby's own."""
+    n = (sec.get("CustomName") or sec.get("Name") or "").strip()
+    if n.upper().startswith("[INACTIVE] "):
+        n = n[11:]
+    return n.lower()
+
+
+def home_order_key(sec):
+    name, kind = section_name(sec), (sec.get("SectionType") or "").lower()
+    for i, want in enumerate(TOP_ORDER):
+        if name == want:
+            return i
+    for i, (want_type, want_name) in enumerate(TOP_BUILTIN):
+        if want_type in kind or name == want_name:
+            return TOP_ORDER.index("continue watching" if want_type == "resume" else "latest media")
+    return len(TOP_ORDER)
+
+
+def reorder_home(uid):
+    """Put a user's Home rows in TOP_ORDER (Continue Watching, New Releases, Latest Media, Your Next
+    Watch, then the home rows in ROWS order); rows not in the list keep their relative order below.
+    Only the order changes: every existing section is sent back, so nothing is deleted."""
+    secs = (emby(f"/HomeScreenCompanion/Hsc/UserSections?UserId={uid}") or {}).get("Sections") or []
+    if not secs:
+        print(f"user {uid}: no home sections returned, order left alone")
+        return
+    ordered = sorted(secs, key=home_order_key)  # sorted() is stable
+    if [x.get("Id") for x in ordered] == [x.get("Id") for x in secs]:
+        return
+    r = emby("/HomeScreenCompanion/Hsc/UserSections", "POST", {"UserId": uid, "Sections": ordered})
+    print(f"user {uid}: home rows reordered ({(r or {}).get('Message', '')}); top: "
+          + ", ".join(section_name(x) or x.get("SectionType", "?") for x in ordered[:5]))
 
 
 def run_once():

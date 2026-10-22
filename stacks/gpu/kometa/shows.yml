@@ -25,15 +25,28 @@ collections:
     collection_order: custom
     summary: Shows popular on TMDb right now that are in the library.
 
+  New Episodes This Week:
+    template: {name: HomeRow}
+    smart_filter:
+      sort_by: episode_added.desc
+      limit: 40
+      all:
+        episode_added: 7
+    summary: Shows with episodes added in the last 7 days.
+
+  Animated Shows:
+    template: {name: HomeRow}
+    smart_filter: {sort_by: random, all: {genre: Animation}}
+
   # ---- Recommended tab ----
   Top Rated Shows:
-    template: {name: Row}
+    template: {name: HomeRow}
     imdb_chart: top_shows
     collection_order: custom
     summary: IMDb's Top 250 shows that are in the library.
 
   Sitcoms:
-    template: {name: Row}
+    template: {name: HomeRow}
     plex_search:
       all:
         genre: Comedy
@@ -42,7 +55,7 @@ collections:
     smart_label: random
 
   Crime and Mystery:
-    template: {name: Row}
+    template: {name: HomeRow}
     smart_filter:
       sort_by: random
       any:
@@ -53,7 +66,7 @@ collections:
     smart_filter: {sort_by: random, all: {genre: Reality}}
 
   Kids Shows:
-    template: {name: Row}
+    template: {name: HomeRow}
     smart_filter:
       sort_by: random
       any:
@@ -61,7 +74,7 @@ collections:
         genre: Children # the TV library has no "Kids" genre
 
   Limited Series:
-    template: {name: Row}
+    template: {name: HomeRow}
     plex_all: true
     filters:
       tmdb_type: miniseries
@@ -75,6 +88,24 @@ collections:
       tmdb_status: ended
     smart_label: random
     summary: Shows that have ended, so there is no wait for the next season.
+
+  Currently Airing:
+    template: {name: Row}
+    plex_all: true
+    filters:
+      tmdb_status: returning
+    smart_label: random
+    summary: Shows that are still making new seasons.
+
+  Drama Shows:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Drama}}
+  Comedy Shows:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Comedy}}
+  Documentary Series:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Documentary}}
 
   HBO:
     template: {name: Row}
