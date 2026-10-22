@@ -51,6 +51,11 @@ docs/       gen_routes.py regenerates Traefik and TSDProxy routes; torrent-fallb
   VMs (which includes the Traefik/Tailscale path); open to the whole LAN: Plex 32400, Emby
   8096, Jellyseerr 5055 (and SMB/NFS on TrueNAS). Open WebUI 3010 only from the edge VM.
 - Disk health: Scrutiny collectors on both Proxmox hosts (`playbooks/proxmox-scrutiny.yml`).
+- Junior sysadmin (role `ops`): every VM POSTs its state (containers, disks, NFS mount, backups,
+  arr queues, Tdarr, Tailscale) to n8n every 15 min (`homelab-agent`), and n8n can act only through
+  the "ops door": an `ops` SSH user whose key is pinned to `homelab-ops`, a fixed set of verbs
+  (restart/stop a listed container, retry or blocklist an arr queue item, re-test a Prowlarr
+  indexer, prune dangling images, remount the NAS). It never reboots anything or touches `/mnt/nfs`.
 - Downloads: Usenet first; torrents (qBittorrent via PIA) only after 24 h with nothing on Usenet,
   public trackers, seed to 1.0 or 3 days, hardlinked imports. Details in `docs/torrent-fallback.md`.
 
