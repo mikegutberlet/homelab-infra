@@ -134,7 +134,9 @@ def sops(args, stdin):
     else:
         cmd = ["ssh", "-o", "BatchMode=yes", APPS,
                "sudo SOPS_AGE_KEY_FILE=/root/.config/sops/age/keys.txt sops " + " ".join(args) + " /dev/stdin"]
-    r = subprocess.run(cmd, input=stdin, capture_output=True, text=True)
+    # cwd "/" keeps sops from finding the repo's .sops.yaml, whose creation rules match only
+    # the real file path, not stdin (the recipient is passed on the command line instead).
+    r = subprocess.run(cmd, input=stdin, capture_output=True, text=True, cwd="/")
     if r.returncode:
         sys.exit(f"sops failed ({'local' if SOPS else 'on the apps VM'}): {r.stderr.strip()[-300:]}")
     return r.stdout
