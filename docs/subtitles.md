@@ -26,8 +26,9 @@ Languages
 Providers
 - OpenSubtitles.com and Subdl: machine- and AI-translated subtitles stay **allowed**: they are
   the only Japanese source for most Western titles. Bazarr cannot allow them per language.
-- Added, no login needed: Podnapisi, Gestdown, Subsource, Embedded Subtitles (extracts text
-  subtitles already inside the video to a .srt; it cannot read PGS images).
+- Added, no login needed: Gestdown and Embedded Subtitles (extracts text subtitles already
+  inside the video to a .srt; it cannot read PGS images). Podnapisi is gone from Bazarr 1.6.2;
+  Subsource needs an account and API key (optional, Goobs's call).
 - Addic7ed kept (frequent timeouts; Gestdown covers the same shows).
 
 Subtitles
@@ -40,7 +41,9 @@ Subtitles
   text subtitles get fetched for titles that only have image subtitles.
 
 General
-- Bind address 0.0.0.0 (was 192.168.1.14 from the old VM), a form login for the UI.
+- Bind address 0.0.0.0 (was 192.168.1.14 from the old VM); backup folder `/config/backup`
+  (the old path was unwritable, so Bazarr's own backups never worked; the nightly VM backup
+  covers it anyway). Form login for the UI: Goobs sets it (Settings, General, Security).
 
 ## In this repo
 
