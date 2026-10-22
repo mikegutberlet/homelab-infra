@@ -29,7 +29,11 @@ Providers
 - Added, no login needed: Gestdown and Embedded Subtitles (extracts text subtitles already
   inside the video to a .srt; it cannot read PGS images). Podnapisi is gone from Bazarr 1.6.2;
   Subsource needs an account and API key (optional, Goobs's call).
-- Addic7ed kept (frequent timeouts; Gestdown covers the same shows).
+- Addic7ed kept (Goobs's choice, 2026-10-22 16:18 UTC). Its failures are connection timeouts
+  to www.addic7ed.com, not a quota: Bazarr pauses it an hour after each one and would sit out
+  until the next day on a real download-limit error. There is no per-provider request cap.
+- Sub-Zero mods: Goobs turned on "Remove Tags" (remove_tags, strips formatting) on 2026-10-22;
+  the one meant for [SOUND] lines is "Remove Hearing Impaired" (remove_HI).
 
 Subtitles
 - Minimum score: series 90, movies 70 (both unchanged; a higher movie floor would reject most
@@ -65,7 +69,13 @@ General
   integrity-checked database copy); on the Mac `~/HomeLab/subtitles/` has
   `changes-20261022.md` (every change with its old value and undo), the profiles export and
   the assignment manifests (dry run and real run).
-- Not done: Bazarr UI login (Goobs), Subsource key and OpenSubtitles VIP (optional).
+- Bazarr UI login left off on purpose: it sits behind Tailscale + Authentik, only LAN port
+  6767 is open. Subsource key and OpenSubtitles VIP still optional.
+- First 11 h of backfill (to 15:19 UTC): 535 TV subtitles (OpenSubtitles.com 346, Subdl 127,
+  Gestdown 62; 395 en of which 183 HI, 140 ja), subsync ran 484 times (89 shifts over 30 s).
+  Movie pass had not started yet (the series pass was still running).
+- The media VM nearly ran out of memory at 15:30 UTC (6 GB, balloon floor 5 GB, no swap);
+  fixed by the right-sizing thread: 8 GB fixed, balloon off, 4 GB swap.
 
 ## How the backfill runs
 
