@@ -1,10 +1,10 @@
 # Movie rows for Plex. In smart_filter, a list under `all:` means every value must match, so
 # rows that accept several studios or ratings use `any:`.
-# "HomeRow" rows are pinned to Home for Goobs and shared users, in this
-# order; "Row" rows show on the Movies library's Recommended tab and under Collections.
-# Every row only ever lists movies already in the library. home-rows/rows.py copies the
-# list-based ones (Trending, Popular, Top Rated, seasonal, Oscars, Hidden Gems, International)
-# to Emby by these exact names, so rename them in both places.
+# "HomeRow" rows are pinned to Home for Goobs and shared users, in this order (New Releases
+# first; Plex's own Continue Watching and Recently Added rows always sit above them); "Row" rows
+# show on the Movies library's Recommended tab and under Collections. Every row only ever lists
+# movies already in the library. home-rows/home_rows.py copies the list-based ones to Emby by
+# these exact names, so rename them in both places.
 
 templates:
   HomeRow:
@@ -32,6 +32,7 @@ collections:
 
   New Releases:
     template: {name: HomeRow}
+    hub_priority: 1 # first Kometa row on Home
     smart_filter:
       sort_by: release.desc
       limit: 60
@@ -93,9 +94,32 @@ collections:
     collection_order: custom
     summary: IMDb's Top 250 movies that are in the library.
 
+  Highly Rated, Not Yet Watched:
+    template: {name: HomeRow}
+    smart_filter:
+      sort_by: random
+      all:
+        unplayed: true
+        audience_rating.gte: 7.5
+    summary: Well-reviewed movies nobody here has watched yet.
+
+  Superhero Movies:
+    template: {name: HomeRow}
+    plex_all: true
+    filters:
+      tmdb_keyword: superhero
+    smart_label: random
+
+  Based on a True Story:
+    template: {name: HomeRow}
+    plex_all: true
+    filters:
+      tmdb_keyword: based on true story
+    smart_label: random
+
   # ---- Recommended tab ----
   Hidden Gems:
-    template: {name: Row}
+    template: {name: HomeRow}
     plex_all: true
     filters:
       tmdb_vote_average.gte: 7.2
@@ -115,7 +139,7 @@ collections:
     summary: Foreign-language films that have an English audio track.
 
   Oscar Winners:
-    template: {name: Row}
+    template: {name: HomeRow}
     imdb_award:
       event_id: ev0000003
       event_year: all
@@ -138,16 +162,16 @@ collections:
     summary: Feature films of 95 minutes or less.
 
   Action Movies:
-    template: {name: Row}
+    template: {name: HomeRow}
     smart_filter: {sort_by: random, all: {genre: Action}}
   Comedy Movies:
-    template: {name: Row}
+    template: {name: HomeRow}
     smart_filter: {sort_by: random, all: {genre: Comedy}}
   Horror Movies:
-    template: {name: Row}
+    template: {name: HomeRow}
     smart_filter: {sort_by: random, all: {genre: Horror}}
   Sci-Fi Movies:
-    template: {name: Row}
+    template: {name: HomeRow}
     smart_filter: {sort_by: random, all: {genre: Science Fiction}}
   Thrillers:
     template: {name: Row}
@@ -156,7 +180,7 @@ collections:
     template: {name: Row}
     smart_filter: {sort_by: random, all: {genre: Romance}}
   Animated Movies:
-    template: {name: Row}
+    template: {name: HomeRow}
     smart_filter: {sort_by: random, all: {genre: Animation}}
   Documentaries:
     template: {name: Row}
@@ -165,11 +189,52 @@ collections:
     template: {name: Row}
     smart_filter: {sort_by: random, all: {genre: Crime}}
 
+  Classics:
+    template: {name: Row}
+    smart_filter:
+      sort_by: random
+      all:
+        year.lte: 1979
+        audience_rating.gte: 7
+    summary: Well-loved movies from before 1980.
+
+  Rom-Coms:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: [Romance, Comedy]}} # both genres
+  Time Travel:
+    template: {name: Row}
+    plex_all: true
+    filters:
+      tmdb_keyword: time travel
+    smart_label: random
+
+  Drama Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Drama}}
+  Adventure Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Adventure}}
+  Fantasy Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Fantasy}}
+  Mystery Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Mystery}}
+  War Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: War}}
+  Westerns:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Western}}
+  Family Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Family}}
+
   80s Movies:
     template: {name: Row}
     smart_filter: {sort_by: random, all: {decade: 1980}}
   90s Movies:
-    template: {name: Row}
+    template: {name: HomeRow}
     smart_filter: {sort_by: random, all: {decade: 1990}}
   2000s Movies:
     template: {name: Row}
