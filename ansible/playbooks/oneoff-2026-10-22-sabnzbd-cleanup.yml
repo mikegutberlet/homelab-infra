@@ -40,9 +40,10 @@
     # ---- 1. Icons Unearthed: Season 9 files back to their Season 1 paths ----
     - name: Move the six files back (only when the source exists and the target does not)
       ansible.builtin.shell: |
-        set -euo pipefail
         base=http://127.0.0.1:8989/api/v3
-        files=$(curl -fsS -H "X-Api-Key: $SONARR_KEY" "$base/episodefile?seriesId={{ sonarr_series_id }}")
+        files=$(curl -sS -m 20 -H "X-Api-Key: $SONARR_KEY" "$base/episodefile?seriesId={{ sonarr_series_id }}") || { echo "curl failed rc=$?"; exit 1; }
+        echo "episodefile records: $(jq 'length' <<<"$files" 2>/dev/null || echo "not json: ${files:0:200}")"
+        jq -r '.[] | "  S\(.seasonNumber) \(.path)"' <<<"$files"
         for n in 1 2 3 4 5 6; do
           src=$(jq -r --arg n "$n" '[.[] | select(.seasonNumber==9) | select(.relativePath|test("S09E0"+$n+"[^0-9]";"i")) | .path] | first // empty' <<<"$files")
           dst=$(jq -r --arg n "$n" '[.[] | select(.seasonNumber==1) | select(.relativePath|test("S01E0"+$n+"[^0-9]";"i")) | .path] | first // empty' <<<"$files")
@@ -50,12 +51,12 @@
             mkdir -p "$(dirname "$dst")"
             mv -n "$src" "$dst" && echo "moved: $src -> $dst"
           else
-            echo "skip E0$n: src='${src}' dst='${dst}'"
+            echo "skip E0$n: src='${src}' (exists: $([ -f "$src" ] && echo y || echo n)) dst='${dst}' (exists: $([ -e "$dst" ] && echo y || echo n))"
           fi
         done
-        # Empty Season 9 folder left behind by the bad import
-        s9=$(jq -r '[.[] | select(.seasonNumber==9) | .path] | first // empty' <<<"$files" | xargs -r dirname)
-        [ -n "$s9" ] && [ -d "$s9" ] && rmdir "$s9" 2>/dev/null && echo "removed empty $s9" || true
+        s9=$(jq -r '[.[] | select(.seasonNumber==9) | .path] | first // empty' <<<"$files")
+        if [ -n "$s9" ]; then s9=$(dirname "$s9"); [ -d "$s9" ] && rmdir "$s9" 2>/dev/null && echo "removed empty $s9"; fi
+        exit 0
       args:
         executable: /bin/bash
       environment:
@@ -73,7 +74,7 @@
         method: POST
         headers: { X-Api-Key: "{{ sonarr_key }}" }
         body_format: json
-        body: { name: RescanSeries, seriesId: "{{ sonarr_series_id | int }}" }
+        body: '{"name":"RescanSeries","seriesId":{{ sonarr_series_id }}}'    # numeric; a quoted id is a 500
         status_code: [200, 201]
       changed_when: true
 
@@ -101,7 +102,7 @@
         method: POST
         headers: { X-Api-Key: "{{ sonarr_key }}" }
         body_format: json
-        body: { name: SeasonSearch, seriesId: "{{ sonarr_series_id | int }}", seasonNumber: 9 }
+        body: '{"name":"SeasonSearch","seriesId":{{ sonarr_series_id }},"seasonNumber":9}'
         status_code: [200, 201]
       changed_when: true
 
