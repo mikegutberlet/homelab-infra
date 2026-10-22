@@ -102,7 +102,8 @@ if (md.prowlarr) {
 }
 if (md.sabnzbd) {
   const s = md.sabnzbd;
-  if (s.diskspace_gb != null && s.diskspace_gb < S.SAB_DISK_CRIT_GB) add('sab-disk', 'critical', `SABnzbd sees only ${s.diskspace_gb} GB free`, 'Downloads will pause; check the NAS and the sabnzb folder');
+  if (s.diskspace_gb != null && s.diskspace_gb < S.SAB_DISK_CRIT_GB) add('sab-disk', 'critical', `SABnzbd's temp disk has only ${s.diskspace_gb} GB free`, 'Downloads pause at 20 GB; finished jobs that will not import are the usual cause (check the Radarr/Sonarr queues and /srv/usenet-incomplete)');
+  else if (s.diskspace_gb != null && s.diskspace_gb < S.SAB_DISK_WARN_GB) add('sab-disk', 'warning', `SABnzbd's temp disk is down to ${s.diskspace_gb} GB free`, 'Pauses at 20 GB');
   if (s.paused && s.queue_count > 0) add('sab-paused', 'warning', `SABnzbd is paused with ${s.queue_count} item(s) queued`, s.pause_int && s.pause_int !== '0' ? `timed pause, ${s.pause_int} min left` : 'manual or disk pause');
   if ((s.failed_24h || []).length) add('sab-failed', 'warning', `SABnzbd: ${s.failed_24h.length} failed download(s) in 24 h`, s.failed_24h.slice(0, 5).map((f) => `${f.name}: ${f.fail_message || ''}`).join('; '));
 }

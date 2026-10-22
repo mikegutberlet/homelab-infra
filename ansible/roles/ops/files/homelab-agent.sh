@@ -14,6 +14,7 @@ REPORT_URL=${REPORT_URL:-http://192.168.1.53:5678/webhook/homelab/report}
 STACKS=${STACKS:-}
 EXPECTED=${EXPECTED:-}                 # "stack/service stack/service ..." that must be running
 NAS_IP=${NAS_IP:-192.168.1.209}
+EXTRA_DISKS=${EXTRA_DISKS:-}           # more mount points to report, e.g. the SABnzbd scratch disk
 APPDATA=/opt/appdata
 AGENT_VERSION=1
 
@@ -53,7 +54,8 @@ host_json() {
 
 # ---------- disks and mounts ----------
 disks_json() {
-  df -B1 --output=target,size,used,avail / "$APPDATA" 2>/dev/null | tail -n +2 \
+  # shellcheck disable=SC2086
+  df -B1 --output=target,size,used,avail / "$APPDATA" $EXTRA_DISKS 2>/dev/null | tail -n +2 \
     | awk '{printf "{\"mount\":\"%s\",\"size\":%s,\"used\":%s,\"avail\":%s,\"used_pct\":%d}\n", $1,$2,$3,$4, ($2>0? 100*$3/$2 : 0)}' \
     | jq -s 'unique_by(.mount)'
 }

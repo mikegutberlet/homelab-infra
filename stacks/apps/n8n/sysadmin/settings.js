@@ -27,7 +27,8 @@ const SETTINGS = {
   RECLAIM_WARN_GB: 20,
   QUEUE_CRIT: 20,                            // stuck arr items
   STUCK_RETRY_H: 24, STUCK_BLOCKLIST_H: 48,
-  SAB_DISK_CRIT_GB: 100,
+  // SABnzbd's temp disk is 200 GB (scratch disk, 2026-10-22); SABnzbd itself pauses at 20 GB free.
+  SAB_DISK_WARN_GB: 30, SAB_DISK_CRIT_GB: 22,
   TDARR_IDLE_H: 6,
   KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,
   SCRUB_WARN_DAYS: 45,

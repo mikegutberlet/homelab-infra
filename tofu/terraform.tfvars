@@ -26,6 +26,10 @@ vms = {
     memory_mb  = 8192
     disk_gb    = 64
     datastore  = "local-lvm"
+    # SABnzbd temp disk (2026-10-22): downloads used to fill the 64 GB system disk and pause at
+    # its 15 GB floor. xfstest is RicksGarage's second SSD, apart from the local-lvm pool.
+    scratch_gb        = 200
+    scratch_datastore = "xfstest"
     startup    = 4
     tags       = ["media", "docker"]
   }

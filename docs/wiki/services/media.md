@@ -103,7 +103,7 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Purpose | Usenet download client; 8 Usenet servers and tv/movies categories carried over |
 | Image / port | `lscr.io/linuxserver/sabnzbd:latest` (settings and history copied from 5.1.3, paths fixed), 8080 |
 | Address | https://sabnzbd.tail9af84.ts.net (SSO) plus its own login |
-| Data | `/opt/appdata/sabnzbd`; downloads to `/mnt/nfs/sabnzb/{incomplete,complete}` |
+| Data | `/opt/appdata/sabnzbd`; temp downloads on the 200 GB scratch disk `/srv/usenet-incomplete` (container `/incomplete`, pauses under 20 GB free), finished files to `/mnt/nfs/sabnzb/complete` (pauses under 500 GB free on the NAS); Direct Unpack on (2026-10-22) |
 | History | Ran as uid 1000 on the old VM while the Arr apps ran as 3000, so nothing imported from early August to 2026-10-21; a group fix on the old VM drained 259 folders to 9 before the migration. Those 9 leftovers (about 28 GB) are still in `complete` and need Goobs's decision |
 | Health | `GET /api?mode=version` |
 
