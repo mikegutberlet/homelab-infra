@@ -1,0 +1,99 @@
+# TV rows for Plex; same templates and rules as movies.yml. home-rows/rows.py copies Trending,
+# Popular, Top Rated, Sitcoms, Limited Series and Finished Series to Emby by these names.
+
+templates:
+  HomeRow:
+    visible_home: true
+    visible_shared: true
+    visible_library: true
+  Row:
+    visible_home: false
+    visible_shared: false
+    visible_library: true
+
+collections:
+  # ---- Home ----
+  Trending Shows:
+    template: {name: HomeRow}
+    tmdb_trending_weekly: 200
+    collection_order: custom
+    summary: Shows trending on TMDb this week that are in the library.
+
+  Popular Shows:
+    template: {name: HomeRow}
+    tmdb_popular: 300
+    collection_order: custom
+    summary: Shows popular on TMDb right now that are in the library.
+
+  # ---- Recommended tab ----
+  Top Rated Shows:
+    template: {name: Row}
+    imdb_chart: top_shows
+    collection_order: custom
+    summary: IMDb's Top 250 shows that are in the library.
+
+  Sitcoms:
+    template: {name: Row}
+    plex_search:
+      all:
+        genre: Comedy
+    filters:
+      tmdb_keyword: sitcom
+    smart_label: random
+
+  Crime and Mystery:
+    template: {name: Row}
+    smart_filter:
+      sort_by: random
+      any:
+        genre: [Crime, Mystery]
+
+  Reality TV:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Reality}}
+
+  Kids Shows:
+    template: {name: Row}
+    smart_filter:
+      sort_by: random
+      any:
+        content_rating: [TV-Y, TV-Y7, TV-Y7-FV]
+        genre: [Kids, Children]
+
+  Limited Series:
+    template: {name: Row}
+    plex_all: true
+    filters:
+      tmdb_type: miniseries
+    smart_label: random
+    summary: One-season stories, easy to binge.
+
+  Finished Series:
+    template: {name: Row}
+    plex_all: true
+    filters:
+      tmdb_status: ended
+    smart_label: random
+    summary: Shows that have ended, so there is no wait for the next season.
+
+  HBO:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {network: [HBO, HBO Max, Max]}}
+  Netflix Originals:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {network: Netflix}}
+  FX:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {network: [FX, FXX, FX on Hulu]}}
+  AMC:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {network: [AMC, AMC+]}}
+  Adult Swim:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {network: Adult Swim}}
+  Cartoon Network:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {network: Cartoon Network}}
+  Disney TV:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {network: [Disney Channel, Disney+, Disney XD, Disney Junior]}}

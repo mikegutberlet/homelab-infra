@@ -1,0 +1,191 @@
+# Movie rows for Plex. "HomeRow" rows are pinned to Home for Goobs and shared users, in this
+# order; "Row" rows show on the Movies library's Recommended tab and under Collections.
+# Every row only ever lists movies already in the library. home-rows/rows.py copies the
+# list-based ones (Trending, Popular, Top Rated, seasonal, Oscars, Hidden Gems, International)
+# to Emby by these exact names, so rename them in both places.
+
+templates:
+  HomeRow:
+    visible_home: true
+    visible_shared: true
+    visible_library: true
+  Row:
+    visible_home: false
+    visible_shared: false
+    visible_library: true
+
+collections:
+  # ---- Home ----
+  Trending This Week:
+    template: {name: HomeRow}
+    tmdb_trending_weekly: 200
+    collection_order: custom
+    summary: Movies trending on TMDb this week that are in the library.
+
+  Popular Right Now:
+    template: {name: HomeRow}
+    tmdb_popular: 300
+    collection_order: custom
+    summary: Movies popular on TMDb right now that are in the library.
+
+  New Releases:
+    template: {name: HomeRow}
+    smart_filter:
+      sort_by: release.desc
+      limit: 60
+      all:
+        release: 183 # released in the last ~6 months
+    summary: Movies released in the last six months.
+
+  # Seasonal rows (lists from Kometa's own seasonal defaults); each exists only in its dates.
+  Halloween Movies:
+    template: {name: HomeRow}
+    schedule: range(10/01-10/31)
+    imdb_search:
+      list.any: ls546214737, ls023118929, ls000099714
+      limit: 500
+    tmdb_collection:
+      - 185103 # Hotel Transylvania
+      - 11716 # Addams Family
+      - 750822 # Addams Family (animated)
+      - 313086 # The Conjuring
+      - 91361 # Halloween
+      - 8581 # A Nightmare on Elm Street
+      - 1733 # The Mummy
+      - 2980 # Ghostbusters
+      - 751156 # Hocus Pocus
+    smart_label: random
+  Thanksgiving Movies:
+    template: {name: HomeRow}
+    schedule: range(11/01-11/30)
+    imdb_search:
+      keyword.any: thanksgiving
+      limit: 500
+    smart_label: random
+  Christmas Movies:
+    template: {name: HomeRow}
+    schedule: range(12/01-12/31)
+    mdblist_list: https://mdblist.com/lists/k0meta/christmas-extravaganza
+    smart_label: random
+  Valentine's Day Movies:
+    template: {name: HomeRow}
+    schedule: range(02/01-02/14)
+    imdb_search:
+      list.any: ls032692441, ls000094398, ls057783436, ls064427905
+      limit: 500
+    smart_label: random
+
+  Family Night:
+    template: {name: HomeRow}
+    smart_filter:
+      sort_by: random
+      all:
+        content_rating: [G, PG]
+    summary: Rated G and PG.
+
+  Top Rated of All Time:
+    template: {name: HomeRow}
+    imdb_chart: top_movies
+    collection_order: custom
+    summary: IMDb's Top 250 movies that are in the library.
+
+  # ---- Recommended tab ----
+  Hidden Gems:
+    template: {name: Row}
+    plex_all: true
+    filters:
+      tmdb_vote_average.gte: 7.2
+      tmdb_vote_count.gte: 150
+      tmdb_vote_count.lte: 2500
+    smart_label: random
+    summary: Highly rated on TMDb but less well known.
+
+  International Films in English:
+    template: {name: Row}
+    plex_search:
+      all:
+        audio_language: English
+    filters:
+      original_language.not: en
+    smart_label: random
+    summary: Foreign-language films that have an English audio track.
+
+  Oscar Winners:
+    template: {name: Row}
+    imdb_award:
+      event_id: ev0000003
+      event_year: all
+      category_filter:
+        - best motion picture of the year
+        - best picture
+        - best picture, production
+        - best picture, unique and artistic production
+      winning: true
+    collection_order: release.desc
+    summary: Academy Award winners for Best Picture.
+
+  Quick Watches:
+    template: {name: Row}
+    smart_filter:
+      sort_by: random
+      all:
+        duration.gte: 60
+        duration.lte: 95
+    summary: Feature films of 95 minutes or less.
+
+  Action Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Action}}
+  Comedy Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Comedy}}
+  Horror Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Horror}}
+  Sci-Fi Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Science Fiction}}
+  Thrillers:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Thriller}}
+  Romance Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Romance}}
+  Animated Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Animation}}
+  Documentaries:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Documentary}}
+  Crime Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {genre: Crime}}
+
+  80s Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {decade: 1980}}
+  90s Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {decade: 1990}}
+  2000s Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {decade: 2000}}
+  2010s Movies:
+    template: {name: Row}
+    smart_filter: {sort_by: random, all: {decade: 2010}}
+
+  Pixar:
+    template: {name: Row}
+    smart_filter: {sort_by: release.asc, all: {studio: [Pixar, Pixar Animation Studios]}}
+  Disney:
+    template: {name: Row}
+    smart_filter: {sort_by: release.asc, all: {studio: [Walt Disney Pictures, Walt Disney Animation Studios, Walt Disney Productions]}}
+  DreamWorks:
+    template: {name: Row}
+    smart_filter: {sort_by: release.asc, all: {studio: [DreamWorks Animation, DreamWorks Pictures]}}
+  Marvel Studios:
+    template: {name: Row}
+    smart_filter: {sort_by: release.asc, all: {studio: Marvel Studios}}
+  A24:
+    template: {name: Row}
+    smart_filter: {sort_by: release.desc, all: {studio: A24}}

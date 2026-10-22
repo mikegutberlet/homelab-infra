@@ -163,6 +163,47 @@ services:
       # Read-only until Goobs decides which folders Unmanic may re-encode.
       - /mnt/nfs/Media:/library:ro
 
+  # Curated home screen rows (2026-10-22). Kometa builds the Plex collections and pins the
+  # featured ones to Home, daily at 05:00 (mostly Plex/TMDb API calls, no transcoding).
+  # home-rows then copies the rows to Emby through the Home Screen Companion plugin (07:00).
+  kometa:
+    <<: *common
+    image: kometateam/kometa:v2.5.3
+    network_mode: host # reaches Plex on 127.0.0.1:32400
+    user: ${PUID}:${PGID}
+    # Kometa writes its logs and cache next to config.yml, so /config is appdata and the
+    # repo's config.yml is linked in (edits apply at the next run, no restart needed).
+    entrypoint: ["/tini", "-s", "--", "/bin/sh", "-c",
+                 "ln -sf /config/homelab/config.yml /config/config.yml && exec /.venv/bin/python3 /kometa.py \"$$@\"", "kometa"]
+    environment:
+      TZ: ${TZ}
+      HOME: /config
+      KOMETA_CONFIG: /config/config.yml
+      KOMETA_TIMES: "05:00"
+      KOMETA_PLEXTOKEN: ${PLEX_TOKEN}
+      KOMETA_TMDBKEY: ${TMDB_API_KEY}
+      KOMETA_MDBLISTKEY: ${MDBLIST_API_KEY}
+    volumes:
+      - /opt/appdata/kometa:/config
+      - ./kometa:/config/homelab:ro
+    depends_on: [plex]
+
+  home-rows:
+    <<: *common
+    image: python:3.12-alpine
+    network_mode: host # Plex 127.0.0.1:32400, Emby 127.0.0.1:8096, /health on :8097
+    user: ${PUID}:${PGID}
+    command: ["python", "-u", "/app/home_rows.py"]
+    environment:
+      TZ: ${TZ}
+      PLEX_TOKEN: ${PLEX_TOKEN}
+      EMBY_API_KEY: ${HOME_ROWS_EMBY_KEY}
+      RUN_AT: "07:00"
+    volumes:
+      - ./home-rows:/app:ro
+      - /opt/appdata/kometa/logs:/kometa/logs:ro # Kometa's last run, for /health
+    depends_on: [emby, kometa]
+
   autoheal:
     image: willfarrell/autoheal:1.2.0
     restart: unless-stopped
