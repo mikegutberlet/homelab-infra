@@ -31,6 +31,10 @@ monitor (the script handles it).
 
 ## The digest workflow
 
+Since 2026-10-22 the digest is built by the "Homelab sysadmin" workflow, which also runs the
+15-minute checks and the safe fixes: see [The junior sysadmin](sysadmin.md). The webhook paths below
+are unchanged.
+
 n8n workflow "Homelab digest" (`stacks/apps/n8n/homelab-digest.workflow.json`), active. Webhook
 paths, all POST on `http://n8n:5678` inside the apps stack or `http://192.168.1.53:5678` from other VMs:
 
