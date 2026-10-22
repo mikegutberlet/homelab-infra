@@ -6,3 +6,5 @@
 *.agekey
 keys.txt
 *.tfplan
+__pycache__/
+*.pyc
