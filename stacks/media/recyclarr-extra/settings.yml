@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://schemas.recyclarr.dev/v8/settings-schema.json
+# Recyclarr reads settings.yml only from the root of its config dir (/config, the writable
+# appdata). /opt/appdata/recyclarr/settings.yml is a symlink to this file, mounted read-only at
+# /config/extra, so the repo stays the source (see docs/wiki/services/media.md).
+resource_providers:
+  # Home-lab custom formats for the "Foreign - Prefer English Dub" profiles (2026-10-22).
+  - name: homelab-radarr-cfs
+    type: custom-formats
+    service: radarr
+    path: /config/extra/custom-formats/radarr
+  - name: homelab-sonarr-cfs
+    type: custom-formats
+    service: sonarr
+    path: /config/extra/custom-formats/sonarr

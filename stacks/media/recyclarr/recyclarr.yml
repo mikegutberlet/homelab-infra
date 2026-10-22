@@ -5,6 +5,14 @@
 # "web-1080p" (Sonarr) and "hd-bluray-web" (Radarr) templates; a profile's default
 # custom-format groups come with it.
 # Both top out at 1080p (no 4K, by choice).
+#
+# Quality floor (Goobs, 2026-10-22): the guide profiles allow only 1080p (Sonarr) or
+# 1080p/720p Bluray (Radarr), so anything else stayed missing. Goobs wants a 480p floor
+# instead, torrents being a fallback for obscure titles, and never a cam/telesync/screener.
+# The `qualities` lists below override the guide's: same top tiers and cutoff, then 720p and
+# the SD tiers down to 480p, and everything below 480p, 4K, remuxes and discs disabled.
+# "No CAM/TS/Screener" is a hand-made custom format in both apps (release-title regex,
+# score -10000); it is kept out of reset_unmatched_scores so the daily sync leaves it alone.
 sonarr:
   sonarr: # v8: instance names must be unique across Sonarr and Radarr
     base_url: http://sonarr:8989
@@ -17,6 +25,111 @@ sonarr:
         name: "Anything Not Terrible "
         reset_unmatched_scores:
           enabled: true
+          except: ["No CAM/TS/Screener"]
+        upgrade:
+          allowed: true
+          until_quality: WEB 1080p
+          until_score: 10000
+        qualities:
+          - name: WEB 1080p
+            qualities: [WEBDL-1080p, WEBRip-1080p]
+          - name: Bluray-1080p
+          - name: HDTV-1080p
+          - name: Bluray-720p
+          - name: WEB 720p
+            qualities: [WEBDL-720p, WEBRip-720p]
+          - name: HDTV-720p
+          - name: Bluray-576p
+          - name: Bluray-480p
+          - name: WEB 480p
+            qualities: [WEBDL-480p, WEBRip-480p]
+          - name: DVD
+          - name: SDTV
+          - name: Bluray-2160p Remux
+            enabled: false
+          - name: Bluray-2160p
+            enabled: false
+          - name: WEB 2160p
+            enabled: false
+            qualities: [WEBDL-2160p, WEBRip-2160p]
+          - name: HDTV-2160p
+            enabled: false
+          - name: Bluray-1080p Remux
+            enabled: false
+          - name: Raw-HD
+            enabled: false
+          - name: Unknown
+            enabled: false
+      # Foreign-language series (moved here daily by profile-sorter). Same qualities and TRaSH
+      # formats as above, minus "Language: Not Original" (it rejects English-only dubs), plus
+      # home-lab formats that rank an English dub above original audio only (Goobs prefers dubs
+      # over subtitles, 2026-10-22). User-defined (no trash_id), so no guide language rule applies.
+      - name: &sonarr_foreign Foreign - Prefer English Dub
+        reset_unmatched_scores:
+          enabled: true
+          except: ["No CAM/TS/Screener"]
+        upgrade:
+          allowed: true
+          until_quality: WEB 1080p
+          until_score: 10000
+        min_format_score: 0
+        min_upgrade_format_score: 1
+        qualities:
+          - name: WEB 1080p
+            qualities: [WEBDL-1080p, WEBRip-1080p]
+          - name: Bluray-1080p
+          - name: HDTV-1080p
+          - name: Bluray-720p
+          - name: WEB 720p
+            qualities: [WEBDL-720p, WEBRip-720p]
+          - name: HDTV-720p
+          - name: Bluray-576p
+          - name: Bluray-480p
+          - name: WEB 480p
+            qualities: [WEBDL-480p, WEBRip-480p]
+          - name: DVD
+          - name: SDTV
+          - name: Bluray-2160p Remux
+            enabled: false
+          - name: Bluray-2160p
+            enabled: false
+          - name: WEB 2160p
+            enabled: false
+            qualities: [WEBDL-2160p, WEBRip-2160p]
+          - name: HDTV-2160p
+            enabled: false
+          - name: Bluray-1080p Remux
+            enabled: false
+          - name: Raw-HD
+            enabled: false
+          - name: Unknown
+            enabled: false
+    custom_formats:
+      # The WEB-1080p guide formats, for the user-defined foreign profile.
+      - trash_ids:
+          - ec8fa7296b64e8cd390a1600981f3923 # Repack/Proper
+          - eb3d5cc0a2be0db205fb823640db6a3c # Repack2
+          - 44e7c4de10ae50265753082e5dc76047 # Repack3
+          - e6258996055b9fbab7e9cb2f75819294 # WEB Tier 01
+          - 58790d4e2fdcd9733aa7ae68ba2bb503 # WEB Tier 02
+          - d84935abd3f8556dcd51d4f27e22d0a6 # WEB Tier 03
+          - d0c516558625b04b363fa6c5c2c7cfd4 # WEB Scene
+          # Home-lab formats from ../recyclarr-extra/custom-formats/sonarr.
+          - f7981de50c8515d8c2ff2afbf303d38d # Homelab: English Audio (+2000)
+          - f12cacec1d53d2f8cfb36d384fd32a7a # Homelab: Dubbed or Dual Audio (+2000)
+          - 7572bfe6bb8e657b4918d81a60f1103c # Homelab: Not Original or English (-10000)
+        assign_scores_to:
+          - name: *sonarr_foreign
+    custom_format_groups:
+      add:
+        - trash_id: 59c3af66780d08332fdc64e68297098f # [Unwanted] Unwanted Formats
+          assign_scores_to: [name: *sonarr_foreign]
+        - trash_id: abe720fab2d27682adc2a735136cec02 # Streaming Services General
+          assign_scores_to: [name: *sonarr_foreign]
+        - trash_id: 85fae4a2294965b75710ef2989c850eb # HD/UHD Streaming Boost
+          assign_scores_to: [name: *sonarr_foreign]
+        - trash_id: f8bf8eab4617f12dfdbd16303d8da245 # Golden Rule HD (x265 (HD))
+          assign_scores_to: [name: *sonarr_foreign]
 
 radarr:
   radarr:
@@ -29,7 +142,139 @@ radarr:
         name: Anything Not terrible
         reset_unmatched_scores:
           enabled: true
+          except: ["No CAM/TS/Screener"]
+        upgrade:
+          allowed: true
+          until_quality: Bluray-1080p
+          until_score: 10000
+        qualities:
+          - name: Bluray-1080p
+          - name: WEB 1080p
+            qualities: [WEBDL-1080p, WEBRip-1080p]
+          - name: Bluray-720p
+          - name: WEB 720p
+            qualities: [WEBDL-720p, WEBRip-720p]
+          - name: HDTV-1080p
+          - name: HDTV-720p
+          - name: Bluray-576p
+          - name: Bluray-480p
+          - name: WEB 480p
+            qualities: [WEBDL-480p, WEBRip-480p]
+          - name: DVD
+          - name: SDTV
+          # Everything below is off: 4K, remuxes and discs (no 4K; Roku/phone can't play them),
+          # DVD-R images, and the cam-era junk Goobs never wants.
+          - name: Remux-2160p
+            enabled: false
+          - name: Bluray-2160p
+            enabled: false
+          - name: WEB 2160p
+            enabled: false
+            qualities: [WEBDL-2160p, WEBRip-2160p]
+          - name: HDTV-2160p
+            enabled: false
+          - name: Remux-1080p
+            enabled: false
+          - name: BR-DISK
+            enabled: false
+          - name: Raw-HD
+            enabled: false
+          - name: DVD-R
+            enabled: false
+          - name: DVDSCR
+            enabled: false
+          - name: REGIONAL
+            enabled: false
+          - name: TELECINE
+            enabled: false
+          - name: TELESYNC
+            enabled: false
+          - name: CAM
+            enabled: false
+          - name: WORKPRINT
+            enabled: false
+          - name: Unknown
+            enabled: false
+      # Foreign-language movies (moved here daily by profile-sorter). Same qualities and TRaSH
+      # formats as above, except: language Any instead of Original (Original rejects a release
+      # tagged English-only), Bluray-1080p and WEB 1080p merged into one group so a dubbed WEB-DL
+      # is not "upgraded" to a subtitles-only Bluray (quality outranks format score), and
+      # home-lab formats that rank an English dub above original audio only (Goobs, 2026-10-22).
+      - name: &radarr_foreign Foreign - Prefer English Dub
+        reset_unmatched_scores:
+          enabled: true
+          except: ["No CAM/TS/Screener"]
+        upgrade:
+          allowed: true
+          until_quality: 1080p
+          until_score: 10000
+        min_format_score: 0
+        min_upgrade_format_score: 1
+        qualities:
+          - name: 1080p
+            qualities: [Bluray-1080p, WEBDL-1080p, WEBRip-1080p]
+          - name: Bluray-720p
+          - name: WEB 720p
+            qualities: [WEBDL-720p, WEBRip-720p]
+          - name: HDTV-1080p
+          - name: HDTV-720p
+          - name: Bluray-576p
+          - name: Bluray-480p
+          - name: WEB 480p
+            qualities: [WEBDL-480p, WEBRip-480p]
+          - name: DVD
+          - name: SDTV
+          # Everything below is off: 4K, remuxes and discs (no 4K; Roku/phone can't play them),
+          # DVD-R images, and the cam-era junk Goobs never wants.
+          - name: Remux-2160p
+            enabled: false
+          - name: Bluray-2160p
+            enabled: false
+          - name: WEB 2160p
+            enabled: false
+            qualities: [WEBDL-2160p, WEBRip-2160p]
+          - name: HDTV-2160p
+            enabled: false
+          - name: Remux-1080p
+            enabled: false
+          - name: BR-DISK
+            enabled: false
+          - name: Raw-HD
+            enabled: false
+          - name: DVD-R
+            enabled: false
+          - name: DVDSCR
+            enabled: false
+          - name: REGIONAL
+            enabled: false
+          - name: TELECINE
+            enabled: false
+          - name: TELESYNC
+            enabled: false
+          - name: CAM
+            enabled: false
+          - name: WORKPRINT
+            enabled: false
+          - name: Unknown
+            enabled: false
     custom_formats:
+      # The HD Bluray + WEB guide formats, for the user-defined foreign profile.
+      - trash_ids:
+          - ed27ebfef2f323e964fb1f61391bcb35 # HD Bluray Tier 01
+          - c20c8647f2746a1f4c4262b0fbbeeeae # HD Bluray Tier 02
+          - 5608c71bcebba0a5e666223bae8c9227 # HD Bluray Tier 03
+          - c20f169ef63c5f40c2def54abaf4438e # WEB Tier 01
+          - 403816d65392c79236dcb6dd591aeda4 # WEB Tier 02
+          - af94e0fe497124d1f9ce732069ec8c3b # WEB Tier 03
+          - e7718d7a3ce595f289bfee26adc178f5 # Repack/Proper
+          - ae43b294509409a6a13919dedd4764c4 # Repack2
+          - 5caaaa1c08c1742aa4342d8c4cc463f2 # Repack3
+          # Home-lab formats from ../recyclarr-extra/custom-formats/radarr.
+          - 03c8697a4963714a449ff7f3ef63c43a # Homelab: English Audio (+2000)
+          - f88d7ef98af0031394cdedfe46f92766 # Homelab: Dubbed or Dual Audio (+2000)
+          - cf978d4b72de03a4773bee970890c94b # Homelab: Not Original or English (-10000)
+        assign_scores_to:
+          - name: *radarr_foreign
       # Tdarr re-encodes H.264 movies to HEVC (2026-10-21), so the TRaSH "x265 (HD)" penalty
       # (-10000) would make Radarr try to replace those files. Score it 0 instead.
       - trash_ids:
@@ -37,3 +282,11 @@ radarr:
         assign_scores_to:
           - name: Anything Not terrible
             score: 0
+          - name: *radarr_foreign
+            score: 0
+    custom_format_groups:
+      add:
+        - trash_id: a3ac6af01d78e4f21fcb75f601ac96df # [Unwanted] Unwanted Formats
+          assign_scores_to: [name: *radarr_foreign]
+        - trash_id: d9cc9a504e5ede6294c8b973aad4f028 # Streaming Services General
+          assign_scores_to: [name: *radarr_foreign]

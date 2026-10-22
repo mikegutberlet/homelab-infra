@@ -29,7 +29,7 @@ Deferred: Kasm, local Ollama models (until the eGPU), Frigate (no cameras).
 tofu/       VMs on Proxmox (bpg/proxmox provider; tofu@pve token)
 ansible/    OS hardening, Docker, NFS, backups, LAN firewall, iGPU, stack deploys
 stacks/     one Compose project per VM, secrets in secrets.sops.env
-docs/       gen_routes.py regenerates Traefik and TSDProxy routes
+docs/       gen_routes.py regenerates Traefik and TSDProxy routes; torrent-fallback.md (Usenet first, torrents after 24 h)
 ```
 
 ## Rules this repo follows
@@ -51,6 +51,8 @@ docs/       gen_routes.py regenerates Traefik and TSDProxy routes
   VMs (which includes the Traefik/Tailscale path); open to the whole LAN: Plex 32400, Emby
   8096, Jellyseerr 5055 (and SMB/NFS on TrueNAS). Open WebUI 3010 only from the edge VM.
 - Disk health: Scrutiny collectors on both Proxmox hosts (`playbooks/proxmox-scrutiny.yml`).
+- Downloads: Usenet first; torrents (qBittorrent via PIA) only after 24 h with nothing on Usenet,
+  public trackers, seed to 1.0 or 3 days, hardlinked imports. Details in `docs/torrent-fallback.md`.
 
 ## Running it
 
