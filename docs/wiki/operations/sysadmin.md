@@ -48,7 +48,7 @@ token), `stacks/apps/n8n/sysadmin/chat_*.js`, `tool_*.js`, `opsdoor_*.js`.
 
 | Part | Does |
 | --- | --- |
-| Sysadmin agent (n8n AI Agent, Gemini Flash on the same key as Open WebUI) | Answers from tools, never from memory alone: `lab_overview` (open issues, when each VM reported, pool space), `vm_report` (one VM's latest 15-minute report), `recent_fixes`, `ops_lookup` (live `status` or `logs <service>` through the ops door), `propose_fix` |
+| Sysadmin agent (n8n AI Agent, Claude Haiku 5.5, falling back to Gemini Flash on the same key as Open WebUI) | Answers from tools, never from memory alone: `lab_overview` (open issues, when each VM reported, pool space), `vm_report` (one VM's latest 15-minute report), `recent_fixes`, `ops_lookup` (live `status` or `logs <service>` through the ops door), `propose_fix` |
 | Homelab ops door (second, small workflow) | Host switch plus one SSH node per VM; used by the agent's lookups and by confirmed fixes, so the SSH nodes exist once |
 | Chat memory | Per browser tab ("New chat" starts a fresh one), last 10 turns |
 | Confirm / Cancel | A proposed fix is parked for 15 minutes with the chat session; the Confirm button posts it back and plain code re-checks it (same verbs, never-list and per-target counters as the automatic fixes, plus `CHAT_FIX_PER_HOUR` / `CHAT_FIX_PER_DAY`), logs it in the fix log (the digest's "Fixed" section) and runs it through the ops door. The model never runs anything |
@@ -235,7 +235,8 @@ message (see the log), and a 401 means the token did not match.
 | Name | Type | Used by |
 | --- | --- | --- |
 | Gmail SMTP | SMTP | both email nodes (exists since the first digest) |
-| Gemini API key | Google Gemini (PaLM) API, the ai stack's `LLM_API_KEY` | the chat agent's model |
+| Anthropic API key | Anthropic, read by the deploy script from the Mac's `~/.config/homelab/anthropic_api_key` | the chat agent's model (Claude Haiku 5.5) |
+| Gemini API key | Google Gemini (PaLM) API, the ai stack's `LLM_API_KEY` | the chat agent's fallback model (Gemini Flash) |
 | Sysadmin chat token | Header Auth `X-Chat-Token`, made by the deploy script and kept in `/opt/appdata/sysadmin-chat/token.env` on the apps VM | the chat webhook (chat page and Telegram bot), "Telegram push" and "Telegram digest push" (the bot's `/notify` checks it) |
 | ops edge / media / gpu / apps / ai | SSH private key, user `ops`, host `192.168.1.5x` | the five `ops <vm>` nodes |
 | Proxmox API token | Header Auth, `Authorization: PVEAPIToken=homepage@pve!homepage=<secret>` | PVE nodes |

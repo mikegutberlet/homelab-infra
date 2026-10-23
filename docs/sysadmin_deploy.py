@@ -8,11 +8,11 @@ Goobs runs this on the Mac (lab SSH key; the ops key pair at ~/.config/homelab/o
 What it does, in order:
   1. Reads the Proxmox token secret and the TrueNAS API key from the apps VM's decrypted
      /opt/stacks/apps/.env (root-only there; they came from docs/homepage_keys.py), the Gemini key
-     from the ai VM's /opt/stacks/ai/.env (LLM_API_KEY, the one Open WebUI uses) and the ops
-     private key from the Mac. Nothing is printed.
+     from the ai VM's /opt/stacks/ai/.env (LLM_API_KEY, the one Open WebUI uses), and the Anthropic
+     key (~/.config/homelab/anthropic_api_key) and ops private key from the Mac. Nothing is printed.
   2. Imports five SSH credentials (ops edge/media/gpu/apps/ai), four Header Auth credentials
-     (Proxmox API token, TrueNAS API key, Gemini API key, Sysadmin chat token) into n8n through
-     its CLI, replacing same-named ones. The chat token is made here on first run and kept in
+     (Proxmox API token, TrueNAS API key, Gemini API key, Sysadmin chat token) and the "Anthropic
+     API key" into n8n through its CLI, replacing same-named ones. The chat token is made here on first run and kept in
      /opt/appdata/sysadmin-chat/token.env on the apps VM, where the chat page's nginx reads it.
   3. Imports the "Homelab ops door" sub-workflow (the chat agent's SSH lookups and confirmed fixes),
      then builds the sysadmin workflow with those credential ids plus the existing "Gmail SMTP" id,
@@ -35,6 +35,7 @@ APPS = "goobs@192.168.1.53"
 AI = "goobs@192.168.1.54"
 TOKEN_ENV = "/opt/appdata/sysadmin-chat/token.env"
 OPS_KEY = pathlib.Path.home() / ".config/homelab/ops_ed25519"
+ANTHROPIC_KEY = pathlib.Path.home() / ".config/homelab/anthropic_api_key"  # the chat agent's model
 HOSTS = builder.HOSTS
 N8N = "sudo docker compose -f /opt/stacks/apps/compose.yaml exec -T n8n"
 
@@ -87,6 +88,9 @@ if not pve_secret or not nas_key:
 gemini_key = ssh("sudo grep -E '^LLM_API_KEY=' /opt/stacks/ai/.env", host=AI).strip().split("=", 1)[-1]
 if not gemini_key:
     sys.exit("LLM_API_KEY missing in the ai VM's /opt/stacks/ai/.env (the Gemini key Open WebUI uses).")
+anthropic_key = ANTHROPIC_KEY.read_text().strip() if ANTHROPIC_KEY.exists() else ""
+if not anthropic_key:
+    sys.exit(f"{ANTHROPIC_KEY} missing or empty. Create a key at console.anthropic.com and save it there (mode 600).")
 # The chat page's webhook token: made once, kept on the apps VM, restarted into the nginx container.
 chat_token = ssh(f"sudo cat {TOKEN_ENV} 2>/dev/null", check=False).strip().split("=", 1)[-1]
 if not chat_token:
@@ -118,6 +122,9 @@ for name, header, value in (("Proxmox API token", "Authorization", f"PVEAPIToken
 ids["Gemini API key"] = existing.get("Gemini API key", new_id())
 creds.append({"id": ids["Gemini API key"], "name": "Gemini API key", "type": "googlePalmApi",
               "data": {"host": "https://generativelanguage.googleapis.com", "apiKey": gemini_key}})
+ids["Anthropic API key"] = existing.get("Anthropic API key", new_id())
+creds.append({"id": ids["Anthropic API key"], "name": "Anthropic API key", "type": "anthropicApi",
+              "data": {"apiKey": anthropic_key, "url": "https://api.anthropic.com"}})
 ids["Gmail SMTP"] = existing[smtp_name]
 
 print("Importing credentials...")
