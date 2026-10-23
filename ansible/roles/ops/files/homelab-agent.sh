@@ -177,7 +177,8 @@ sab_json() {
   [ -z "$key" ] && { echo null; return; }
   local base="http://127.0.0.1:8080/api?output=json&apikey=$key"
   local q h; q=$(get "$base&mode=queue&limit=5"); h=$(get "$base&mode=history&limit=100")
-  jq -c -n --argjson q "$q" --argjson h "$h" --argjson now "$now" '
+  # Both documents go in on stdin: a --argjson value counts against the kernel's single-argument limit.
+  printf '%s\n%s\n' "$q" "$h" | jq -c -s --argjson now "$now" '.[0] as $q | .[1] as $h |
     {status:($q.queue.status // null), paused:($q.queue.paused // null), pause_int:($q.queue.pause_int // null),
      diskspace_gb:(($q.queue.diskspace1 // "0")|tonumber? // 0), queue_count:(($q.queue.noofslots_total // 0)|tonumber? // 0),
      speed:($q.queue.speed // null),
@@ -192,12 +193,15 @@ qb_json() {
   port=$(docker exec media-gluetun-1 wget -qO- -T 5 http://127.0.0.1:8085/api/v2/app/preferences 2>/dev/null | jq -r '.listen_port // empty' 2>/dev/null)
   torrents=$(docker exec media-gluetun-1 wget -qO- -T 10 'http://127.0.0.1:8085/api/v2/torrents/info' 2>/dev/null || echo '[]')
   local home_ip; home_ip=$(curl -fsS -m 10 https://api.ipify.org 2>/dev/null || true)
-  jq -c -n --arg ip "$ip" --arg home "$home_ip" --arg port "${port:-}" --argjson t "$torrents" --argjson now "$now" '
+  # The torrent list grows past the kernel's single-argument limit (jq: "Argument list too long",
+  # seen on media 2026-10-22, which silenced the whole report), so it arrives on stdin.
+  jq -c --arg ip "$ip" --arg home "$home_ip" --arg port "${port:-}" --argjson now "$now" '. as $t |
     {exit_ip:(if $ip=="" then null else $ip end), home_ip:(if $home=="" then null else $home end),
      vpn_ok:($ip != "" and $ip != $home), forwarded_port:(if $port=="" then null else ($port|tonumber) end),
      count:($t|length),
      errored:($t | map(select(.state=="error" or .state=="missingFiles")) | map({name, state}) | .[0:20]),
-     stalled_3d:($t | map(select((.state=="stalledDL" or .state=="metaDL") and (.added_on < ($now - 259200)))) | map({name, state, progress}) | .[0:20])}'
+     stalled_3d:($t | map(select((.state=="stalledDL" or .state=="metaDL") and (.added_on < ($now - 259200)))) | map({name, state, progress}) | .[0:20])}' \
+    <<<"$torrents" 2>/dev/null || echo null
 }
 
 tdarr_json() {
