@@ -1,0 +1,11 @@
+# Dashboards are files in stacks/apps/grafana/dashboards (one folder per subfolder). Edits made in
+# the UI can't be saved over them: export the JSON and commit it instead.
+apiVersion: 1
+providers:
+  - name: homelab
+    type: file
+    allowUiUpdates: false
+    disableDeletion: true
+    options:
+      path: /var/lib/grafana-dashboards
+      foldersFromFilesStructure: true

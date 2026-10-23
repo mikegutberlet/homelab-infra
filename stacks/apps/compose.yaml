@@ -309,6 +309,121 @@ services:
       - /opt/appdata/dockge:/app/data
       - /opt/stacks:/opt/stacks
 
+  # --- metrics and trend graphs (2026-10-23) ---
+  # Prometheus keeps the history, Grafana draws it. Alerting stays in Kuma and the n8n digest;
+  # Grafana has no contact points. Every VM runs node-exporter and cAdvisor (role metrics); the
+  # exporters for Proxmox, the arr apps and TrueNAS run here. Targets: prometheus/prometheus.yml.
+  prometheus:
+    <<: *common
+    image: prom/prometheus:v3.15.1
+    mem_limit: 1g
+    user: ${PUID}:${PGID}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # ~25k series at a 30 s scrape is ~100 MB a day; whichever limit comes first wins.
+      - --storage.tsdb.retention.time=180d
+      - --storage.tsdb.retention.size=15GB
+      - --web.enable-lifecycle # POST /-/reload after a config change
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - /opt/appdata/prometheus:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 60s
+      retries: 3
+
+  # Signed in by Authentik only: Traefik's forward auth adds X-authentik-username, and the port
+  # accepts connections from the edge VM alone (edge_only_ports), like Open WebUI. akadmin is the
+  # Grafana admin; any other Authentik user gets a read-only Viewer account.
+  grafana:
+    <<: *common
+    image: grafana/grafana:13.2.4
+    mem_limit: 512m
+    user: ${PUID}:${PGID}
+    environment:
+      GF_SERVER_ROOT_URL: https://grafana.${TS_TAILNET}/
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER_NAME: X-authentik-username
+      GF_AUTH_PROXY_HEADER_PROPERTY: username
+      GF_AUTH_PROXY_HEADERS: Email:X-authentik-email
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
+      GF_AUTH_PROXY_WHITELIST: 192.168.1.50
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_DISABLE_SIGNOUT_MENU: "true"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_USER: akadmin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD} # never used to log in; the form is off
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false" # Diun watches the image
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_UNIFIED_ALERTING_ENABLED: "false" # alerts stay in Kuma and n8n
+    ports: ["3004:3000"]
+    volumes:
+      - /opt/appdata/grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana-dashboards:ro
+    depends_on: [prometheus]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 60s
+      retries: 3
+      start_period: 60s
+
+  # Proxmox API (read-only token prometheus@pve!prometheus, role PVEAuditor). One target covers
+  # the whole cluster; prometheus.yml asks each host for its own node data.
+  pve-exporter:
+    <<: *common
+    image: prompve/prometheus-pve-exporter:3.10.1
+    mem_limit: 128m
+    environment:
+      PVE_USER: prometheus@pve
+      PVE_TOKEN_NAME: prometheus
+      PVE_TOKEN_VALUE: ${PVE_EXPORTER_TOKEN}
+      PVE_VERIFY_SSL: "false" # the hosts' self-signed certificates
+
+  # Arr and SABnzbd counters (library size, missing, queue, speed). Reuses Homepage's API keys.
+  # Without ENABLE_ADDITIONAL_METRICS each scrape is a handful of API calls.
+  exportarr-sonarr:
+    <<: *common
+    image: ghcr.io/onedr0p/exportarr:v2.3.0
+    command: [sonarr]
+    mem_limit: 128m
+    environment: {PORT: 9707, URL: "http://192.168.1.51:8989", APIKEY: "${HOMEPAGE_SONARR_KEY}"}
+  exportarr-radarr:
+    <<: *common
+    image: ghcr.io/onedr0p/exportarr:v2.3.0
+    command: [radarr]
+    mem_limit: 128m
+    environment: {PORT: 9708, URL: "http://192.168.1.51:7878", APIKEY: "${HOMEPAGE_RADARR_KEY}"}
+  exportarr-prowlarr:
+    <<: *common
+    image: ghcr.io/onedr0p/exportarr:v2.3.0
+    command: [prowlarr]
+    mem_limit: 128m
+    environment: {PORT: 9709, URL: "http://192.168.1.51:9696", APIKEY: "${HOMEPAGE_PROWLARR_KEY}"}
+  exportarr-sabnzbd:
+    <<: *common
+    image: ghcr.io/onedr0p/exportarr:v2.3.0
+    command: [sabnzbd]
+    mem_limit: 128m
+    environment: {PORT: 9710, URL: "http://192.168.1.51:8080", APIKEY: "${HOMEPAGE_SABNZBD_KEY}"}
+
+  # TrueNAS SCALE pushes its netdata reporting here in Graphite format (System > Reporting >
+  # Exporters on the NAS); the exporter turns it into Prometheus metrics. Only the NAS may send
+  # (lanfw_extra_allow).
+  graphite-exporter:
+    <<: *common
+    image: prom/graphite-exporter:v0.17.0
+    mem_limit: 128m
+    command:
+      - --graphite.mapping-config=/etc/graphite/mapping.yml
+      - --graphite.sample-expiry=5m
+    ports: ["2003:9109"] # Graphite plaintext over TCP
+    volumes:
+      - ./prometheus/graphite-mapping.yml:/etc/graphite/mapping.yml:ro
+
   autoheal:
     image: willfarrell/autoheal:1.2.0
     restart: unless-stopped

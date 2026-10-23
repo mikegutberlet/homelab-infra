@@ -25,6 +25,10 @@ timezone: America/Los_Angeles # same as the Proxmox hosts and TrueNAS
 # lanfw: interface the LAN arrives on (Debian cloud image).
 lanfw_iface: eth0
 
+# Host-networked metrics ports only Prometheus may reach (lanfw chain LANFW-IN); edge adds Tailscale's.
+metrics_scraper: 192.168.1.53
+host_metrics_ports: ["9100/tcp"]
+
 # Junior sysadmin (role ops): where the reporter posts, and what the ops door may never
 # restart or stop (n8n would cut its own SSH session; databases and autoheal stay put;
 # the tailscale container is the only way in from outside).

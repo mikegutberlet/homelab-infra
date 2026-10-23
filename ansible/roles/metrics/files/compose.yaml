@@ -1,0 +1,53 @@
+# Written by Ansible (role metrics) to /opt/stacks/metrics on every VM. Prometheus on the apps VM
+# scrapes both (stacks/apps/prometheus/prometheus.yml).
+
+x-common: &common
+  restart: unless-stopped
+  labels:
+    autoheal: "true" # the VM's own autoheal (in its main stack) watches these too
+
+services:
+  # Host network, so the NIC counters are the VM's and not a container's. Not covered by
+  # DOCKER-USER: lanfw's INPUT rule lets only the apps VM reach :9100.
+  node-exporter:
+    <<: *common
+    image: prom/node-exporter:v1.12.1
+    mem_limit: 64m
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=:9100
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+|var/lib/containerd/.+)($|/)
+      - --collector.netclass.ignored-devices=^(veth.*|br-.*|docker0)$
+      - --collector.netdev.device-exclude=^(veth.*|br-.*)$
+      - --collector.systemd # unit states (lanfw, watchdog, homelab-agent timers)
+    volumes:
+      - /:/host:ro,rslave
+      - /run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
+
+  # Per-container CPU, memory, network and I/O. Docker-only and a 30 s housekeeping interval
+  # keep its own CPU use low; container labels are reduced to the compose names.
+  cadvisor:
+    <<: *common
+    image: ghcr.io/google/cadvisor:v0.60.6
+    mem_limit: 192m
+    privileged: true
+    devices: [/dev/kmsg]
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.project,com.docker.compose.service
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp
+    ports: ["9101:8080"] # DOCKER-USER: lab VMs only
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 60s
+      retries: 3

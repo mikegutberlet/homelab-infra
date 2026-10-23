@@ -157,6 +157,16 @@ http:
       entryPoints: [web]
       service: sysadmin
       middlewares: [authentik]
+    grafana:
+      rule: Host(`grafana.{{ env "TS_TAILNET" }}`)
+      entryPoints: [web]
+      service: grafana
+      middlewares: [authentik]
+    prometheus:
+      rule: Host(`prometheus.{{ env "TS_TAILNET" }}`)
+      entryPoints: [web]
+      service: prometheus
+      middlewares: [authentik]
     chat:
       rule: Host(`chat.{{ env "TS_TAILNET" }}`)
       entryPoints: [web]
@@ -301,6 +311,14 @@ http:
       loadBalancer:
         servers:
           - url: http://192.168.1.53:3003
+    grafana:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.53:3004
+    prometheus:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.53:9090
     chat:
       loadBalancer:
         servers:

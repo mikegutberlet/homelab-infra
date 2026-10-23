@@ -32,6 +32,7 @@ PAGES = [
     (None, "services/gpu.md"),
     (None, "services/apps.md"),
     (None, "services/ai.md"),
+    (None, "services/monitoring.md"),
     (None, "services/truenas-and-hosts.md"),
     ("Projects and decisions", "06-media-library.md"),
     (None, "07-decisions.md"),
@@ -72,6 +73,7 @@ NAV_LABELS = {
     "services/gpu.md": "gpu VM (.52)",
     "services/apps.md": "apps VM (.53)",
     "services/ai.md": "ai VM (.54)",
+    "services/monitoring.md": "Metrics (Grafana)",
     "services/truenas-and-hosts.md": "TrueNAS and the hosts",
 }
 

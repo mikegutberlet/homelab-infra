@@ -93,6 +93,12 @@ tautulli:
 sysadmin:
   url: http://traefik:80
 
+grafana:
+  url: http://traefik:80
+
+prometheus:
+  url: http://traefik:80
+
 chat:
   url: http://traefik:80
 

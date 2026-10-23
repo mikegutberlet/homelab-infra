@@ -2,7 +2,8 @@
 
 Personal cloud, documents, automation and all the ops tools. 4 vCPU, 10 GB RAM, 96 GB disk on
 `RicksShipXFS`. Monitoring lives here, on the other host from TrueNAS and the edge VM, so it can still
-alert when RicksGarage is down. Mounts the NAS for Nextcloud, Paperless and backups. Stack:
+alert when RicksGarage is down. Mounts the NAS for Nextcloud, Paperless and backups. Prometheus, Grafana and their exporters
+also run here; they have their own page, [monitoring](monitoring.md). Stack:
 `stacks/apps/compose.yaml`, 20 containers.
 
 ```mermaid

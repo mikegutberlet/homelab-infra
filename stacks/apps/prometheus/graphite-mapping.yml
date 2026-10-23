@@ -1,0 +1,11 @@
+# TrueNAS (netdata) Graphite paths look like truenas.<namespace>.<chart id with dots>.<dimension>,
+# e.g. truenas.nas.system.cpu.user or truenas.nas.zfs.arc_size.arcsz. One rule keeps the chart as
+# the metric name and the last part as a label: truenas_system_cpu{dimension="user"}.
+# Set the NAS exporter to prefix "truenas", namespace "nas" (docs/wiki/services/monitoring.md).
+mappings:
+  - match: 'truenas\.([^.]+)\.(.+)\.([^.]+)$'
+    match_type: regex
+    name: 'truenas_${2}'
+    labels:
+      nas: '${1}'
+      dimension: '${3}'

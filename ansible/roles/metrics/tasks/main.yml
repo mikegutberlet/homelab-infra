@@ -1,0 +1,19 @@
+# node-exporter and cAdvisor on every VM, as their own small compose project (/opt/stacks/metrics),
+# so they stay up whatever happens to the VM's main stack. Prometheus is on the apps VM.
+- name: Metrics stack folder
+  ansible.builtin.file:
+    path: "{{ stacks_root }}/metrics"
+    state: directory
+    mode: "0755"
+
+- name: Metrics compose file
+  ansible.builtin.copy:
+    src: compose.yaml
+    dest: "{{ stacks_root }}/metrics/compose.yaml"
+    mode: "0644"
+
+- name: Start or update node-exporter and cAdvisor
+  ansible.builtin.command:
+    cmd: docker compose up -d --wait --wait-timeout 120 --remove-orphans
+    chdir: "{{ stacks_root }}/metrics"
+  changed_when: true

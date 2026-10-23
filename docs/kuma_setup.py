@@ -51,6 +51,8 @@ MONITORS = [
     ("Homepage", "http://192.168.1.53:3001/", False, ["200-299", "300-399", "400-499"]),
     ("Scrutiny", "http://192.168.1.53:8087/api/health", False, None),
     ("Dockge", "http://192.168.1.53:5001/", False, ["200-299", "300-399"]),
+    ("Grafana", "http://192.168.1.53:3004/api/health", False, None),
+    ("Prometheus", "http://192.168.1.53:9090/-/healthy", False, None),
     ("Edge (Traefik, TCP)", "192.168.1.50:80", False, None),  # Kuma isn't on the tailnet
     ("Piper (TCP)", "192.168.1.54:10200", False, None),
     ("AnythingLLM", "http://192.168.1.54:3011/api/ping", False, None),
