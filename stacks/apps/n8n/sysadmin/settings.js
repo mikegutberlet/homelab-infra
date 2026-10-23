@@ -1,8 +1,9 @@
 // Shared constants for the "Homelab sysadmin" workflow. docs/build_sysadmin_workflow.py pastes
 // this file at the top of every Code node, so change it here and rebuild, not inside n8n.
 const SETTINGS = {
-  // Round one runs report-only: fixes are decided and logged as "would run", nothing is executed.
-  FIXES_ENABLED: false,
+  // Automatic fixes run (within FIX_PER_HOUR / FIX_PER_DAY) since the 2026-10-23 digest review;
+  // false = report-only, fixes are decided and logged as "would run", nothing is executed.
+  FIXES_ENABLED: true,
   // arr-blocklist stays off until arr-retry has run clean for a week (Goobs, 2026-10-22).
   BLOCKLIST_ENABLED: false,
   // VMs that must report; a silent one is itself a critical issue.
