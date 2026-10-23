@@ -82,9 +82,12 @@ for (const app of ['sonarr', 'radarr']) {
   for (const hc of a.health || []) if (hc.type === 'error') add(`${app}-health:${hc.source}`, 'warning', `${app}: ${hc.message}`, hc.source);
   const stuck = a.stuck || [];
   if (stuck.length > S.QUEUE_CRIT) add(`${app}-queue`, 'critical', `${app}: ${stuck.length} queue items stuck or failed`, stuck.slice(0, 5).map((q) => q.title).join('; '));
+  const retried = new Set();
   for (const q of stuck) {
     const msg = (q.messages || []).join(' | ');
-    const retryable = /no files found|not found|missing|does not exist|was not found/i.test(msg);
+    let retryable = /no files found|not found|missing|does not exist|was not found/i.test(msg);
+    // A season pack has one queue item per episode and deleting one drops the whole download: retry it once.
+    if (retryable) { if (retried.has(q.title)) retryable = false; else retried.add(q.title); }
     if ((q.tdstate === 'importBlocked' || q.tdstate === 'importPending' || q.status === 'failed' || q.tds === 'error') && (q.age_h || 0) >= S.STUCK_RETRY_H)
       add(`${app}-stuck:${q.id}`, 'warning', `${app}: "${q.title}" ${q.tdstate || q.status} for ${q.age_h} h`, msg || 'no message', retryable ? { verb: 'arr-retry', target: `${app} ${q.id}`, app, id: q.id } : null);
     else if (q.tds === 'warning' && (q.age_h || 0) >= S.STUCK_RETRY_H)

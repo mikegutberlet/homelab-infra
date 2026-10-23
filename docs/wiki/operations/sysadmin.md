@@ -36,8 +36,9 @@ Limits: one fix per target per hour, three per day; `ops_never` services (n8n, P
 MariaDB, autoheal, tailscale) are never touched. Never: reboot or power off anything, delete
 under `/mnt/nfs`, pull images, change app settings, touch the Tdarr queue.
 
-Switches live at the top of `stacks/apps/n8n/sysadmin/settings.js`: `FIXES_ENABLED` (false =
-report-only, the digest shows "would have fixed") and `BLOCKLIST_ENABLED`. Change, rebuild, re-import.
+Switches live at the top of `stacks/apps/n8n/sysadmin/settings.js`: `FIXES_ENABLED` (on since
+2026-10-23; false = report-only, the digest shows "would have fixed") and `BLOCKLIST_ENABLED`.
+Change, rebuild, re-import.
 
 ## Chat with the sysadmin (sysadmin.tail9af84.ts.net)
 
