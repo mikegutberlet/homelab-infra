@@ -57,13 +57,13 @@ pilot (23:32 UTC) to go straight to the full run.
 
 | Setting | Value |
 | --- | --- |
-| Library | `Media/Movies` only (Sonarr's TV library is untouched) |
-| Candidates | H.264 movies above about 2.5 GB per hour (about 5.5 Mbps); skip HEVC and AV1 files, seeding files, the 8 multi-video folders, anything under `to-delete`, and the 33 review-relink folders |
-| Video | Quick Sync HEVC 8-bit Main, MKV, quality 22 |
-| Audio | Keep English plus the movie's original language; drop other dubs and commentary; DTS, DTS-HD and TrueHD converted to E-AC3 640k; AC3/AAC/E-AC3 copied |
+| Library | `Media/Movies`; since 2026-10-23 also `Media/TVShows` (library `tvShowsHevc01`, created paused). Both share the one GPU worker. Code: `stacks/gpu/tdarr-flow/` (`flow.js` is copied to `/app/configs/hevc/flow.js`; `media_map.py` refreshes the Radarr/Sonarr maps; `tdarr_setup.py --movies=on --tv=on` sets up both libraries) |
+| Candidates | 8-bit H.264 above about 2.5 GB per hour (about 5.5 Mbps); since 2026-10-23 also any other codec (10-bit HEVC, AV1, VC-1, ...) over the grab caps of PR #45 (movies 70 MB/min, episodes 65 MB/min). Skip 4K and HDR (awaiting review), other HEVC and AV1 files, files not in the Radarr/Sonarr map, seeding files, the 8 multi-video folders, anything under `to-delete`, and the 33 review-relink folders |
+| Video | Quick Sync HEVC 8-bit Main, MKV, quality 22, preset `faster` since 2026-10-23 (was `slow`: on the Skylake iGPU `faster` runs about 8x real time instead of 2.8x, SSIM 0.958 vs 0.959, about 5% bigger). A second worker adds only ~45% at `faster` and nothing at `slow`, and would compete with Plex/Emby transcodes, so it stays at 1. Non-H.264 input is decoded in software (no 10-bit HEVC or AV1 decoder on the iGPU) |
+| Audio | Keep English plus the title's original language; drop other dubs and commentary; DTS, DTS-HD and TrueHD converted to E-AC3 640k; AC3/AAC/E-AC3 copied |
 | Subtitles | Keep English and original language; always keep forced subs and untagged (`und`) tracks |
 | Replace only if | at least 20% smaller **and** the output passes a health check; filenames kept |
-| Radarr | H.265 penalty off (PR #6); the flow triggers a Radarr rescan per file; the first 5 are verified by hand (new file shown, no download queued) |
+| Radarr / Sonarr | H.265 penalty off (PR #6); the flow triggers a Radarr movie or Sonarr series rescan per file; the first 5 are verified by hand (new file shown, no download queued) |
 | Schedule | 1 worker, low priority, paused 17:00 to 23:00 Pacific |
 | Safety nets | First day's originals (about 40 files) moved to `to-delete/2026-10-21/tdarr-originals` instead of deleted; SSIM spot-check on 3 early outputs; run log under `~/HomeLab/tdarr-review/run/` on the Mac |
 | Mount | Tdarr's `/mnt/nfs/Media` is read-write and `/mnt/nfs/to-delete` is mounted for the holding folder (`stacks/gpu/compose.yaml`, PR #8 merged 2026-10-22); Unmanic stays read-only |
