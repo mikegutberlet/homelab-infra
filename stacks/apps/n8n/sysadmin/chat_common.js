@@ -4,7 +4,12 @@
 // made and again when Goobs presses Confirm.
 const CHAT_VERBS = { restart: 'service', stop: 'service', 'arr-retry': 'arr', 'arr-blocklist': 'arr', 'prowlarr-test': 'id', 'docker-prune': 'none', 'remount-nas': 'none' };
 const reply = (text, extra) => [{ json: { route: 'reply', reply: { text, ...(extra || {}) } } }];
-const chatStore = (sd) => { sd.chat = sd.chat || { next: 1, pending: {} }; sd.chat.pending = sd.chat.pending || {}; return sd.chat; };
+const chatStore = (sd) => {
+  sd.chat = sd.chat || { next: 1, pending: {} }; sd.chat.pending = sd.chat.pending || {};
+  // Drop proposals whose Confirm window has passed (abandoned chat tabs), so the store does not grow.
+  for (const [k, p] of Object.entries(sd.chat.pending)) if (now - p.t > SETTINGS.CHAT_CONFIRM_MIN * 60e3) delete sd.chat.pending[k];
+  return sd.chat;
+};
 
 // p = {host, verb, args[]} -> {host, verb, target, tkey, cmd} or {error}. Same command shapes,
 // never-list and per-target counters as the automatic fixes (decide.js).
