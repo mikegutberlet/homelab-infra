@@ -12,7 +12,8 @@ Credentials are not in the file; n8n asks on import. Names it expects:
   "TrueNAS API key"     Header Auth: Authorization = Bearer <key>
   "Anthropic API key"   Anthropic: ~/.config/homelab/anthropic_api_key on the Mac (chat agent's model)
   "Gemini API key"      Google Gemini(PaLM) Api: the ai stack's LLM_API_KEY (chat agent's fallback model)
-  "Sysadmin chat token" Header Auth: X-Chat-Token = <token> (the chat page's nginx adds it)
+  "Sysadmin chat token" Header Auth: X-Chat-Token = <token> (the chat page's nginx and the Telegram
+                        bot send it to the chat webhook; the Telegram push nodes send it to the bot)
 
 The chat agent's lookups and confirmed fixes go through a second, small workflow, "Homelab ops
 door" (stacks/apps/n8n/homelab-ops-door.workflow.json, fixed id OPS_DOOR_ID): one SSH node per VM
@@ -31,6 +32,9 @@ CHAT_MODEL = "claude-haiku-5-5"  # Anthropic instead of Gemini Flash (Goobs, 202
 CHAT_FALLBACK_MODEL = "models/gemini-flash-latest"  # another provider, used when Anthropic fails (n8n takes one fallback)
 MAIL_FROM = "Homelab <filingbin69@gmail.com>"
 MAIL_TO = "mikegutberlet@gmail.com"
+# The Telegram bot (stacks/apps/sysadmin-telegram) on the apps stack's network; /notify sends
+# {subject, text} to the allowed chats. Switches: TELEGRAM_ALERTS / TELEGRAM_DIGEST in settings.js.
+TELEGRAM_NOTIFY_URL = "http://sysadmin-telegram:3004/notify"
 HOSTS = {"edge": "192.168.1.50", "media": "192.168.1.51", "gpu": "192.168.1.52", "apps": "192.168.1.53", "ai": "192.168.1.54"}
 HOSTS_LIST = list(HOSTS)
 NS = uuid.UUID("3f1d2a8e-6b44-4c1a-9a3e-0d5c7b2f9e10")
@@ -78,15 +82,25 @@ def webhook(name, path, pos):
     return node(name, "n8n-nodes-base.webhook", 2, pos, {"httpMethod": "POST", "path": path, "responseMode": "onReceived", "options": {}}, webhookId=nid("wh-" + name))
 
 
-def http(name, url, pos, auth=None, insecure=False):
-    p = {"method": "GET", "url": url, "options": {"timeout": 15000, "allowUnauthorizedCerts": insecure}}
+def http(name, url, pos, auth=None, insecure=False, body=None, timeout=15000):
+    """GET url, or POST body ({field: expression}) as JSON. A failure only marks this node."""
+    p = {"method": "POST" if body else "GET", "url": url, "options": {"timeout": timeout, "allowUnauthorizedCerts": insecure}}
     extra = {"onError": "continueRegularOutput"}
     if auth:
         p.update({"authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth"})
         c = cred("httpHeaderAuth", auth)
         if c:
             extra["credentials"] = c
+    if body:
+        p.update({"sendBody": True, "contentType": "json", "specifyBody": "keypair",
+                  "bodyParameters": {"parameters": [{"name": k, "value": v} for k, v in body.items()]}})
     return node(name, "n8n-nodes-base.httpRequest", 4.2, pos, p, **extra)
+
+
+def telegram_push(name, pos):
+    """POST {subject, text} to the Telegram bot's /notify with the chat token (X-Chat-Token)."""
+    return http(name, TELEGRAM_NOTIFY_URL, pos, auth="Sysadmin chat token", timeout=30000,
+                body={"subject": "={{ $json.subject }}", "text": "={{ $json.text }}"})
 
 
 def email(name, pos):
@@ -207,6 +221,14 @@ def _build(ops_door_id=OPS_DOOR_ID):
     ]}, "options": {}})
     link("Record fix result", "Failed or follow-up")
     link("Failed or follow-up", "Email critical", 0)
+    # Every critical email is also pushed to Telegram (TELEGRAM_ALERTS). These nodes sit above
+    # "Email critical" on the canvas, so n8n (execution order v1) runs them first: if Gmail fails,
+    # the alert has already reached Telegram; a Telegram failure only marks "Telegram push".
+    node("Telegram alert?", "n8n-nodes-base.code", 2, (2780, -120), {"jsCode": code("telegram_alert.js")})
+    link("Email or fix", "Telegram alert?", 0)
+    link("Failed or follow-up", "Telegram alert?", 0)
+    telegram_push("Telegram push", (3040, -120))
+    link("Telegram alert?", "Telegram push")
     node("Wait 60 s", "n8n-nodes-base.wait", 1.1, (3760, 480), {"amount": 60, "unit": "seconds"}, webhookId=nid("wait"))
     link("Failed or follow-up", "Wait 60 s", 1)
     link("Wait 60 s", "Route fix by host")
@@ -272,6 +294,11 @@ def _build(ops_door_id=OPS_DOOR_ID):
     email("Email digest", (520, 900))
     link("Every day 08:00", "Build digest")
     link("Build digest", "Email digest")
+    # The digest to Telegram too, only while TELEGRAM_DIGEST is on (off by default).
+    node("Telegram digest?", "n8n-nodes-base.code", 2, (520, 760), {"jsCode": code("telegram_digest.js")})
+    link("Build digest", "Telegram digest?")
+    telegram_push("Telegram digest push", (780, 760))
+    link("Telegram digest?", "Telegram digest push")
     node("Store event", "n8n-nodes-base.code", 2, (260, 1200), {"jsCode": (SRC / "store_event.js").read_text()})
     for i, src in enumerate(["diun", "kuma", "scrutiny", "backup", "other"]):
         webhook(src, f"homelab/{src}", (0, 1100 + 90 * i))

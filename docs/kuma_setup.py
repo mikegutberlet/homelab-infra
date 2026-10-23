@@ -47,6 +47,8 @@ MONITORS = [
     ("Stirling PDF", "http://192.168.1.53:8070/", False, ["200-299", "300-399"]),
     ("n8n", "http://192.168.1.53:5678/healthz", False, None),
     ("Sysadmin chat", "http://192.168.1.53:3003/healthz", False, None),
+    # 200 while the bot polls Telegram (last getUpdates < 3 min ago); 503 "not configured" before telegram_setup.py.
+    ("Sysadmin Telegram bot", "http://192.168.1.53:3004/healthz", False, None),
     ("Huginn", "http://192.168.1.53:3000/users/sign_in", False, None),
     ("Homepage", "http://192.168.1.53:3001/", False, ["200-299", "300-399", "400-499"]),
     ("Scrutiny", "http://192.168.1.53:8087/api/health", False, None),
