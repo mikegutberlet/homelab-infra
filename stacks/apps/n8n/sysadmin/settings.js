@@ -43,6 +43,10 @@ const SETTINGS = {
   CHAT_FIX_PER_HOUR: 2,                      // per target, counting automatic fixes too
   CHAT_FIX_PER_DAY: 10,                      // all chat fixes together
   CHAT_CONFIRM_MIN: 15,                      // a proposal expires after this
+  // Telegram bot (stacks/apps/sysadmin-telegram). Pushes go to POST sysadmin-telegram:3004/notify;
+  // a Telegram failure never holds up the email.
+  TELEGRAM_ALERTS: true,                     // every critical email is also pushed to Telegram
+  TELEGRAM_DIGEST: false,                    // the 08:00 digest is also sent to Telegram (email only when false)
 };
 const TB = 1e12, GB = 1e9, H = 3600e3;
 const now = Date.now();

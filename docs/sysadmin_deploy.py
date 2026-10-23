@@ -146,8 +146,10 @@ if "Homelab digest" in workflows:
     set_active(workflows["Homelab digest"], False)
     print("  old 'Homelab digest' deactivated (kept)")
 set_active(workflows["Homelab sysadmin"], True)
-print("Restarting n8n so the webhooks and timers register, and the chat page so it picks up its token...")
+print("Restarting n8n so the webhooks and timers register, and the chat page and Telegram bot so they pick up the token...")
 ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml restart n8n")
 ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml up -d --force-recreate sysadmin-chat", check=False)
+# The bot reads CHAT_TOKEN only when its container is created; a no-op while the service is not deployed.
+ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml up -d --no-deps --force-recreate sysadmin-telegram", check=False)
 print("Done. Check n8n > Workflows > Homelab sysadmin (active) and Executions after the next 15-minute tick;")
 print("the chat page is https://sysadmin.<tailnet> (Homepage > Sysadmin chat).")
