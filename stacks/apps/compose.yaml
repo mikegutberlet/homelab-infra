@@ -170,6 +170,33 @@ services:
       - ./sysadmin-chat/index.html:/usr/share/nginx/html/index.html:ro
     depends_on: [n8n]
 
+  # Telegram front end for the same chat webhook (sysadmin-telegram/bot.py, stdlib only). It
+  # long-polls the Bot API, so nothing is exposed to the internet, answers only the chat ids in
+  # TELEGRAM_ALLOWED_CHAT_IDS, and turns proposed fixes into Confirm/Cancel buttons; n8n decides
+  # everything. :3004 serves /healthz (Kuma) and /notify (n8n's critical-alert push, X-Chat-Token).
+  # telegram.env (TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_CHAT_IDS) is written by docs/telegram_setup.py;
+  # without it the bot idles and /healthz says "not configured". No healthcheck on purpose: the
+  # stacks play's "up --wait" would fail on a bot that is not configured yet.
+  sysadmin-telegram:
+    <<: *common
+    image: python:3.12-alpine
+    mem_limit: 128m
+    user: ${PUID}:${PGID}
+    command: ["python", "-u", "/app/bot.py"]
+    env_file:
+      - {path: /opt/appdata/sysadmin-telegram/telegram.env, required: false}
+      - {path: /opt/appdata/sysadmin-chat/token.env, required: false} # CHAT_TOKEN
+    environment:
+      TZ: ${TZ}
+      STATE_DIR: /data
+      HEALTH_PORT: 3004
+    ports: ["3004:3004"]
+    volumes:
+      - ./sysadmin-telegram:/app:ro
+      # state.json (getUpdates offset, per-chat session counters); owned by the storage user.
+      - /opt/appdata/sysadmin-telegram/data:/data
+    depends_on: [n8n]
+
   huginn:
     <<: *common
     image: ghcr.io/huginn/huginn:latest

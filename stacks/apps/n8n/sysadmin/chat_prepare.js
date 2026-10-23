@@ -4,7 +4,10 @@ const S = SETTINGS;
 const sd = $getWorkflowStaticData('global');
 const req = $input.first().json;
 const body = req.body || {};
-const who = (req.headers || {})['x-authentik-username'] || 'chat';
+// who names the asker in the fix log: the Authentik user from the chat page, "telegram" for the
+// Telegram bot (stacks/apps/sysadmin-telegram, which sends X-Chat-Via: telegram), else "chat".
+const hdr = req.headers || {};
+const who = hdr['x-authentik-username'] || (hdr['x-chat-via'] === 'telegram' ? 'telegram' : 'chat');
 const sessionId = String(body.sessionId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'default';
 
 if (body.confirm != null || body.cancel != null) {
