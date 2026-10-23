@@ -13,12 +13,31 @@
 # the SD tiers down to 480p, and everything below 480p, 4K, remuxes and discs disabled.
 # "No CAM/TS/Screener" is a hand-made custom format in both apps (release-title regex,
 # score -10000); it is kept out of reset_unmatched_scores so the daily sync leaves it alone.
+#
+# Smaller files (Goobs, 2026-10-23): the guide sizes set "preferred" at the maximum, so the
+# largest 1080p release always won (10-15 GB Bluray encodes), and Radarr kept "upgrading" WEB-DLs
+# to Bluray. Now: 1080p WEB and Bluray are one tier in every profile (WEB-DL wins on score), sizes
+# are capped and prefer a lean file, x265 (8-bit) gets a bonus, 10-bit is rejected for new grabs
+# (target format is 8-bit HEVC, see docs/wiki/06-media-library.md), and a 1080p file is final:
+# the main profiles stop upgrading at 1080p with score -10000, so files already on disk (including
+# the ~1,200 10-bit HEVC ones) are never replaced. Lower tiers still upgrade to 1080p.
 sonarr:
   sonarr: # v8: instance names must be unique across Sonarr and Radarr
     base_url: http://sonarr:8989
     api_key: !env_var SONARR_API_KEY
+    # Sizes are MB per minute. Guide: preferred 995 (= biggest wins), Bluray-1080p min 50.4.
+    # 1080p: 4-65, aim 20 (about 0.9 GB per 45-minute episode); 720p: 3-35, aim 12.
     quality_definition:
       type: series
+      qualities:
+        - { name: WEBDL-1080p, min: 4, preferred: 20, max: 65 }
+        - { name: WEBRip-1080p, min: 4, preferred: 20, max: 65 }
+        - { name: Bluray-1080p, min: 4, preferred: 20, max: 65 }
+        - { name: HDTV-1080p, min: 4, preferred: 20, max: 65 }
+        - { name: WEBDL-720p, min: 3, preferred: 12, max: 35 }
+        - { name: WEBRip-720p, min: 3, preferred: 12, max: 35 }
+        - { name: Bluray-720p, min: 3, preferred: 12, max: 35 }
+        - { name: HDTV-720p, min: 3, preferred: 12, max: 35 }
     quality_profiles:
       - trash_id: 72dae194fc92bf828f32cde7744e51a1 # WEB-1080p
         # The profile 538 of 541 series use (the name really ends with a space).
@@ -28,12 +47,11 @@ sonarr:
           except: ["No CAM/TS/Screener"]
         upgrade:
           allowed: true
-          until_quality: WEB 1080p
-          until_score: 10000
+          until_quality: 1080p
+          until_score: -10000 # a 1080p file is final, whatever its score
         qualities:
-          - name: WEB 1080p
-            qualities: [WEBDL-1080p, WEBRip-1080p]
-          - name: Bluray-1080p
+          - name: 1080p
+            qualities: [WEBDL-1080p, WEBRip-1080p, Bluray-1080p]
           - name: HDTV-1080p
           - name: Bluray-720p
           - name: WEB 720p
@@ -70,14 +88,13 @@ sonarr:
           except: ["No CAM/TS/Screener"]
         upgrade:
           allowed: true
-          until_quality: WEB 1080p
-          until_score: 10000
+          until_quality: 1080p
+          until_score: 2000 # a dub (+2000) or an English-tagged tiered release ends upgrades
         min_format_score: 0
         min_upgrade_format_score: 1
         qualities:
-          - name: WEB 1080p
-            qualities: [WEBDL-1080p, WEBRip-1080p]
-          - name: Bluray-1080p
+          - name: 1080p
+            qualities: [WEBDL-1080p, WEBRip-1080p, Bluray-1080p]
           - name: HDTV-1080p
           - name: Bluray-720p
           - name: WEB 720p
@@ -120,6 +137,22 @@ sonarr:
           - 7572bfe6bb8e657b4918d81a60f1103c # Homelab: Not Original or English (-10000)
         assign_scores_to:
           - name: *sonarr_foreign
+      # Smaller files (2026-10-23): x265 is welcome (the Golden Rule group below scores it -10000),
+      # 10-bit is not (the target is 8-bit HEVC; the iGPU can't decode 10-bit when a client transcodes).
+      - trash_ids:
+          - 47435ece6b99a0b477caf360e79ba0bb # x265 (HD)
+        assign_scores_to:
+          - name: *sonarr_main
+            score: 500
+          - name: *sonarr_foreign
+            score: 500
+      - trash_ids:
+          - b2550eb333d27b75833e25b8c2557b38 # 10bit
+        assign_scores_to:
+          - name: *sonarr_main
+            score: -10000
+          - name: *sonarr_foreign
+            score: -10000
     # A group listed here is no longer auto-synced to the guide-backed profile, so every entry
     # names the main profile too, or its scores there reset to 0 (seen in the 2026-10-22 preview).
     custom_format_groups:
@@ -137,8 +170,20 @@ radarr:
   radarr:
     base_url: http://radarr:7878
     api_key: !env_var RADARR_API_KEY
+    # Sizes are MB per minute. Guide: preferred 1999 (= biggest wins), Bluray-1080p min 50.8 (6 GB
+    # for a 2-hour film, which rejected lean encodes). 1080p: 8-70, aim 25 (about 3 GB for 2 hours,
+    # cap 8.4 GB); 720p: 5-40, aim 15.
     quality_definition:
       type: movie
+      qualities:
+        - { name: WEBDL-1080p, min: 8, preferred: 25, max: 70 }
+        - { name: WEBRip-1080p, min: 8, preferred: 25, max: 70 }
+        - { name: Bluray-1080p, min: 8, preferred: 25, max: 70 }
+        - { name: HDTV-1080p, min: 8, preferred: 25, max: 70 }
+        - { name: WEBDL-720p, min: 5, preferred: 15, max: 40 }
+        - { name: WEBRip-720p, min: 5, preferred: 15, max: 40 }
+        - { name: Bluray-720p, min: 5, preferred: 15, max: 40 }
+        - { name: HDTV-720p, min: 5, preferred: 15, max: 40 }
     quality_profiles:
       - trash_id: d1d67249d3890e49bc12e275d989a7e9 # HD Bluray + WEB
         name: &radarr_main Anything Not terrible
@@ -147,12 +192,11 @@ radarr:
           except: ["No CAM/TS/Screener"]
         upgrade:
           allowed: true
-          until_quality: Bluray-1080p
-          until_score: 10000
+          until_quality: 1080p
+          until_score: -10000 # a 1080p file is final, whatever its score
         qualities:
-          - name: Bluray-1080p
-          - name: WEB 1080p
-            qualities: [WEBDL-1080p, WEBRip-1080p]
+          - name: 1080p
+            qualities: [Bluray-1080p, WEBDL-1080p, WEBRip-1080p]
           - name: Bluray-720p
           - name: WEB 720p
             qualities: [WEBDL-720p, WEBRip-720p]
@@ -209,7 +253,7 @@ radarr:
         upgrade:
           allowed: true
           until_quality: 1080p
-          until_score: 10000
+          until_score: 2000 # a dub (+2000) or an English-tagged tiered release ends upgrades
         min_format_score: 0
         min_upgrade_format_score: 1
         qualities:
@@ -262,9 +306,6 @@ radarr:
     custom_formats:
       # The HD Bluray + WEB guide formats, for the user-defined foreign profile.
       - trash_ids:
-          - ed27ebfef2f323e964fb1f61391bcb35 # HD Bluray Tier 01
-          - c20c8647f2746a1f4c4262b0fbbeeeae # HD Bluray Tier 02
-          - 5608c71bcebba0a5e666223bae8c9227 # HD Bluray Tier 03
           - c20f169ef63c5f40c2def54abaf4438e # WEB Tier 01
           - 403816d65392c79236dcb6dd591aeda4 # WEB Tier 02
           - af94e0fe497124d1f9ce732069ec8c3b # WEB Tier 03
@@ -278,14 +319,48 @@ radarr:
         assign_scores_to:
           - name: *radarr_foreign
       # Tdarr re-encodes H.264 movies to HEVC (2026-10-21), so the TRaSH "x265 (HD)" penalty
-      # (-10000) would make Radarr try to replace those files. Score it 0 instead.
+      # (-10000) would make Radarr try to replace those files. Since 2026-10-23 it is a bonus:
+      # an x265 release is grabbed already small and spares Tdarr the work.
       - trash_ids:
           - dc98083864ea246d05a42df0d05f81cc # x265 (HD)
         assign_scores_to:
-          - name: Anything Not terrible
-            score: 0
+          - name: *radarr_main
+            score: 500
           - name: *radarr_foreign
-            score: 0
+            score: 500
+      # Not for new grabs: the target is 8-bit HEVC (the iGPU can't decode 10-bit when a client
+      # transcodes). Files already on disk are safe, see upgrade.until_score.
+      - trash_ids:
+          - a5d148168c4506b55cf53984107c396e # 10bit
+        assign_scores_to:
+          - name: *radarr_main
+            score: -10000
+          - name: *radarr_foreign
+            score: -10000
+      # WEB-DL over Bluray encodes (2026-10-23): the guide scores the Bluray tiers 1800/1750/1700,
+      # above WEB Tier 01 (1700), and those groups make the biggest 1080p encodes. Each now sits
+      # 200 below the matching WEB tier, still above untiered releases.
+      - trash_ids:
+          - ed27ebfef2f323e964fb1f61391bcb35 # HD Bluray Tier 01
+        assign_scores_to:
+          - name: *radarr_main
+            score: 1500
+          - name: *radarr_foreign
+            score: 1500
+      - trash_ids:
+          - c20c8647f2746a1f4c4262b0fbbeeeae # HD Bluray Tier 02
+        assign_scores_to:
+          - name: *radarr_main
+            score: 1450
+          - name: *radarr_foreign
+            score: 1450
+      - trash_ids:
+          - 5608c71bcebba0a5e666223bae8c9227 # HD Bluray Tier 03
+        assign_scores_to:
+          - name: *radarr_main
+            score: 1400
+          - name: *radarr_foreign
+            score: 1400
     # Same rule as Sonarr: name the main profile on every group listed here.
     custom_format_groups:
       add:
