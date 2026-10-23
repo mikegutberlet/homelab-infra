@@ -1,16 +1,19 @@
-// Tdarr flow logic (Custom JS Function): H.264 movie -> 8-bit HEVC (Quick Sync) in MKV.
+// Tdarr flow logic (Custom JS Function): movie or episode -> 8-bit HEVC (Quick Sync) in MKV.
 // Lives at /app/configs/hevc/flow.js on the gpu VM; the flow's custom function just requires it.
-// Rules agreed with Goobs 2026-10-21:
-//   - only Radarr's current file for a movie (radarr_map.json), not the review/multi-video folders
-//   - only 8-bit H.264 above ~5.5 Mbps; HEVC/AV1/everything else is left alone
-//   - video: hevc_qsv Main, global_quality 22; audio: DTS/DTS-HD/TrueHD -> EAC3 640k, rest copied
-//   - keep English + the movie's original language + und/untagged + forced subs; drop other
+// Rules agreed with Goobs 2026-10-21 (movies), extended to TV 2026-10-23:
+//   - only Radarr's / Sonarr's current file (radarr_map.json / sonarr_map.json, see media_map.py),
+//     not the review/multi-video folders
+//   - 8-bit H.264 above ~5.5 Mbps; any other codec (10-bit HEVC, AV1, VC-1, ...) only when it is over
+//     the grab caps from PR #45 (movies 70 MB/min, episodes 65 MB/min); 4K and HDR are left alone
+//   - video: hevc_qsv Main, global_quality 22, preset faster (2026-10-23: 3x the speed of slow on the
+//     Skylake iGPU, same SSIM, ~5% bigger); audio: DTS/DTS-HD/TrueHD -> EAC3 640k, rest copied
+//   - keep English + the title's original language + und/untagged + forced subs; drop other
 //     dubs and commentary (never drop the last audio track)
 //   - replace only if the result is at least 20% smaller and passes a full decode check
 //   - same file name (extension becomes .mkv); every original is moved to the NAS holding folder
 //     (to-delete/tdarr-originals/<date>/...), never deleted here: Goobs empties it after checking
 //   - stops encoding while the NAS has less than 3 TB free (originals pile up until emptied)
-//   - Radarr rescans the movie afterwards
+//   - Radarr rescans the movie / Sonarr rescans the series afterwards
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -21,6 +24,12 @@ const HOLD_ROOT = '/mnt/nfs/to-delete/tdarr-originals';
 const MIN_FREE = 3e12;
 const MIN_BPS = 5.5e6;
 const LOG = '/app/logs/hevc-run.tsv';
+const LIBS = {
+  movie: { root: '/mnt/nfs/Media/Movies', hold: '', map: 'radarr_map.json', capMbMin: 70,
+    arr: { port: 7878, key: 'radarr-api-key', cmd: (id) => ({ name: 'RescanMovie', movieIds: [id] }) } },
+  tv: { root: '/mnt/nfs/Media/TVShows', hold: 'TVShows', map: 'sonarr_map.json', capMbMin: 65,
+    arr: { port: 8989, key: 'sonarr-api-key', cmd: (id) => ({ name: 'RescanSeries', seriesId: id }) } },
+};
 
 const LANGS = {
   English: ['eng', 'en'], Japanese: ['jpn', 'ja'], Korean: ['kor', 'ko'], German: ['ger', 'deu', 'de'],
@@ -35,12 +44,12 @@ const LANGS = {
 const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return d; } };
 const log = (row) => fs.appendFileSync(LOG, `${[new Date().toISOString(), ...row].join('\t')}\n`);
 
-function rescanRadarr(movieId) {
-  const key = fs.readFileSync(`${CFG}/radarr-api-key`, 'utf8').trim();
-  const body = JSON.stringify({ name: 'RescanMovie', movieIds: [movieId] });
+function rescan(arr, id) {
+  const key = fs.readFileSync(`${CFG}/${arr.key}`, 'utf8').trim();
+  const body = JSON.stringify(arr.cmd(id));
   return new Promise((resolve) => {
     const req = http.request({
-      host: '192.168.1.51', port: 7878, path: '/api/v3/command', method: 'POST', timeout: 30000,
+      host: '192.168.1.51', port: arr.port, path: '/api/v3/command', method: 'POST', timeout: 30000,
       headers: { 'X-Api-Key': key, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
     }, (res) => { res.resume(); resolve(res.statusCode); });
     req.on('error', (e) => resolve(`error ${e.message}`));
@@ -58,17 +67,20 @@ module.exports = async (args) => {
   const src = args.inputFileObj._id;
   const skip = (why) => { args.jobLog(`skip: ${why}`); log([src, '', '', '', `skip: ${why}`]); return { outputFileObj: args.inputFileObj, outputNumber: 2, variables: args.variables }; };
 
-  const map = readJson(`${CFG}/radarr_map.json`, {});
+  const kind = Object.keys(LIBS).find((k) => src.startsWith(`${LIBS[k].root}/`));
+  if (!kind) return skip('not under Movies or TVShows');
+  const lib = LIBS[kind];
+  const map = readJson(`${CFG}/${lib.map}`, {});
   const excluded = readJson(`${CFG}/excluded_folders.json`, []);
-  const movie = map[src];
-  if (!movie) return skip('not Radarr\'s current file');
+  const item = map[src]; // {id, lang, title}: the movie, or the episode's series
+  if (!item) return skip(`not ${kind === 'tv' ? 'Sonarr' : 'Radarr'}'s current file`);
   if (excluded.some((d) => src.startsWith(`${d}/`))) return skip('excluded folder');
 
-  const df = spawnSync('df', ['-B1', '--output=avail', '/mnt/nfs/Media/Movies'], { encoding: 'utf8' });
+  const df = spawnSync('df', ['-B1', '--output=avail', lib.root], { encoding: 'utf8' });
   const free = parseInt((df.stdout || '').trim().split('\n').pop(), 10);
   if (!(free > MIN_FREE)) { log([src, '', '', '', `paused: NAS free ${Math.round(free / 1e12 * 10) / 10} TB`]); throw new Error('NAS has less than 3 TB free; empty to-delete/tdarr-originals'); }
 
-  // Fail in seconds, not after a 30-minute encode, if the movie folder isn't writable.
+  // Fail in seconds, not after a 30-minute encode, if the folder isn't writable.
   const probeFile = path.join(path.dirname(src), `.tdarr-write-test-${process.pid}`);
   try { fs.writeFileSync(probeFile, ''); fs.unlinkSync(probeFile); } catch (e) {
     log([src, '', '', '', `FAILED: folder not writable (${e.code})`]);
@@ -78,16 +90,23 @@ module.exports = async (args) => {
   const info = probe(src);
   const streams = info.streams || [];
   const v = streams.find((s) => s.codec_type === 'video' && !(s.disposition || {}).attached_pic);
-  if (!v || v.codec_name !== 'h264') return skip(`video is ${v ? v.codec_name : 'missing'}`);
-  if (!['yuv420p', 'yuvj420p'].includes(v.pix_fmt)) return skip(`pixel format ${v.pix_fmt}`);
+  if (!v) return skip('video is missing');
   if (v.field_order && !['progressive', 'unknown'].includes(v.field_order)) return skip(`interlaced (${v.field_order})`);
+  if ((v.width || 0) > 1920 || (v.height || 0) > 1080) return skip(`${v.width}x${v.height} (4K is left for review)`);
+  if (['smpte2084', 'arib-std-b67'].includes(v.color_transfer)) return skip(`HDR (${v.color_transfer})`);
   const dur = parseFloat((info.format || {}).duration || 0);
   const size = fs.statSync(src).size;
   if (!dur) return skip('no duration');
-  if (size * 8 / dur < MIN_BPS) return skip(`bitrate ${(size * 8 / dur / 1e6).toFixed(1)} Mbps`);
+  const mbMin = size / 1e6 / (dur / 60);
+  // Fast path: 8-bit H.264 decoded on the iGPU. Everything else is decoded in software (the Skylake
+  // iGPU has no 10-bit HEVC or AV1 decoder) and only worth it above the grab cap.
+  const fast = v.codec_name === 'h264' && ['yuv420p', 'yuvj420p'].includes(v.pix_fmt);
+  if (fast) {
+    if (size * 8 / dur < MIN_BPS) return skip(`bitrate ${(size * 8 / dur / 1e6).toFixed(1)} Mbps`);
+  } else if (mbMin <= lib.capMbMin) return skip(`${v.codec_name} ${v.pix_fmt} at ${Math.round(mbMin)} MB/min (cap ${lib.capMbMin})`);
 
   // Tracks to keep
-  const keepLangs = new Set(['eng', 'en', 'und', '', ...(LANGS[movie.lang] || [])]);
+  const keepLangs = new Set(['eng', 'en', 'und', '', ...(LANGS[item.lang] || [])]);
   const lang = (s) => ((s.tags || {}).language || '').toLowerCase();
   const title = (s) => ((s.tags || {}).title || '').toLowerCase();
   const audio = streams.filter((s) => s.codec_type === 'audio');
@@ -102,7 +121,7 @@ module.exports = async (args) => {
   keepA.forEach((s) => enc.push('-map', `0:${s.index}`));
   keepS.forEach((s) => enc.push('-map', `0:${s.index}`));
   enc.push('-map', '0:t?');
-  enc.push('-c:v', 'hevc_qsv', '-profile:v', 'main', '-preset', 'slow', '-global_quality', '22', '-look_ahead_depth', '40');
+  enc.push('-c:v', 'hevc_qsv', '-profile:v', 'main', '-preset', 'faster', '-global_quality', '22', '-look_ahead_depth', '40');
   keepA.forEach((s, i) => {
     const prof = (s.profile || '').toLowerCase();
     if (s.codec_name === 'truehd' || (s.codec_name === 'dts')) {
@@ -119,9 +138,9 @@ module.exports = async (args) => {
   const work = path.join(args.workDir, `${base}.mkv`);
   const hw = ['-init_hw_device', 'qsv=hw', '-filter_hw_device', 'hw'];
   const runs = [
-    [...hw, '-hwaccel', 'qsv', '-hwaccel_output_format', 'qsv', '-c:v', 'h264_qsv', '-i', src, ...enc],
-    [...hw, '-i', src, '-vf', 'format=nv12,hwupload=extra_hw_frames=64', ...enc], // software decode fallback
+    [...hw, '-i', src, '-vf', 'format=nv12,hwupload=extra_hw_frames=64', ...enc], // software decode (also 10 -> 8 bit)
   ];
+  if (fast) runs.unshift([...hw, '-hwaccel', 'qsv', '-hwaccel_output_format', 'qsv', '-c:v', 'h264_qsv', '-i', src, ...enc]);
   const t0 = Date.now();
   let ok = false;
   for (const r of runs) {
@@ -161,7 +180,7 @@ module.exports = async (args) => {
   fs.unlinkSync(work);
   // Retire the original into the holding folder (copy, verify size, then remove the source).
   const day = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-  const held = path.join(HOLD_ROOT, day, path.relative('/mnt/nfs/Media/Movies', src));
+  const held = path.join(HOLD_ROOT, day, lib.hold, path.relative(lib.root, src));
   fs.mkdirSync(path.dirname(held), { recursive: true });
   if (spawnSync('cp', ['-p', src, held]).status !== 0 || fs.statSync(held).size !== size) {
     fs.unlinkSync(tmp); throw new Error('holding copy failed');
@@ -170,8 +189,8 @@ module.exports = async (args) => {
   fs.appendFileSync(path.join(HOLD_ROOT, day, 'MANIFEST.tsv'), `${size}\t${src}\t${dest}\n`);
   const fate = `original held at ${held}`;
   fs.renameSync(tmp, dest);
-  const rs = await rescanRadarr(movie.id);
-  log([src, size, newSize, secs, `ok (${Math.round(100 - newSize * 100 / size)}% smaller); ${fate}; radarr rescan ${rs}; dest ${dest}`]);
+  const rs = await rescan(lib.arr, item.id);
+  log([src, size, newSize, secs, `ok (${Math.round(100 - newSize * 100 / size)}% smaller); ${fate}; ${kind === 'tv' ? 'sonarr' : 'radarr'} rescan ${rs}; dest ${dest}`]);
   args.jobLog(`done: ${size} -> ${newSize} bytes in ${secs}s; ${fate}`);
   return { outputFileObj: { _id: dest }, outputNumber: 1, variables: args.variables };
 };
