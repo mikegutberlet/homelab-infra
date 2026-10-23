@@ -773,18 +773,22 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "f7096d81-f926-5952-981d-b410c876d4e5",
-      "name": "Gemini",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1.2,
+      "id": "c10c64ea-498b-52df-8b3c-c489465e5d7b",
+      "name": "Claude",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
       "position": [
         640,
         1900
       ],
       "parameters": {
-        "modelName": "models/gemini-flash-latest",
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-haiku-5-5"
+        },
         "options": {
-          "temperature": 0.2
+          "maxTokensToSample": 4096
         }
       },
       "retryOnFail": true,
@@ -801,7 +805,7 @@
         1900
       ],
       "parameters": {
-        "modelName": "models/gemini-flash-lite-latest",
+        "modelName": "models/gemini-flash-latest",
         "options": {
           "temperature": 0.2
         }
@@ -1461,7 +1465,7 @@
         ]
       ]
     },
-    "Gemini": {
+    "Claude": {
       "ai_languageModel": [
         [
           {

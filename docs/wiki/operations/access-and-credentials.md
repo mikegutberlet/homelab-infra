@@ -55,6 +55,7 @@ This page says **where** each credential lives and how it is used. It never cont
   the hidden prompt to `~/.config/homelab/ts-authkey`, update edge secrets, redeploy edge, restart
   tsdproxy.
 - Gemini key: update `~/.config/homelab/ai-apikey` and the ai secrets, redeploy ai.
+- Anthropic key (sysadmin chat agent): replace `~/.config/homelab/anthropic_api_key`, run `python3 docs/sysadmin_deploy.py`.
 - Gmail app password: revoke in the Google account, re-enter in n8n and Kuma.
 - age key: if it is ever rotated, every `secrets.sops.env` must be re-encrypted (`sops updatekeys`)
   and the new private key copied to each VM by the `stacks` role.

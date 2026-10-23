@@ -10,7 +10,8 @@ Credentials are not in the file; n8n asks on import. Names it expects:
   "ops <vm>"            SSH private key, one per VM (host 192.168.1.5x, user ops, port 22)
   "Proxmox API token"   Header Auth: Authorization = PVEAPIToken=homepage@pve!homepage=<secret>
   "TrueNAS API key"     Header Auth: Authorization = Bearer <key>
-  "Gemini API key"      Google Gemini(PaLM) Api: the ai stack's LLM_API_KEY (chat agent's model)
+  "Anthropic API key"   Anthropic: ~/.config/homelab/anthropic_api_key on the Mac (chat agent's model)
+  "Gemini API key"      Google Gemini(PaLM) Api: the ai stack's LLM_API_KEY (chat agent's fallback model)
   "Sysadmin chat token" Header Auth: X-Chat-Token = <token> (the chat page's nginx adds it)
 
 The chat agent's lookups and confirmed fixes go through a second, small workflow, "Homelab ops
@@ -26,8 +27,8 @@ SRC = ROOT / "stacks/apps/n8n/sysadmin"
 OUT = ROOT / "stacks/apps/n8n/homelab-sysadmin.workflow.json"
 OUT_DOOR = ROOT / "stacks/apps/n8n/homelab-ops-door.workflow.json"
 OPS_DOOR_ID = "HomelabOpsDoor01"  # n8n keeps an id given on import; sysadmin_deploy.py checks it
-CHAT_MODEL = "models/gemini-flash-latest"  # same alias the ai stack uses (gemini-2.5-flash is closed to new accounts)
-CHAT_FALLBACK_MODEL = "models/gemini-flash-lite-latest"  # used when the main model is overloaded (503s on 2026-10-22)
+CHAT_MODEL = "claude-haiku-5-5"  # Anthropic instead of Gemini Flash (Goobs, 2026-10-23)
+CHAT_FALLBACK_MODEL = "models/gemini-flash-latest"  # another provider, used when Anthropic fails (n8n takes one fallback)
 MAIL_FROM = "Homelab <filingbin69@gmail.com>"
 MAIL_TO = "mikegutberlet@gmail.com"
 HOSTS = {"edge": "192.168.1.50", "media": "192.168.1.51", "gpu": "192.168.1.52", "apps": "192.168.1.53", "ai": "192.168.1.54"}
@@ -228,12 +229,15 @@ def _build(ops_door_id=OPS_DOOR_ID):
         "options": {"systemMessage": (SRC / "chat_common.js").read_text().split("const CHAT_SYSTEM = `")[1].split("`;")[0],
                     "maxIterations": 8, "returnIntermediateSteps": False, "enableStreaming": False}}, onError="continueRegularOutput")
     link("Chat next", "Sysadmin agent", 1)
-    # Gemini answered 503 "high demand" for most of an hour on 2026-10-22: retry each call, and
-    # let the agent fall back to the lite model when the main one still fails.
-    g = cred("googlePalmApi", "Gemini API key")
+    # Retry each call; when the main model still fails, the agent falls back to Gemini, another
+    # provider, so an Anthropic outage does not take the chat down. Haiku 5.5 rejects any temperature
+    # but its default, so none is set; its thinking counts toward the token cap, hence 4096.
     retry = {"retryOnFail": True, "maxTries": 3, "waitBetweenTries": 5000}
-    node("Gemini", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1.2, (640, 1900), {"modelName": CHAT_MODEL, "options": {"temperature": 0.2}}, **retry, **({"credentials": g} if g else {}))
-    link("Gemini", "Sysadmin agent", 0, "ai_languageModel")
+    a = cred("anthropicApi", "Anthropic API key")
+    node("Claude", "@n8n/n8n-nodes-langchain.lmChatAnthropic", 1.3, (640, 1900),
+         {"model": {"__rl": True, "mode": "id", "value": CHAT_MODEL}, "options": {"maxTokensToSample": 4096}}, **retry, **({"credentials": a} if a else {}))
+    link("Claude", "Sysadmin agent", 0, "ai_languageModel")
+    g = cred("googlePalmApi", "Gemini API key")
     node("Gemini fallback", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1.2, (760, 1900), {"modelName": CHAT_FALLBACK_MODEL, "options": {"temperature": 0.2}}, **retry, **({"credentials": g} if g else {}))
     link("Gemini fallback", "Sysadmin agent", 0, "ai_languageModel", index=1)
     node("Chat memory", "@n8n/n8n-nodes-langchain.memoryBufferWindow", 1.4, (860, 1900), {"sessionIdType": "customKey", "sessionKey": "={{ $json.sessionId }}", "contextWindowLength": 10})
