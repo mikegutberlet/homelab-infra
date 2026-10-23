@@ -3,6 +3,16 @@
     name: ssh
     state: restarted
 
+- name: Restart fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+
+- name: Restart resolved
+  ansible.builtin.service:
+    name: systemd-resolved
+    state: restarted
+
 # Debian's watchdog.service stop step exits 1 on purpose (run_wd_keepalive=1) so that
 # OnFailure= starts wd_keepalive to keep feeding /dev/watchdog. A restart therefore always
 # "fails"; a plain start afterwards takes over again (Conflicts=wd_keepalive).

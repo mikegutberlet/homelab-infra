@@ -1,6 +1,6 @@
 - name: Base packages
   ansible.builtin.apt:
-    name: [qemu-guest-agent, unattended-upgrades, fail2ban, nfs-common, curl, jq, htop, rsync]
+    name: [qemu-guest-agent, unattended-upgrades, fail2ban, python3-systemd, nfs-common, curl, jq, htop, rsync]
     update_cache: true
 
 - name: Guest agent running (lets Proxmox shut the VM down cleanly)
@@ -44,8 +44,62 @@
       PasswordAuthentication no
       KbdInteractiveAuthentication no
       PermitRootLogin no
+      X11Forwarding no
+      AllowAgentForwarding no
+      MaxAuthTries 3
     mode: "0644"
   notify: Restart ssh
+
+# fail2ban crashed at every boot until 2026-10-23 ("Have not found any log file for sshd jail"):
+# Debian 12 logs SSH to the journal only, so the jail must read it with the systemd backend.
+# The apps VM (n8n's ops door) is never banned.
+- name: fail2ban reads SSH failures from the journal
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.d/10-homelab.local
+    content: |
+      [DEFAULT]
+      backend = systemd
+      ignoreip = 127.0.0.1/8 ::1 192.168.1.53
+      bantime = 1h
+      findtime = 10m
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: fail2ban running
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
+
+# NFS mounts are v4.2, which needs neither rpcbind (port 111) nor statd; LLMNR (5355) is unused.
+# Both answered the whole LAN.
+- name: rpcbind off (NFSv4 doesn't use it)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop: [rpcbind.socket, rpcbind.service]
+
+- name: resolved drop-in folder
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: "0755"
+
+- name: No LLMNR or mDNS from systemd-resolved
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/10-no-llmnr.conf
+    content: |
+      [Resolve]
+      LLMNR=no
+      MulticastDNS=no
+    mode: "0644"
+  notify: Restart resolved
 
 - name: IP forwarding for the Tailscale subnet router
   ansible.posix.sysctl:
