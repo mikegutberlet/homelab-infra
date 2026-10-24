@@ -12,7 +12,7 @@
 #   arr-blocklist <sonarr|radarr> <queue id>  blocklist that release and search again
 #   prowlarr-test <indexer id>      test an indexer, which re-enables a backed-off one
 #   docker-prune                    dangling images and build cache only
-#   remount-nas                     re-trigger the NAS automount, then recreate the stack
+#   remount-nas                     re-trigger the NAS automount, then recreate the services that bind it
 #
 # Never: reboot, poweroff, anything under /mnt/nfs, compose pull, settings changes.
 set -uo pipefail
@@ -108,13 +108,30 @@ case "$verb" in
     ;;
 
   remount-nas)
+    [ "${NFS_EXPECTED:-false}" = true ] || die "this VM has no NFS library mount"
     timeout 5 bash -c "</dev/tcp/$NAS_IP/2049" 2>/dev/null || die "NAS does not answer on 2049; nothing to remount"
     log
-    umount -l /mnt/nfs 2>/dev/null; sleep 2; ls /mnt/nfs >/dev/null 2>&1
-    if findmnt -rn -t nfs,nfs4 --mountpoint /mnt/nfs >/dev/null && [ -n "$(ls -A /mnt/nfs 2>/dev/null)" ]; then
-      # Bind mounts inside the containers still point at the old mount: recreate the stacks.
-      for s in ${STACKS:-}; do (cd "/opt/stacks/$s" && docker compose up -d --force-recreate) >/dev/null 2>&1; done
-      out ok "/mnt/nfs remounted and non-empty; stacks recreated: ${STACKS:-none}"
+    umount -l /mnt/nfs 2>/dev/null; sleep 2
+    # A hard mount that hangs again would hang this script too: give the automount 45 s (its own
+    # mount timeout is 30 s), and KILL, since a process stuck on NFS ignores TERM.
+    listing=$(timeout -s KILL 45 ls -A /mnt/nfs 2>/dev/null) || true
+    if findmnt -rn -t nfs,nfs4 --mountpoint /mnt/nfs >/dev/null && [ -n "$listing" ]; then
+      # Bind mounts inside the containers still point at the old mount: recreate only the services
+      # that bind /mnt/nfs (NFS_SERVICES, written by Ansible from the compose files and the
+      # allow-list, so never n8n, a database or anything on ops_never), one stack at a time, without
+      # their dependencies.
+      done_list=""
+      for s in ${STACKS:-}; do
+        svcs=()
+        for pair in ${NFS_SERVICES:-}; do
+          [ "${pair%%/*}" = "$s" ] && grep -qx "$pair" "$ALLOW" 2>/dev/null && svcs+=("${pair#*/}")
+        done
+        [ "${#svcs[@]}" -gt 0 ] || continue
+        (cd "/opt/stacks/$s" && docker compose up -d --no-deps --force-recreate "${svcs[@]}") >/dev/null 2>&1 \
+          || { out failed "/mnt/nfs remounted, but recreating ${svcs[*]} failed"; exit 1; }
+        done_list="$done_list ${svcs[*]}"
+      done
+      out ok "/mnt/nfs remounted and non-empty; recreated:${done_list:- nothing (no service binds /mnt/nfs)}"
     else out failed "/mnt/nfs still not mounted or empty"; fi
     ;;
 

@@ -13,28 +13,53 @@ Per-VM side: Ansible role `ops` (`homelab-agent`, `homelab-ops`).
 
 | Part | Where | Does |
 | --- | --- | --- |
-| `homelab-agent` | every VM, timer `*:0/15` | POSTs the VM's state to `/webhook/homelab/report`: system, disks, NFS and backup mounts, last backup, containers (state, health, restart count), expected services missing, reclaimable Docker space, Sonarr/Radarr health and stuck queue, Prowlarr backoffs, SABnzbd, qBittorrent via gluetun, Tdarr, login and API-key fingerprints for Sonarr/Radarr/Prowlarr/SABnzbd and every stored copy of their keys (agent v2, 2026-10-22; no secret leaves the VM), and on edge Tailscale plus a TLS check of every ts.net name |
+| `homelab-agent` | every VM, every 15 min at a fixed minute (edge :01, media :04, gpu :07, apps :10, ai :12; `ops_report_minute`) | POSTs the VM's state to `/webhook/homelab/report`: system (with swap-in pages), disks (a missing extra disk too), NFS and backup mounts (listed with a 45 s limit, so a hung NAS shows as "hangs" instead of stalling the agent), last backup, containers (state, health, restart count, id), expected services missing, reclaimable Docker space, Sonarr/Radarr health and stuck queue, Prowlarr backoffs, SABnzbd, qBittorrent via gluetun (VPN exit, forwarded port, qB's listen port), Tdarr (with its API key), login and API-key fingerprints for Sonarr/Radarr/Prowlarr/SABnzbd and every stored copy of their keys (no secret leaves the VM), and on edge Tailscale plus a TLS check of every ts.net name (`ops_cert_skip` leaves names out). Agent v3 (2026-10-24) checks each section's JSON on its own: a broken section arrives as null and is named in `errors`, and a report that cannot be built at all still arrives as `{agent_error}` |
 | Evaluate report | n8n | Turns one report into issues (critical / warning / info) with a stable key; keeps the previous report, restart samples and an hourly trend point per VM |
-| Every 15 min + Evaluate infra | n8n | Reads Proxmox (`cluster/resources`, `cluster/status`, node status for swap), TrueNAS (`pool`, `pool/dataset/id/DeepData`, `alert/list`) and Scrutiny (`/api/summary`), and flags VMs that have not reported for 40 min |
-| Decide | n8n | Updates the issue store (first seen, resolved), emails new criticals (then every 6 h while they persist), and plans fixes within the limits |
-| ops door | every VM | `ssh ops@<vm> <verb> <target>`: the key is pinned to `homelab-ops`, which only knows the verbs below and logs every call under `homelab-ops` in the journal |
-| Build digest | n8n, 08:00 Pacific | Needs you, Fixed in the last 24 h, Would have fixed (report-only mode), Resolved since yesterday, For information, Trends, the legacy webhook sections, Quiet |
+| Every 15 min + Evaluate infra | n8n, at :14, :29, :44, :59 (after the five VMs) | Reads Proxmox (`cluster/resources`, `cluster/status`, node status for free memory and swap), TrueNAS (`pool`, `pool/dataset/id/DeepData`, `alert/list`) and Scrutiny (`/api/summary`), flags VMs that have not reported for 40 min, and raises "TrueNAS down" when two or more VMs cannot reach it on 2049 |
+| Decide | n8n | Updates the issue store (first seen, resolved after three clean checks, came-and-went count), emails new criticals (then every 6 h while they persist), plans fixes within the limits and logs them as `started`, then hands the email and the fixes to `/webhook/homelab/act` and finishes. It never waits on SSH |
+| Act | n8n, `/webhook/homelab/act` (chat token, from n8n itself) | Sends the email (and the Telegram push), then runs the fixes one after another through the `ops <vm>` nodes (a follow-up restart waits 60 s first) and posts the answers to `/webhook/homelab/fixresult`. It never touches the issue store |
+| Record fix result | n8n, `/webhook/homelab/fixresult` (chat token) | Marks each fix `ok`, `refused` or `failed`, emails a failed fix of a critical issue and a stop that worked, plans the follow-up restart (gluetun, then qbittorrent), and hands those back to Act |
+| ops door | every VM | `ssh ops@<vm> <verb> <target>`: the key is pinned to `homelab-ops`, which only knows the verbs below, logs every call under `homelab-ops` in the journal, and is cut off after 150 s |
+| Build digest + Digest sent | n8n, 08:00 Pacific | New since yesterday, Still open, Fix attempts in the last 24 h (and whether each issue is still open), Would have fixed (report-only mode), Resolved since yesterday, For information, Trends, the legacy webhook sections, Quiet. A VM that went silent shows one line, not its stale issues. "Digest sent" clears the day's events and resolved records only after the email went out |
 
 ## Fix verbs and limits
 
 | Verb | When | What it does |
 | --- | --- | --- |
-| `restart <service>` | unhealthy in two reports (30 min); expected service not running; gluetun with no VPN exit or no forwarded port (qbittorrent follows 60 s later) | `docker compose restart` if running, else `up -d --no-deps`; only services on `/etc/homelab-ops.allow` |
-| `stop <service>` | 10+ restarts in an hour, after two restart attempts in 24 h | `docker stop`; the email carries the undo line |
+| `restart <service>` | unhealthy in two reports (30 min); expected service missing in two reports in a row (the first one is a warning); gluetun with no VPN exit or no forwarded port (qbittorrent follows 60 s later) | `docker compose restart` if running, else `up -d --no-deps`; only services on `/etc/homelab-ops.allow` |
+| `stop <service>` | 10+ restarts in an hour, after two restart attempts in 24 h | `docker stop`; the email carries the undo line. The service is then **held**: nothing restarts it (the missing-service rule turns into a daily reminder) until you start it yourself and a report sees it running |
 | `arr-retry <app> <id>` | import blocked/pending or failed for 24 h with a "no files found / missing" message | removes the queue item (download kept on disk) and searches again |
 | `arr-blocklist <app> <id>` | 0 bytes after 48 h; **off** until retry has run clean for a week | blocklists the release and searches again |
 | `prowlarr-test <id>` | indexer disabled by backoff and the backoff has expired | re-tests, which re-enables it |
 | `docker-prune` | over 20 GB reclaimable | dangling images and build cache only |
-| `remount-nas` | `/mnt/nfs` empty or unmounted while TrueNAS answers on 2049 | lazy unmount, re-trigger the automount, recreate the stacks |
+| `remount-nas` | `/mnt/nfs` empty or unmounted while TrueNAS answers on 2049 (a mount that hangs is critical but gets no fix: that is the NAS) | lazy unmount, re-trigger the automount, then recreate only the services that use `/mnt/nfs` (and the ones that depend on them), from `NFS_SERVICES` in `/etc/homelab-ops.conf`. n8n, Postgres and the rest of the stack keep running |
 
 Limits: one fix per target per hour, three per day; `ops_never` services (n8n, Postgres, Redis,
 MariaDB, autoheal, tailscale) are never touched. Never: reboot or power off anything, delete
 under `/mnt/nfs`, pull images, change app settings, touch the Tdarr queue.
+
+Fixes run in a separate n8n execution from the one that planned them. n8n saves a workflow's
+memory (static data) whole at the end of an execution, so two executions that overlap overwrite
+each other: before 2026-10-24 a report that waited on SSH could undo the issue updates of every
+report that came in meanwhile. Now a report run takes well under a second, and the VMs report at
+different minutes so two reports rarely overlap. Keep it that way: no Wait or SSH node in a run
+that changes the static data, and no shared report minute.
+
+## Issues: when they open, close and repeat
+
+- An issue resolves after it is missing from **three checks in a row** (`CLEAR_AFTER_RUNS`), so a
+  flapping container does not open and close every 15 minutes. A report with an agent error counts
+  as no check.
+- An issue that comes back within **6 h** (`FLAP_WINDOW_H`) keeps its first-seen time and counts
+  "came and went Nx". It does not email again unless it is critical and the 6 h repeat is due.
+- A fix that failed or was refused is not retried that day; the digest says why ("not retrying:
+  ...") and when the next try is allowed.
+- Stuck Sonarr/Radarr imports are grouped per series or movie and error, one line and one
+  `arr-retry` per group. Health errors count only when two reports in a row show them.
+- Disks warn only when they are past both the percent and the free-space limits
+  (`DISK_WARN_FREE_GB` 15, `DISK_CRIT_FREE_GB` 8), or at 97 %. Swap warns on swap-in activity
+  (`SWAP_IN_WARN_MB` per 15 min), not on how much swap is used. Proxmox memory warns below
+  `PVE_MEM_FREE_WARN_GB` free.
 
 Switches live at the top of `stacks/apps/n8n/sysadmin/settings.js`: `FIXES_ENABLED` (on since
 2026-10-23; false = report-only, the digest shows "would have fixed") and `BLOCKLIST_ENABLED`.
@@ -118,7 +143,7 @@ fixes are switched off and offers only a Dismiss button.
 
 | Switch | Default | Does |
 | --- | --- | --- |
-| `TELEGRAM_ALERTS` | `true` | Every critical email also goes to Telegram: criticals from Decide (at once, then every 6 h while they persist) and failed fixes from Record fix result. Path: "Telegram alert?" then "Telegram push" |
+| `TELEGRAM_ALERTS` | `true` | Every critical email also goes to Telegram: criticals from Decide (at once, then every 6 h while they persist), failed fixes of critical issues and crash-loop stops from Record fix result. Path, in the act run: "Email or fix", "Telegram alert?", "Telegram push" |
 | `TELEGRAM_DIGEST` | `false` | The 08:00 digest also goes to Telegram: "Telegram digest?" then "Telegram digest push" |
 
 The push nodes POST `{subject, text}` to `http://sysadmin-telegram:3004/notify` with the

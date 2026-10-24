@@ -14,5 +14,5 @@ return toolText({
   fixes_that_ran_last_7_days: ran.length ? ran.map(line) : 'none',
   fixes_that_ran_last_hour: ran.filter((f) => now - f.t < H).length,
   planned_but_NOT_run_report_only_mode: planned.map((f) => `${f.n > 1 ? `${f.n}x, last ` : ''}${ago(f.t)} ago ${f.host}: ${f.cmd} [${f.title}]`),
-  resolved_since_digest: (sd.resolved || []).slice(-40).map((r) => `${r.title} (open ${ago(r.first)}, cleared ${fmtT(r.resolved_at)})`),
+  resolved_since_digest: (sd.resolved || []).slice(-40).map((r) => `${r.title} (open ${dur(r.resolved_at - r.first)}, cleared ${fmtT(r.resolved_at)})`),
 });

@@ -3,7 +3,7 @@ const S = SETTINGS;
 const sd = $getWorkflowStaticData('global');
 const order = { critical: 0, warning: 1, info: 2 };
 const issues = Object.values(sd.issues || {}).sort((a, b) => order[a.sev] - order[b.sev] || a.first - b.first)
-  .map((i) => ({ host: i.host, sev: i.sev, title: i.title, detail: i.detail, since: `${fmtT(i.first)} (${ago(i.first)} ago)`, fix_planned: i.fix_planned || undefined, fix_held: i.fix_held || undefined }));
+  .map((i) => ({ host: i.host, sev: i.sev, title: i.title, detail: i.detail, since: `${fmtT(i.first)} (${ago(i.first)} ago)`, came_and_went: i.flaps || undefined, not_seen_last_check: i.miss ? true : undefined, fix_planned: i.fix_planned || undefined, fix_held: i.fix_held || undefined }));
 const reports = {};
 for (const h of S.HOSTS) {
   const r = (sd.last || {})[h];
