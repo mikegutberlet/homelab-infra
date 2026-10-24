@@ -94,7 +94,9 @@ case "$verb" in
   prowlarr-test)
     id=${1:-}; [[ "$id" =~ ^[0-9]+$ ]] || die "indexer id must be a number"
     key=$(arr_key prowlarr); [ -n "$key" ] || die "no API key for prowlarr"
-    body=$(curl -fsS -m 20 -H "X-Api-Key: $key" "http://127.0.0.1:9696/api/v1/indexer/$id" 2>/dev/null) || die "indexer $id not found"
+    # A failed read is "failed", not "refused": n8n holds a refused fix for a day, a failed one is retried.
+    body=$(curl -fsS -m 20 -H "X-Api-Key: $key" "http://127.0.0.1:9696/api/v1/indexer/$id" 2>/dev/null) \
+      || { log "could not read indexer $id"; out failed "could not read indexer $id from Prowlarr"; exit 1; }
     name=$(jq -r '.name' <<<"$body"); log "$id $name"
     if curl -fsS -m 60 -H "X-Api-Key: $key" -H 'Content-Type: application/json' -X POST "http://127.0.0.1:9696/api/v1/indexer/test" -d "$body" >/dev/null 2>&1; then
       out ok "indexer $name tested fine (backoff cleared)"
@@ -109,7 +111,9 @@ case "$verb" in
 
   remount-nas)
     [ "${NFS_EXPECTED:-false}" = true ] || die "this VM has no NFS library mount"
-    timeout 5 bash -c "</dev/tcp/$NAS_IP/2049" 2>/dev/null || die "NAS does not answer on 2049; nothing to remount"
+    # The NAS going quiet between n8n's check and this one is "failed" (retried in an hour), not "refused".
+    timeout 5 bash -c "</dev/tcp/$NAS_IP/2049" 2>/dev/null \
+      || { log "NAS does not answer on 2049"; out failed "NAS does not answer on 2049; nothing to remount"; exit 1; }
     log
     umount -l /mnt/nfs 2>/dev/null; sleep 2
     # A hard mount that hangs again would hang this script too: give the automount 45 s (its own
@@ -119,19 +123,22 @@ case "$verb" in
       # Bind mounts inside the containers still point at the old mount: recreate only the services
       # that bind /mnt/nfs (NFS_SERVICES, written by Ansible from the compose files and the
       # allow-list, so never n8n, a database or anything on ops_never), one stack at a time, without
-      # their dependencies.
-      done_list=""
+      # their dependencies. Only the ones that are up: a stopped one was stopped on purpose (a
+      # crash-loop stop or a chat stop the sysadmin holds), and compose up would start it again.
+      done_list="" left=""
       for s in ${STACKS:-}; do
         svcs=()
         for pair in ${NFS_SERVICES:-}; do
-          [ "${pair%%/*}" = "$s" ] && grep -qx "$pair" "$ALLOW" 2>/dev/null && svcs+=("${pair#*/}")
+          [ "${pair%%/*}" = "$s" ] && grep -qx "$pair" "$ALLOW" 2>/dev/null || continue
+          st=$(docker inspect -f '{{.State.Status}}' "$s-${pair#*/}-1" 2>/dev/null) || st=absent
+          case "$st" in running|restarting) svcs+=("${pair#*/}");; *) left="$left ${pair#*/} ($st)";; esac
         done
         [ "${#svcs[@]}" -gt 0 ] || continue
         (cd "/opt/stacks/$s" && docker compose up -d --no-deps --force-recreate "${svcs[@]}") >/dev/null 2>&1 \
           || { out failed "/mnt/nfs remounted, but recreating ${svcs[*]} failed"; exit 1; }
         done_list="$done_list ${svcs[*]}"
       done
-      out ok "/mnt/nfs remounted and non-empty; recreated:${done_list:- nothing (no service binds /mnt/nfs)}"
+      out ok "/mnt/nfs remounted and non-empty; recreated:${done_list:- nothing}${left:+; left as they were:$left}"
     else out failed "/mnt/nfs still not mounted or empty"; fi
     ;;
 

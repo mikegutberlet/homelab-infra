@@ -23,9 +23,11 @@ const tried = (i) => {
 };
 
 // A VM that went silent: its other issues are as of its last report, so they fold into that line.
-const silent = new Set(S.HOSTS.filter((h) => sd.issues && sd.issues[`infra:silent:${h}`]));
+// One that reports again is not silent, even while its silent issue waits out CLEAR_AFTER_RUNS.
+const reporting = S.HOSTS.filter((h) => sd.last && sd.last[h] && now - sd.last[h].received < S.SILENT_AFTER_MIN * 60e3);
+const silent = new Set(S.HOSTS.filter((h) => sd.issues && sd.issues[`infra:silent:${h}`] && !reporting.includes(h)));
 const frozen = (h) => all.filter((i) => i.host === h).length;
-const issues = all.filter((i) => !silent.has(i.host));
+const issues = all.filter((i) => !silent.has(i.host) && !(i.key.startsWith('infra:silent:') && reporting.includes(i.key.split(':')[2])));
 
 // Needs you: criticals and warnings, the ones that are new since yesterday first.
 const line = (i) => `[${i.sev.toUpperCase()}] ${i.title.slice(0, 200)}\n      ${i.detail}\n      since ${fmtT(i.first)}`
@@ -45,11 +47,13 @@ for (const f of fixed) {
   if (!groups.has(g)) groups.set(g, []);
   groups.get(g).push(f);
 }
-const stillOpen = (f) => f.key && f.key !== 'chat' && sd.issues && sd.issues[f.key];
+// Open and seen in the last check; one that missed a check is clearing (it resolves after CLEAR_AFTER_RUNS).
+const stillOpen = (f) => f.key && f.key !== 'chat' && sd.issues && sd.issues[f.key] && !sd.issues[f.key].miss;
+const clearing = (f) => f.key && f.key !== 'chat' && sd.issues && sd.issues[f.key] && sd.issues[f.key].miss > 0;
 const attempts = [...groups.values()].map((fs) => {
   const l = fs[fs.length - 1];
   const detail = l.detail ? ` (${String(l.detail).replace(/^ok: /, '').slice(0, 200)})` : '';
-  return `${l.host}: ${l.cmd}${fs.length > 1 ? ` ${fs.length}x` : ''} at ${fs.map((f) => `${hm(f.t)} ${st(f)}`).join(', ')}${detail}  [${l.title}]${stillOpen(l) ? '  STILL OPEN' : ''}`;
+  return `${l.host}: ${l.cmd}${fs.length > 1 ? ` ${fs.length}x` : ''} at ${fs.map((f) => `${hm(f.t)} ${st(f)}`).join(', ')}${detail}  [${l.title}]${stillOpen(l) ? '  STILL OPEN' : clearing(l) ? `  not seen since ${hm(sd.issues[l.key].miss_at)}` : ''}`;
 });
 section(`FIX ATTEMPTS IN THE LAST 24 H (${fixed.length})`, attempts);
 const would = (sd.wouldfix || []).filter((f) => f.t > since);
@@ -62,7 +66,7 @@ for (const r of sd.resolved || []) {
   const g = res.get(r.key) || { n: 0 };
   res.set(r.key, { ...r, n: g.n + 1 });
 }
-section(`RESOLVED SINCE YESTERDAY (${res.size})`, [...res.values()].map((r) => `${r.title} (open ${dur(r.resolved_at - r.first)}, cleared ${fmtT(r.resolved_at)}${r.n > 1 || r.flaps ? `; came and went ${Math.max(r.n, r.flaps + 1)}x` : ''})`));
+section(`RESOLVED SINCE YESTERDAY (${res.size})`, [...res.values()].map((r) => `${r.title} (open ${dur(r.resolved_at - r.first)}, cleared ${fmtT(r.resolved_at)}${r.n > 1 || r.flaps ? `; came and went ${Math.max(r.n, (r.flaps || 0) + 1)}x` : ''})`));
 
 // Info-level notes.
 const info = issues.filter((i) => i.sev === 'info');
@@ -97,13 +101,14 @@ for (const e of ev) (evGroups[e.source] = evGroups[e.source] || []).push(e);
 for (const [src, items] of Object.entries(evGroups)) section(`${(names[src] || src).toUpperCase()} (${items.length})`, items.map((e) => `${fmtT(Date.parse(e.t))}  ${e.line}`));
 
 // Quiet: which VMs report and have nothing open.
-const reporting = S.HOSTS.filter((h) => sd.last && sd.last[h] && now - sd.last[h].received < S.SILENT_AFTER_MIN * 60e3);
 const clean = reporting.filter((h) => !open.some((i) => i.host === h));
 text += `QUIET\n  ${reporting.length} of ${S.HOSTS.length} VMs reporting; nothing open on ${clean.join(', ') || 'none of them'}.\n`
   + `  Fixes ${S.FIXES_ENABLED ? `enabled (at most ${S.FIX_PER_HOUR} per target an hour, ${S.FIX_PER_DAY} a day)` : 'report-only'}.\n`;
 
-// Subject: new and open counts; a fix counts as fixed only when its issue is gone.
-const auto = [...groups.values()].map((fs) => fs[fs.length - 1]).filter((f) => f.source !== 'chat' && f.key && f.key !== 'chat');
+// Subject: new and open counts; a fix counts as fixed once its issue is gone or clearing. Per-item
+// stuck keys (<app>-stuck:<id>, before 2026-10-24) were dropped, not resolved, so they do not count.
+const auto = [...groups.values()].map((fs) => fs[fs.length - 1])
+  .filter((f) => f.source !== 'chat' && f.key && f.key !== 'chat' && !/:(sonarr|radarr)-stuck:\d+$/.test(f.key));
 const done = new Set(auto.filter((f) => !stillOpen(f) && fixed.some((x) => x.key === f.key && x.status === 'ok')).map((f) => f.key)).size;
 const notHelped = new Set(auto.filter((f) => stillOpen(f)).map((f) => f.key)).size;
 const crit = open.filter((i) => i.sev === 'critical').length, warn = open.length - crit;

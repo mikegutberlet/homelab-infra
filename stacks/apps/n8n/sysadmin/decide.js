@@ -15,33 +15,36 @@ const active = new Set(issues.map((i) => i.key));
 
 // Resolved: an open key of this scope that this run did not raise counts a miss; after
 // CLEAR_AFTER_RUNS misses in a row it resolves, as of the first miss. A partial report (the agent
-// could not build one) counts no misses. Issues of a VM that is no longer in HOSTS resolve with
-// the next infra run.
+// could not build one) counts no misses. Issues of a VM that is not in HOSTS and has stopped
+// reporting resolve with the next infra run.
+const fresh = (h) => sd.last && sd.last[h] && now - sd.last[h].received < S.SILENT_AFTER_MIN * 60e3;
 for (const [key, it] of Object.entries(sd.issues)) {
-  const gone = scope === 'infra' && it.host !== 'infra' && !S.HOSTS.includes(it.host);
+  const gone = scope === 'infra' && it.host !== 'infra' && !S.HOSTS.includes(it.host) && !fresh(it.host);
   if (!gone) {
     if (it.host !== scope || active.has(key) || partial) continue;
     it.miss = (it.miss || 0) + 1;
     if (!it.miss_at) it.miss_at = now;
     if (it.miss < S.CLEAR_AFTER_RUNS) continue;
   }
-  const rec = { key, title: it.title, sev: it.sev, first: it.first, resolved_at: it.miss_at || now, flaps: it.flaps || 0 };
+  const rec = { key, title: it.title, sev: it.sev, first: it.first, resolved_at: it.miss_at || now, flaps: it.flaps || 0, emailed_at: it.emailed_at || null };
   sd.resolved.push(rec);
   sd.recent[key] = rec;
   delete sd.issues[key];
 }
 sd.resolved = sd.resolved.slice(-200);
 for (const [key, r] of Object.entries(sd.recent)) if (now - r.resolved_at > S.FLAP_WINDOW_H * H) delete sd.recent[key];
+// Chat proposals whose Confirm window passed: pruned here, so a chat question writes nothing.
+if (sd.chat && sd.chat.pending) for (const [k, p] of Object.entries(sd.chat.pending)) if (now - p.t > S.CHAT_CONFIRM_MIN * 60e3) delete sd.chat.pending[k];
 
 // Upsert the active ones. fix_planned and fix_held describe this run only. An issue that resolved
-// less than FLAP_WINDOW_H ago keeps its first-seen time and counts one more flap.
+// less than FLAP_WINDOW_H ago keeps its first-seen time and its last email, and counts one more flap.
 const toEmail = [];
 for (const i of issues) {
   const prev = sd.issues[i.key];
   const back = prev ? null : sd.recent[i.key];
   const it = prev
     ? { ...prev, ...i, first: prev.first, count: (prev.count || 0) + 1, last: now, miss: 0, miss_at: null, fix_planned: null, fix_held: null }
-    : { ...i, first: back ? back.first : now, last: now, count: 1, flaps: back ? (back.flaps || 0) + 1 : 0 };
+    : { ...i, first: back ? back.first : now, last: now, count: 1, flaps: back ? (back.flaps || 0) + 1 : 0, emailed_at: back ? back.emailed_at : null };
   if (back) delete sd.recent[i.key];
   if (i.sev === 'critical' && (!it.emailed_at || now - it.emailed_at > S.EMAIL_REPEAT_H * H)) { toEmail.push(it); it.emailed_at = now; }
   sd.issues[i.key] = it;

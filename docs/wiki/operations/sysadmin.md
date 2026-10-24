@@ -32,7 +32,7 @@ Per-VM side: Ansible role `ops` (`homelab-agent`, `homelab-ops`).
 | `arr-blocklist <app> <id>` | 0 bytes after 48 h; **off** until retry has run clean for a week | blocklists the release and searches again |
 | `prowlarr-test <id>` | indexer disabled by backoff and the backoff has expired | re-tests, which re-enables it |
 | `docker-prune` | over 20 GB reclaimable | dangling images and build cache only |
-| `remount-nas` | `/mnt/nfs` empty or unmounted while TrueNAS answers on 2049 (a mount that hangs is critical but gets no fix: that is the NAS) | lazy unmount, re-trigger the automount, then recreate only the services that use `/mnt/nfs` (and the ones that depend on them), from `NFS_SERVICES` in `/etc/homelab-ops.conf`. n8n, Postgres and the rest of the stack keep running |
+| `remount-nas` | `/mnt/nfs` empty or unmounted while TrueNAS answers on 2049 (a mount that hangs is critical but gets no fix: that is the NAS) | lazy unmount, re-trigger the automount, then recreate only the services that use `/mnt/nfs` (and the ones that depend on them), from `NFS_SERVICES` in `/etc/homelab-agent.conf`, and only the ones that are up: a service that was stopped on purpose stays stopped. n8n, Postgres and the rest of the stack keep running |
 
 Limits: one fix per target per hour, three per day; `ops_never` services (n8n, Postgres, Redis,
 MariaDB, autoheal, tailscale) are never touched. Never: reboot or power off anything, delete
@@ -43,7 +43,10 @@ memory (static data) whole at the end of an execution, so two executions that ov
 each other: before 2026-10-24 a report that waited on SSH could undo the issue updates of every
 report that came in meanwhile. Now a report run takes well under a second, and the VMs report at
 different minutes so two reports rarely overlap. Keep it that way: no Wait or SSH node in a run
-that changes the static data, and no shared report minute.
+that changes the static data, and no shared report minute. One exception is left: a chat run that
+proposes a fix (the model's turn) or runs a confirmed one (the SSH call) writes the static data and
+then waits, so a report that lands in that half-minute can be lost and is redone 15 minutes later.
+Plain questions in the chat write nothing.
 
 ## Issues: when they open, close and repeat
 
@@ -52,7 +55,9 @@ that changes the static data, and no shared report minute.
   as no check.
 - An issue that comes back within **6 h** (`FLAP_WINDOW_H`) keeps its first-seen time and counts
   "came and went Nx". It does not email again unless it is critical and the 6 h repeat is due.
-- A fix that failed or was refused is not retried that day; the digest says why ("not retrying:
+- A fix the ops door refused (not on the allow-list, a bad argument) is not retried for 24 h. A fix
+  that failed (an error, no answer, the NAS gone quiet) is tried again after an hour if the issue
+  is still open, up to three tries in 24 h. The digest says why it is not retrying ("not retrying:
   ...") and when the next try is allowed.
 - Stuck Sonarr/Radarr imports are grouped per series or movie and error, one line and one
   `arr-retry` per group. Health errors count only when two reports in a row show them.

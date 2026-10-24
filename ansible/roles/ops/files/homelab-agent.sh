@@ -372,7 +372,8 @@ edge_json() {
   if [ -n "$tailnet" ] && [ -r /opt/stacks/edge/tsdproxy/apps.yaml ]; then
     certs=$(grep -E '^[a-z0-9-]+:$' /opt/stacks/edge/tsdproxy/apps.yaml | tr -d ':' | while read -r app; do
       [[ " $CERT_SKIP " == *" $app "* ]] && continue
-      local host="$app.$tailnet" exp days ok=false ip why=""
+      # Every name starts clean: a second "local exp" in the same function keeps the previous name's value.
+      local host="$app.$tailnet" exp="" days=null ok=false ip="" why=""
       ip=$(jq -r --arg h "$host." '[.Peer[]? | select(.DNSName == $h and .Online) | .TailscaleIPs[0]] | first // empty' <<<"$ts")
       [ -n "$ip" ] || ip=$(timeout 10 docker exec edge-tailscale-1 nslookup "$host" 100.100.100.100 2>/dev/null | awk '/^Address/ && $2 !~ /100\.100\.100\.100/ {print $2; exit}')
       if [ -z "$ip" ]; then why="not on the tailnet"; else
@@ -391,7 +392,9 @@ edge_json() {
 # Each section goes to a file of its own. One that is not a single valid JSON document becomes null
 # and its name lands in "errors", so one bad section never blanks the whole report; the files go
 # into jq with --slurpfile, so no section counts against the kernel's argument-size limit.
-tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+# The files live on /run (tmpfs): a full root disk must not stop the report that says so.
+tmp=$(mktemp -d -p /run homelab-agent.XXXXXX 2>/dev/null || mktemp -d 2>/dev/null) || tmp=""
+trap '[ -n "$tmp" ] && rm -rf "$tmp"' EXIT
 errors=()
 section() { # name function
   local name=$1; shift
@@ -401,25 +404,33 @@ section() { # name function
     echo null >"$tmp/$name.json"
   fi
 }
-section system host_json; section disks disks_all; section mounts mounts_json; section backup backup_json
-section docker docker_json; section media media_json; section edge edge_json; section logins logins_json
-jq -n '$ARGS.positional' --args "${errors[@]}" >"$tmp/errors.json"
-jq -c -n --arg host "$(hostname)" --argjson ts "$now" --argjson v "$AGENT_VERSION" \
-  --slurpfile system "$tmp/system.json" --slurpfile disks "$tmp/disks.json" --slurpfile mounts "$tmp/mounts.json" \
-  --slurpfile backup "$tmp/backup.json" --slurpfile docker "$tmp/docker.json" --slurpfile media "$tmp/media.json" \
-  --slurpfile edge "$tmp/edge.json" --slurpfile logins "$tmp/logins.json" --slurpfile errors "$tmp/errors.json" \
-  '{host:$host, ts:$ts, agent_version:$v, system:$system[0], disks:$disks[0], mounts:$mounts[0], backup:$backup[0],
-    docker:$docker[0], media:$media[0], logins:$logins[0], edge:$edge[0], errors:$errors[0]}' >"$tmp/report.json" 2>"$tmp/report.err"
-if ! [ -s "$tmp/report.json" ]; then
-  # Still say something: n8n raises "could not build its report" instead of waiting 40 minutes for silence.
-  logger -t homelab-agent "report assembly failed: $(tail -1 "$tmp/report.err")"
-  jq -c -n --arg host "$(hostname)" --argjson ts "$now" --argjson v "$AGENT_VERSION" --arg e "report assembly failed: $(tail -1 "$tmp/report.err" | cut -c1-200)" \
-    '{host:$host, ts:$ts, agent_version:$v, agent_error:$e}' >"$tmp/report.json"
+why="no writable temp folder"
+if [ -n "$tmp" ]; then
+  section system host_json; section disks disks_all; section mounts mounts_json; section backup backup_json
+  section docker docker_json; section media media_json; section edge edge_json; section logins logins_json
+  jq -n '$ARGS.positional' --args "${errors[@]}" >"$tmp/errors.json"
+  jq -c -n --arg host "$(hostname)" --argjson ts "$now" --argjson v "$AGENT_VERSION" \
+    --slurpfile system "$tmp/system.json" --slurpfile disks "$tmp/disks.json" --slurpfile mounts "$tmp/mounts.json" \
+    --slurpfile backup "$tmp/backup.json" --slurpfile docker "$tmp/docker.json" --slurpfile media "$tmp/media.json" \
+    --slurpfile edge "$tmp/edge.json" --slurpfile logins "$tmp/logins.json" --slurpfile errors "$tmp/errors.json" \
+    '{host:$host, ts:$ts, agent_version:$v, system:$system[0], disks:$disks[0], mounts:$mounts[0], backup:$backup[0],
+      docker:$docker[0], media:$media[0], logins:$logins[0], edge:$edge[0], errors:$errors[0]}' >"$tmp/report.json" 2>"$tmp/report.err"
+  why=$(tail -1 "$tmp/report.err" 2>/dev/null | cut -c1-200)
+fi
+if [ -n "$tmp" ] && jq -e 'type == "object"' "$tmp/report.json" >/dev/null 2>&1; then
+  data=@"$tmp/report.json"
+else
+  # Still say something, built in memory: n8n raises "could not build its report" instead of
+  # waiting 40 minutes for silence.
+  logger -t homelab-agent "report assembly failed: ${why:-unknown}"
+  data=$(jq -c -n --arg host "$(hostname)" --argjson ts "$now" --argjson v "$AGENT_VERSION" \
+    --arg e "report assembly failed: ${why:-unknown}; $(df -h --output=avail / 2>/dev/null | tail -1 | tr -d ' ') free on /" \
+    '{host:$host, ts:$ts, agent_version:$v, agent_error:$e}')
 fi
 
 if [ "${1:-}" = "--print" ]; then
-  jq . "$tmp/report.json"
+  if [ "${data:0:1}" = "@" ]; then jq . "${data:1}"; else jq . <<<"$data"; fi
 else
-  curl -fsS -m 20 -X POST -H 'Content-Type: application/json' --data-binary @"$tmp/report.json" "$REPORT_URL" >/dev/null \
+  curl -fsS -m 20 -X POST -H 'Content-Type: application/json' --data-binary "$data" "$REPORT_URL" >/dev/null \
     || logger -t homelab-agent "could not deliver report to $REPORT_URL"
 fi

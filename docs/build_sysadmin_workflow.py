@@ -36,9 +36,10 @@ MAIL_TO = "mikegutberlet@gmail.com"
 # {subject, text} to the allowed chats. Switches: TELEGRAM_ALERTS / TELEGRAM_DIGEST in settings.js.
 TELEGRAM_NOTIFY_URL = "http://sysadmin-telegram:3004/notify"
 # n8n posting to its own webhooks (same container). Decide and Record fix result hand their emails
-# and fixes to homelab/act, and the fix run posts the answer to homelab/fixresult, so no run that
-# saves static data waits on SMTP or SSH (n8n saves the whole static data when a run ends, last
-# writer wins). Both webhooks take the "Sysadmin chat token" header like the chat webhook.
+# and fixes to homelab/act, and the fix run posts the answer to homelab/fixresult, so no report,
+# infra or fix-result run waits on SMTP or SSH (n8n saves the whole static data when a run ends,
+# last writer wins). The chat's propose and confirm paths still write and then wait (the model, the
+# ops door). Both webhooks take the "Sysadmin chat token" header like the chat webhook.
 INTERNAL = "http://127.0.0.1:5678/webhook"
 HOSTS = {"edge": "192.168.1.50", "media": "192.168.1.51", "gpu": "192.168.1.52", "apps": "192.168.1.53", "ai": "192.168.1.54"}
 HOSTS_LIST = list(HOSTS)
