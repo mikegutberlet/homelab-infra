@@ -290,7 +290,8 @@ services:
     environment:
       SCRUTINY_WEB_INFLUXDB_HOST: scrutiny-influx
       # Disk warnings go to the n8n daily digest (shoutrrr generic webhook, plain http).
-      SCRUTINY_NOTIFY_URLS: '["generic://n8n:5678/webhook/homelab/scrutiny?disabletls=yes&template=json"]'
+      # One plain URL: Scrutiny splits this variable on spaces, so a JSON list arrives as a broken URL.
+      SCRUTINY_NOTIFY_URLS: "generic://n8n:5678/webhook/homelab/scrutiny?disabletls=yes&template=json"
     volumes:
       - /opt/appdata/scrutiny/config:/opt/scrutiny/config
     depends_on: [scrutiny-influx]
@@ -306,6 +307,7 @@ services:
     <<: *common
     image: crazymax/diun:4
     command: serve
+    hostname: apps # Diun names the host it watches by its own hostname (else the container id)
     environment:
       TZ: ${TZ}
       DIUN_WATCH_SCHEDULE: "0 */6 * * *"
@@ -313,6 +315,7 @@ services:
       DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT: "true"
       DIUN_NOTIF_WEBHOOK_ENDPOINT: http://n8n:5678/webhook/homelab/diun # daily digest (n8n)
       DIUN_NOTIF_WEBHOOK_METHOD: POST
+      DIUN_NOTIF_WEBHOOK_HEADERS_CONTENT-TYPE: application/json # Diun sets none; n8n then sees an empty body
     volumes:
       - /opt/appdata/diun:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro

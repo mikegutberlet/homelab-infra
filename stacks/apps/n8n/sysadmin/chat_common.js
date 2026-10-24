@@ -5,9 +5,11 @@
 const CHAT_VERBS = { restart: 'service', stop: 'service', 'arr-retry': 'arr', 'arr-blocklist': 'arr', 'prowlarr-test': 'id', 'docker-prune': 'none', 'remount-nas': 'none' };
 const reply = (text, extra) => [{ json: { route: 'reply', reply: { text, ...(extra || {}) } } }];
 const chatStore = (sd) => {
-  sd.chat = sd.chat || { next: 1, pending: {} }; sd.chat.pending = sd.chat.pending || {};
-  // Drop proposals whose Confirm window has passed (abandoned chat tabs), so the store does not grow.
-  for (const [k, p] of Object.entries(sd.chat.pending)) if (now - p.t > SETTINGS.CHAT_CONFIRM_MIN * 60e3) delete sd.chat.pending[k];
+  // Assign only what is missing: any write marks static data as changed, and n8n then saves the
+  // whole store when this (slow) chat run ends, over whatever the VM reports wrote meanwhile.
+  // Expired proposals (abandoned chat tabs) are pruned by Decide, in a short run.
+  if (!sd.chat) sd.chat = { next: 1, pending: {} };
+  if (!sd.chat.pending) sd.chat.pending = {};
   return sd.chat;
 };
 
