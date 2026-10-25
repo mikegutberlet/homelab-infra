@@ -1,24 +1,42 @@
 // Shared by the chat nodes (pasted after settings.js). The chat page (stacks/apps/sysadmin-chat)
 // posts {message, sessionId} or {confirm, sessionId} / {cancel, sessionId}. The agent only ever
-// proposes a fix through the propose_fix tool; checkFix() is the gate, run when the proposal is
-// made and again when Goobs presses Confirm.
+// proposes a fix through the propose_fix tool; checkFix() is the gate, run when the model proposes
+// (so it hears at once), when Chat state registers the proposal, and again when Goobs presses Confirm.
+// The chat run waits on the model and the ops door, so it never writes static data (n8n would save
+// the whole store when it ends, over whatever the VM reports wrote meanwhile): proposals and
+// Confirm/Cancel go to the short homelab/chatstate run (chat_state.js), the fix's answer to
+// homelab/fixresult (record_fix.js).
 const CHAT_VERBS = { restart: 'service', stop: 'service', 'arr-retry': 'arr', 'arr-blocklist': 'arr', 'prowlarr-test': 'id', 'docker-prune': 'none', 'remount-nas': 'none' };
 const reply = (text, extra) => [{ json: { route: 'reply', reply: { text, ...(extra || {}) } } }];
+// Only Chat state (the chatstate run) calls this; it creates what is missing. Expired proposals
+// (abandoned chat tabs) are pruned by Decide.
 const chatStore = (sd) => {
-  // Assign only what is missing: any write marks static data as changed, and n8n then saves the
-  // whole store when this (slow) chat run ends, over whatever the VM reports wrote meanwhile.
-  // Expired proposals (abandoned chat tabs) are pruned by Decide, in a short run.
   if (!sd.chat) sd.chat = { next: 1, pending: {} };
   if (!sd.chat.pending) sd.chat.pending = {};
   return sd.chat;
 };
+// A session id is a key of sd.chat.pending: names every object has (constructor, toString, ...)
+// would reach Object.prototype instead of a proposal, so they become 'default' too. __proto__ is
+// named on its own: n8n's task runner deletes Object.prototype.__proto__ (node --disable-proto),
+// and n8n's main process drops such a key between runs.
+const chatSession = (v) => { const s = String(v || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64); return s && s !== '__proto__' && !(s in Object.prototype) ? s : 'default'; };
+// The model's propose_fix input {host, verb, args, reason}, cleaned the same way wherever it is read.
+const proposalInput = (q) => {
+  const o = q && typeof q === 'object' ? q : {};
+  const args = Array.isArray(o.args) ? o.args.slice(0, 8).map((x) => String(x).slice(0, 100)) : o.args ? String(o.args).slice(0, 200) : [];
+  return { host: String(o.host || '').trim(), verb: String(o.verb || '').trim(), args, reason: String(o.reason || '').slice(0, 200) };
+};
+// How propose_fix's answer starts when the fix passed checkFix; Chat finish looks for it.
+const PROPOSAL_OK = 'Proposal registered:';
+const notRegistered = (why) => `The fix could not be registered, so there is no Confirm button: ${why}. Ask again if it is still needed.`;
 
 // p = {host, verb, args[]} -> {host, verb, target, tkey, cmd} or {error}. Same command shapes,
 // never-list and per-target counters as the automatic fixes (decide.js).
 function checkFix(sd, p) {
   const S = SETTINGS;
   if (!p || !S.HOSTS.includes(p.host)) return { error: `unknown VM "${p && p.host}"` };
-  const kind = CHAT_VERBS[p.verb];
+  // Own keys only: Chat state passes the posted verb straight in, and CHAT_VERBS.constructor exists.
+  const kind = Object.prototype.hasOwnProperty.call(CHAT_VERBS, p.verb) ? CHAT_VERBS[p.verb] : null;
   if (!kind) return { error: `"${p.verb}" is not one of the safe fixes` };
   if (p.verb === 'arr-blocklist' && !S.BLOCKLIST_ENABLED) return { error: 'arr-blocklist stays off until arr-retry has run clean for a week' };
   const a = (Array.isArray(p.args) ? p.args : String(p.args || '').split(/\s+/)).map((x) => String(x).trim()).filter(Boolean);

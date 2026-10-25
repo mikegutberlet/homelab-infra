@@ -17,8 +17,9 @@ Per-VM side: Ansible role `ops` (`homelab-agent`, `homelab-ops`).
 | Evaluate report | n8n | Turns one report into issues (critical / warning / info) with a stable key; keeps the previous report, restart samples and an hourly trend point per VM |
 | Every 15 min + Evaluate infra | n8n, at :14, :29, :44, :59 (after the five VMs) | Reads Proxmox (`cluster/resources`, `cluster/status`, node status for free memory and swap), TrueNAS (`pool`, `pool/dataset/id/DeepData`, `alert/list`) and Scrutiny (`/api/summary`), flags VMs that have not reported for 40 min, and raises "TrueNAS down" when two or more VMs cannot reach it on 2049 |
 | Decide | n8n | Updates the issue store (first seen, resolved after three clean checks, came-and-went count), emails new criticals (then every 6 h while they persist), plans fixes within the limits and logs them as `started`, then hands the email and the fixes to `/webhook/homelab/act` and finishes. It never waits on SSH |
-| Act | n8n, `/webhook/homelab/act` (chat token, from n8n itself) | Sends the email (and the Telegram push), then runs the fixes one after another through the `ops <vm>` nodes (a follow-up restart waits 60 s first) and posts the answers to `/webhook/homelab/fixresult`. It never touches the issue store |
-| Record fix result | n8n, `/webhook/homelab/fixresult` (chat token) | Marks each fix `ok`, `refused` or `failed`, emails a failed fix of a critical issue and a stop that worked, plans the follow-up restart (gluetun, then qbittorrent), and hands those back to Act |
+| Act | n8n, `/webhook/homelab/act` (internal token, from n8n itself) | Sends the email (and the Telegram push), then runs the fixes one after another through the `ops <vm>` nodes (a follow-up restart waits 60 s first) and posts the answers to `/webhook/homelab/fixresult`. It never touches the issue store |
+| Record fix result | n8n, `/webhook/homelab/fixresult` (internal token) | Marks each fix `ok`, `refused` or `failed`, emails a failed fix of a critical issue and a stop that worked, plans the follow-up restart (gluetun, then qbittorrent), and hands those back to Act. A fix confirmed in chat is only marked (and a failed chat stop drops any hold); the chat has already given the answer |
+| Chat state | n8n, `/webhook/homelab/chatstate` (internal token, from n8n itself) | The chat's only writer, in a run of its own that answers at once: numbers a fix the agent proposed and parks it with the chat session, and claims a Confirm or Cancel (re-checks it, logs a confirmed fix as `started` and holds a confirmed stop) |
 | ops door | every VM | `ssh ops@<vm> <verb> <target>`: the key is pinned to `homelab-ops`, which only knows the verbs below, logs every call under `homelab-ops` in the journal, and is cut off after 150 s |
 | Build digest + Digest sent | n8n, 08:00 Pacific | New since yesterday, Still open, Fix attempts in the last 24 h (and whether each issue is still open), Would have fixed (report-only mode), Resolved since yesterday, For information, Trends, the legacy webhook sections, Quiet. A VM that went silent shows one line, not its stale issues. "Digest sent" clears the day's events and resolved records only after the email went out |
 
@@ -43,10 +44,18 @@ memory (static data) whole at the end of an execution, so two executions that ov
 each other: before 2026-10-24 a report that waited on SSH could undo the issue updates of every
 report that came in meanwhile. Now a report run takes well under a second, and the VMs report at
 different minutes so two reports rarely overlap. Keep it that way: no Wait or SSH node in a run
-that changes the static data, and no shared report minute. One exception is left: a chat run that
-proposes a fix (the model's turn) or runs a confirmed one (the SSH call) writes the static data and
-then waits, so a report that lands in that half-minute can be lost and is redone 15 minutes later.
-Plain questions in the chat write nothing.
+that changes the static data, and no shared report minute. The chat follows the same rule since
+2026-10-24: its run waits on the model (10-60 s) or on a confirmed fix (up to 150 s) and writes
+nothing. A proposal and a Confirm or Cancel go to Chat state (`/webhook/homelab/chatstate`, a short
+run), and a confirmed fix's answer goes to `/webhook/homelab/fixresult` like an automatic fix's.
+`docs/build_sysadmin_workflow.py` stops with an error when a Code node of the chat run writes to the
+static data. Two runs still read the static data, wait, then write: the 15-minute infra run (its
+Proxmox, TrueNAS and Scrutiny reads come first; normally 1-3 s, up to about 2 minutes when reads time
+out) and the 08:00 digest (the Telegram push and the email come before "Digest sent"). A report or
+chat write that lands in that window is lost: a report is redone 15 minutes later; a lost chat write
+can bring a used proposal back (its buttons are already gone, and it expires) or drop a confirmed
+fix's log entry and hold (the fix's answer logs it again and an `ok` stop is held again, unless that
+write lands in the same window).
 
 ## Issues: when they open, close and repeat
 
@@ -82,11 +91,19 @@ token), `stacks/apps/n8n/sysadmin/chat_*.js`, `tool_*.js`, `opsdoor_*.js`.
 | Sysadmin agent (n8n AI Agent, Claude Haiku 5.5, falling back to Gemini Flash on the same key as Open WebUI) | Answers from tools, never from memory alone: `lab_overview` (open issues, when each VM reported, pool space), `vm_report` (one VM's latest 15-minute report), `recent_fixes`, `ops_lookup` (live `status` or `logs <service>` through the ops door), `propose_fix` |
 | Homelab ops door (second, small workflow) | Host switch plus one SSH node per VM; used by the agent's lookups and by confirmed fixes, so the SSH nodes exist once |
 | Chat memory | Per browser tab ("New chat" starts a fresh one), last 10 turns |
-| Confirm / Cancel | A proposed fix is parked for 15 minutes with the chat session; the Confirm button posts it back and plain code re-checks it (same verbs, never-list and per-target counters as the automatic fixes, plus `CHAT_FIX_PER_HOUR` / `CHAT_FIX_PER_DAY`), logs it in the fix log (the digest's "Fixed" section) and runs it through the ops door. The model never runs anything |
+| Confirm / Cancel | `propose_fix` only checks a fix (same verbs, never-list and per-target counters as the automatic fixes, plus `CHAT_FIX_PER_HOUR` / `CHAT_FIX_PER_DAY`), so the model hears at once whether it is allowed. When the agent has answered, Chat state checks the last allowed one again, numbers it and parks it for 15 minutes with the chat session; then the page shows Confirm and Cancel. Proposal numbers are seconds since 2026-10-01, so a number is never handed out twice. The Confirm button posts it back, and Chat state claims it, re-checks it and logs it in the fix log (the digest's "Fixed" section) as `started`; a stop is held from then on. The chat run then runs it through the ops door, answers ("Done: ..." or "That did not work: ..."), and posts the door's answer to Record fix result, which marks the entry `ok`, `refused` or `failed`. It sends no email for a chat fix, and a stop confirmed in chat is held like an automatic one. The model never runs anything |
 
 Switches in `settings.js`: `CHAT_FIXES_ENABLED` (false = the chat proposes fixes but Confirm does
 nothing; independent of `FIXES_ENABLED`, which gates the automatic fixes), `CHAT_FIX_PER_HOUR`,
 `CHAT_FIX_PER_DAY`, `CHAT_CONFIRM_MIN`. The model name is `CHAT_MODEL` in `docs/build_sysadmin_workflow.py`.
+
+Two answers mean the chat could not reach Chat state (n8n restarting, or the internal call timed
+out: 15 s for a proposal, 60 s for a Confirm or Cancel): "I could not reach the sysadmin's store, so
+nothing was run" after a Confirm, and "The fix could not be registered, so there is no Confirm
+button: ..." after a proposal (also when the second check refuses it, for example because a limit was
+reached during the agent's turn). Ask again. Look at n8n > Executions for the `chatstate` webhook.
+When the agent fails ("The agent failed: ..."), a fix it proposed in that turn is dropped too (no
+Confirm button), even if `propose_fix` allowed it; ask again.
 
 Prompt injection: container logs and app names pass through the model, so a log line could try to
 talk it into something. It can only read and propose; nothing runs without your Confirm, and the
@@ -132,13 +149,15 @@ answer"). Ask again, and use `/fixes` to see whether a confirmed fix ran.
 **Confirm buttons.** A proposed fix arrives as its own message: "Proposed fix: `<cmd>` on `<host>`",
 the reason, "Expires in 15 min" (`CHAT_CONFIRM_MIN`), and Confirm and Cancel buttons. When you
 press one, the buttons disappear and the message gets "Confirmed at HH:MM" (Pacific) or "Cancelled".
-The result ("Done: ...", "That did not work: ...", "Cancelled: ...", "Proposal n is gone ...") comes
-as a new message. A second press of the same message only gets "Already handled". The bot keeps
-each proposal's session in `state.json`, so Confirm still works after `/new`. A newer proposal in
+The result ("Done: ...", "That did not work: ...", "Cancelled: ...", "Proposal n is gone ...", or
+"I could not reach the sysadmin's store, so nothing was run") comes as a new message. A second
+press of the same message only gets "Already handled". The bot keeps each proposal's session in
+`state.json`, so Confirm still works after `/new`. A newer proposal in
 the same conversation removes the older message's buttons ("Replaced by proposal n"). A press on a
-message the bot no longer knows (over a day old, after a lost `state.json`, or a proposal number
-reused after a workflow re-import) only removes its buttons ("This proposal is gone; ask again")
-and never reaches n8n.
+message the bot no longer knows (over a day old, or after a lost `state.json`) only removes its
+buttons ("This proposal is gone; ask again") and never reaches n8n. (The bot also refuses a press
+whose number now belongs to another message; n8n no longer hands a number out twice, not even after
+a workflow re-import.)
 Everything else works the same as on the page: the workflow parks one proposal per session for
 `CHAT_CONFIRM_MIN`, a newer proposal replaces it, and the code re-checks the verb, the never-list
 and the limits when you press Confirm. While `CHAT_FIXES_ENABLED` is false, the message says chat
@@ -269,6 +288,7 @@ message (see the log), and a 401 means the token did not match.
 | Anthropic API key | Anthropic, read by the deploy script from the Mac's `~/.config/homelab/anthropic_api_key` | the chat agent's model (Claude Haiku 5.5) |
 | Gemini API key | Google Gemini (PaLM) API, the ai stack's `LLM_API_KEY` | the chat agent's fallback model (Gemini Flash) |
 | Sysadmin chat token | Header Auth `X-Chat-Token`, made by the deploy script and kept in `/opt/appdata/sysadmin-chat/token.env` on the apps VM | the chat webhook (chat page and Telegram bot), "Telegram push" and "Telegram digest push" (the bot's `/notify` checks it) |
+| Sysadmin internal token | Header Auth `X-Internal-Token`, made new by every deploy run and kept only in n8n | the internal `act`, `fixresult` and `chatstate` webhooks and the nodes that post to them (n8n calls them itself). Separate from the chat token, so the chat page or the bot (or a leaked `token.env`) cannot ask Act to run a fix or send mail |
 | ops edge / media / gpu / apps / ai | SSH private key, user `ops`, host `192.168.1.5x` | the five `ops <vm>` nodes |
 | Proxmox API token | Header Auth, `Authorization: PVEAPIToken=homepage@pve!homepage=<secret>` | PVE nodes |
 | TrueNAS API key | Header Auth, `Authorization: Bearer <key>` | NAS nodes |
