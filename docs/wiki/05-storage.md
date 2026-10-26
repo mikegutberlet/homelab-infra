@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| System | TrueNAS SCALE 23.10.2 (end of life; an upgrade is a separate, pending step) in VM 110 on RicksGarage |
+| System | TrueNAS 25.10.7 (upgraded from 23.10.2 on 2026-10-26) in VM 110 on RicksGarage |
 | Pool | `DeepData`, RAIDZ1 over five 20 TB Seagate Exos drives presented as virtual disks from a USB DAS |
 | Space | 54.2 TB used / 18.3 TB free on 2026-10-21 (about 75 to 80% full) |
 | Snapshots | **None, by Goobs's choice** (2026-10-21): the pool is too full to hold them, and accidental loss is an accepted risk. The firm rule in exchange is that nothing is ever deleted on purpose |

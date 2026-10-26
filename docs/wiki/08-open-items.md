@@ -52,7 +52,6 @@ Everything that is pending, waiting on a decision, or known but not yet verified
 | Backups have a single copy (on the NAS) and no whole-VM images | A pool loss takes the backups with it | Proxmox Backup Server and an off-site copy, per the design's next steps |
 | NFS export is open to the whole `192.168.1.0/24` | Any LAN device can mount the share | Tighten to `192.168.1.50-54` and the hosts |
 | `Photos` has no second copy | Phone backups now land there via Immich | Part of the off-site decision |
-| TrueNAS SCALE 23.10.2 is past its support window | Security updates stop | Plan an upgrade; needs a NAS restart with Goobs's OK |
 | TrueNAS VM vCPU count | Not recorded in the repo (managed by hand) | Record it `(unverified)` |
 | Stale Tailscale nodes from the old VMs | Clutter and leftover keys | Remove in the Tailscale admin console |
 | Tailscale reusable key expiry (about **2027-01-19**) | TSDProxy can no longer register new names after that; existing ones keep working for a while | Rotation steps in [Access and credentials](operations/access-and-credentials.md) |

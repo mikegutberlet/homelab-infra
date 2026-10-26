@@ -43,7 +43,7 @@ flowchart TB
 
 | VM | Host | IP | vCPU / RAM / disk | Stack contents | Needs the NAS |
 | --- | --- | --- | --- | --- | --- |
-| truenas (110) | RicksGarage | 192.168.1.209 | 6 (unverified) / 16 GB fixed / unchanged | TrueNAS SCALE 23.10.2, pool DeepData, NFS | is the NAS |
+| truenas (110) | RicksGarage | 192.168.1.209 | 6 (unverified) / 16 GB fixed / unchanged | TrueNAS 25.10.7, pool DeepData, NFS | is the NAS |
 | edge (201) | RicksGarage | 192.168.1.50 | 2 / 3 GB / 32 GB | Traefik, Authentik (server, worker, Postgres, Redis), TSDProxy, Tailscale subnet router, Docker socket proxy, autoheal. wg-easy defined but not started | no |
 | media (202) | RicksGarage | 192.168.1.51 | 4 / 6 GB (balloon floor 5 GB) / 64 GB | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd, gluetun + qBittorrent, Recyclarr, Jellyseerr, MeTube, Storyteller, Audiobookshelf, RomM + MariaDB, autoheal | yes |
 | gpu (203) | RicksShip | 192.168.1.52 | 6 / 10 GB / 96 GB + iGPU passthrough | Plex, Emby, ErsatzTV, Immich (server, ML, Postgres, Valkey), Tdarr, Unmanic, autoheal | yes |
