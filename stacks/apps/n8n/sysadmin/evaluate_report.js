@@ -46,6 +46,15 @@ if (sys.reboot_required) add('reboot-required', 'info', `${host}: a kernel or li
 if (sys.pending_updates > 0) add('updates', 'info', `${host}: ${sys.pending_updates} package update(s) pending`, 'unattended-upgrades installs security fixes; the rest wait for apt upgrade');
 if (sys.clock_synced === false) add('clock', 'warning', `${host}: clock not NTP-synced`, 'Certificates and Tailscale depend on correct time');
 
+// ---- kernel (2026-10-23: a kernel BUG in NFS writeback froze a Tdarr copy, and a day later the
+// Plex scanner that touched the same file; Plex looked up but its library and restarts hung) ----
+const kn = r.kernel || null;
+if (kn && kn.oopsed) add('kernel-oops', 'critical', `${host}: the kernel crashed since boot`, `${kn.last_oops || 'taint flag D is set'}. Processes it was serving can hang for good; restart the VM from Proxmox when you can (qm reboot, or qm stop + start if it hangs)`);
+// A D-state process seen in two reports in a row (15+ minutes) is stuck, not busy. what = ps lstart (5 words) + name.
+const prevStuck = new Set(((prev && prev.kernel && prev.kernel.stuck) || []).map((p) => `${p.pid} ${p.what}`));
+const stuckNow = ((kn && kn.stuck) || []).filter((p) => prevStuck.has(`${p.pid} ${p.what}`));
+if (stuckNow.length) add('stuck-io', 'critical', `${host}: ${stuckNow.length} process(es) stuck in uninterruptible I/O`, `${stuckNow.slice(0, 5).map((p) => { const w = p.what.split(' '); return `${w.slice(5).join(' ')} (pid ${p.pid}, since ${w.slice(1, 4).join(' ')})`; }).join('; ')}. Usually a hung NAS write; they cannot be killed, and a container that holds one cannot restart. If the NAS answers, only a VM restart clears it`);
+
 // ---- disks and mounts ----
 for (const d of r.disks || []) {
   if (d.missing) { add(`disk-missing:${d.mount}`, 'critical', `${host}: ${d.mount} is not mounted`, 'Its disk did not come back after a restart; whatever writes there now fills the system disk (/etc/fstab, lsblk)'); continue; }
@@ -225,6 +234,29 @@ if (md.tdarr) {
       if (t.queued > 0 && !(t.nodes || []).every((n) => n.paused) && idle > S.TDARR_IDLE_H) add('tdarr-idle', 'warning', `Tdarr: no file finished in ${Math.round(idle)} scheduled hours with ${t.queued} queued`, 'Workers may be stuck (the 17:00-23:00 pause is not counted); check the Tdarr node page');
     }
   }
+}
+
+// ---- Plex: can apps outside the LAN find it? (gpu only; the agent sends plex where Plex runs) ----
+// 2026-10-25: Remote Access had been off since the Oct 21 power cut. plex.tv refused Plex's
+// check-ins and then stopped listing it, so the Roku (which finds servers through plex.tv)
+// showed nothing while the container stayed healthy and Kuma's LAN probe stayed green.
+const px = r.plex;
+if (px && px.answering) {
+  const pp = (prev && prev.plex) || {};
+  const on = S.PLEX_REMOTE ? { verb: 'plex-remote-on', target: 'plex' } : null;
+  if (!px.token || (px.sign_in && px.sign_in !== 'ok')) add('plex-signin', 'critical', `Plex is signed out of plex.tv (${px.sign_in || 'no token'})`, 'Apps cannot find it or log in; sign in again from Plex Web on the LAN (http://192.168.1.52:32400/web > Settings > General). Nothing is fixed from here');
+  else if (S.PLEX_REMOTE && px.publish === false) add('plex-remote', 'critical', 'Plex Remote Access is switched off', 'plex.tv stops listing the server after a while, and then the Roku and other apps cannot find it, at home too', on);
+  // One plex.tv answer without the server can be a blip: critical (and a re-publish) from the second.
+  else if (px.listed === false && pp.listed !== false) add('plex-listed', 'warning', 'plex.tv does not list Plex (Tahoe) as a server', 'Apps that find servers through plex.tv see nothing; re-published if it is still missing at the next check');
+  else if (px.listed === false) add('plex-listed', 'critical', 'plex.tv does not list Plex (Tahoe) as a server', 'The Roku and other apps that find servers through plex.tv see nothing', on);
+  // A device Plex keeps turning away (401) holds a sign-in plex.tv no longer issues; only signing out
+  // and in on that device fixes it (the Roku, 2026-10-25). Three or more in two reports in a row,
+  // so one wrong PIN is not a warning. 127.0.0.1 is a remote app coming in through the Plex relay.
+  const wasRefused = new Set((pp.refused || []).filter((x) => x.n >= 3).map((x) => x.ip));
+  for (const x of (px.refused || []).filter((y) => y.n >= 3 && wasRefused.has(y.ip)))
+    add(`plex-refused:${x.ip}`, 'warning', `Plex keeps refusing ${x.ip === '127.0.0.1' ? 'a remote app (through the relay)' : `the device at ${x.ip}`} (${x.n} times in 15 min)`, 'It holds a Plex sign-in that plex.tv no longer issues. In that device\'s Plex app: Settings > Sign out, then sign in again with the code at plex.tv/link');
+  // The forward on the router cannot help behind carrier NAT (seen 2026-10-25, router WAN 100.82.x).
+  if (S.PLEX_REMOTE && px.publish && px.mapping_error) add('plex-nat', 'info', `Plex is not reachable directly from outside the house (${px.mapping_error})`, px.mapping_error === 'doublenat' ? 'The router itself sits behind another NAT (carrier NAT or a second router), so the 6996 forward cannot work; remote apps fall back to the slow Plex relay. At home and over Tailscale it is fine' : 'Remote apps fall back to the slow Plex relay; check the 6996 forward on the router');
 }
 
 // ---- logins and API keys (agent v2; fingerprints only) ----

@@ -2,7 +2,7 @@
 # Reporter for the n8n "Homelab sysadmin" workflow. Collects this VM's facts every 15 minutes
 # and POSTs one JSON document to n8n. Read-only: nothing here restarts, deletes or changes
 # anything. App API keys are read from the app's own config under /opt/appdata and used only
-# against localhost; they never leave this VM.
+# against localhost (Plex's token also against plex.tv, its issuer); they never reach n8n.
 #
 # Usage: homelab-agent [--print]     (--print writes the report to stdout instead of n8n)
 set -uo pipefail
@@ -71,6 +71,23 @@ host_json() {
       mem:{total:$mt, available:$ma, used_pct:(if $mt>0 then (100*($mt-$ma)/$mt|floor) else 0 end)},
       swap:{total:$st, used:($st-$sf), pswpin:$si, pswpout:$so},
       reboot_required:$rr, pending_updates:$pu, clock_synced:($co==0)}'
+}
+
+# ---------- kernel: crashed since boot? processes stuck in uninterruptible I/O? ----------
+# 2026-10-23 08:38 the gpu kernel hit a BUG in NFS writeback ("list_del corruption"). A Tdarr copy
+# to the NAS and, a day later, a Plex scan that touched the same file froze in D state for good;
+# nothing can kill them and only a VM restart clears it. Taint bit 128 (D) = an oops since boot.
+# stuck: D-state processes (pid, start time, name); n8n flags the ones it saw in the last report too.
+kernel_json() {
+  local tainted oops stuck
+  tainted=$(cat /proc/sys/kernel/tainted 2>/dev/null || echo 0)
+  oops=$(journalctl -k -b --no-pager -o short-iso 2>/dev/null \
+    | grep -E 'kernel BUG|Oops|list_(add|del) corruption|general protection fault|blocked for more than [0-9]+ seconds' \
+    | grep -v 'traps:' | tail -1 | cut -c1-200)   # traps: = a user program's crash, not the kernel's
+  stuck=$(ps -eo pid=,stat=,lstart=,comm= 2>/dev/null | awk '$2 ~ /^D/ {pid=$1; $1=$2=""; sub(/^ +/,""); printf "%s\t%s\n", pid, $0}' \
+    | jq -R -s -c 'split("\n") | map(select(length>0) | split("\t") | {pid:(.[0]|tonumber), what:.[1]}) | .[0:20]')
+  j -n --argjson t "$(num "$tainted")" --arg o "$oops" --argjson s "${stuck:-[]}" \
+    '{tainted:$t, oopsed:(($t / 128 | floor) % 2 == 1), last_oops:(if $o=="" then null else $o end), stuck:$s}'
 }
 
 # ---------- disks and mounts ----------
@@ -260,6 +277,52 @@ media_json() {
     '{sonarr:$s, radarr:$r, prowlarr:$p, sabnzbd:$sab, qbittorrent:$qb, tdarr:$t} | with_entries(select(.value != null))'
 }
 
+# ---------- Plex: can apps outside the LAN find it? ----------
+# 2026-10-25: Plex answered on the LAN for days while its Remote Access switch was off; plex.tv
+# refused its check-ins (422) and then stopped listing it as a server, so the Roku and every app
+# that finds servers through plex.tv showed nothing. The health check and Kuma stayed green.
+# The token is Plex's own (Preferences.xml); it goes only to Plex on localhost and to plex.tv,
+# which issued it.
+plex_json() {
+  local prefs="$APPDATA/plex/Library/Application Support/Plex Media Server/Preferences.xml"
+  [ -r "$prefs" ] || { echo null; return; }
+  local tok ident acct pset res
+  tok=$(sed -n 's/.*PlexOnlineToken="\([^"]*\)".*/\1/p' "$prefs" | head -1)
+  ident=$(get -H 'Accept: application/json' http://127.0.0.1:32400/identity)
+  if [ -n "$tok" ]; then
+    local h=(-H 'Accept: application/json' -H "X-Plex-Token: $tok")
+    acct=$(get "${h[@]}" http://127.0.0.1:32400/myplex/account)
+    pset=$(get "${h[@]}" 'http://127.0.0.1:32400/:/prefs')
+    res=$(get "${h[@]}" -H 'X-Plex-Client-Identifier: homelab-agent' 'https://plex.tv/api/v2/resources')
+  else acct='{}'; pset='{}'; res='{}'; fi
+  # Devices Plex turned away (401) in the last 15 minutes, by address. A device that holds a
+  # sign-in plex.tv no longer issues (the Roku, 2026-10-25) keeps knocking and gets nothing.
+  local logf="${prefs%/Preferences.xml}/Logs/Plex Media Server.log" refused='[]'
+  if [ -r "$logf" ]; then
+    refused=$(tail -n 200000 "$logf" | awk -v since="$(date -d '15 min ago' '+%Y%m%d%H%M%S')" '
+      BEGIN { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", m, " "); for (i in m) mon[m[i]] = sprintf("%02d", i) }
+      /Completed: \[/ && / 401 / {
+        d = $2; sub(",", "", d); t = $4; gsub(/[:.]/, "", t)
+        if ($3 mon[$1] sprintf("%02d", d) substr(t, 1, 6) < since) next
+        ip = $0; sub(/.*Completed: \[/, "", ip); sub(/\].*/, "", ip); sub(/:[0-9]+$/, "", ip); n[ip]++ }
+      END { for (ip in n) printf "%s\t%d\n", ip, n[ip] }' \
+      | jq -R -s -c 'split("\n") | map(select(length>0) | split("\t") | {ip:.[0], n:(.[1]|tonumber)}) | sort_by(-.n) | .[0:5]')
+  fi
+  # listed: plex.tv has this server (by machine id) as one that provides "server"; null when
+  # plex.tv or Plex did not answer.
+  printf '%s\n%s\n%s\n%s\n' "$ident" "$acct" "$pset" "$res" | jq -c -s --argjson tok "$([ -n "$tok" ] && echo true || echo false)" --argjson refused "${refused:-[]}" '
+    .[0].MediaContainer.machineIdentifier as $id | (.[1].MyPlex // {}) as $a
+    | ((.[2].MediaContainer.Setting // []) | map(select(.id == "PublishServerOnPlexOnlineKey")) | .[0].value) as $pub
+    | {answering:($id != null), token:$tok,
+       publish:(if $pub == null then null else ($pub == true or $pub == "1" or $pub == 1) end),
+       sign_in:($a.signInState // null), mapping:($a.mappingState // null),
+       mapping_error:(if ($a.mappingError // "") == "" then null else $a.mappingError end),
+       public_port:($a.publicPort // null), refused:$refused,
+       listed:(if (.[3] | type) == "array" and $id != null
+               then (.[3] | map(select(.clientIdentifier == $id and ((.provides // "") | split(",") | index("server")))) | length > 0)
+               else null end)}'
+}
+
 # ---------- logins: are the app credentials still what they were? ----------
 # Fingerprints only (sha256, first 16 hex chars); no password, hash or API key leaves the VM.
 # n8n compares each run with the previous one and emails when a login or key changes, when the
@@ -408,13 +471,15 @@ why="no writable temp folder"
 if [ -n "$tmp" ]; then
   section system host_json; section disks disks_all; section mounts mounts_json; section backup backup_json
   section docker docker_json; section media media_json; section edge edge_json; section logins logins_json
+  section plex plex_json; section kernel kernel_json
   jq -n '$ARGS.positional' --args "${errors[@]}" >"$tmp/errors.json"
   jq -c -n --arg host "$(hostname)" --argjson ts "$now" --argjson v "$AGENT_VERSION" \
     --slurpfile system "$tmp/system.json" --slurpfile disks "$tmp/disks.json" --slurpfile mounts "$tmp/mounts.json" \
     --slurpfile backup "$tmp/backup.json" --slurpfile docker "$tmp/docker.json" --slurpfile media "$tmp/media.json" \
-    --slurpfile edge "$tmp/edge.json" --slurpfile logins "$tmp/logins.json" --slurpfile errors "$tmp/errors.json" \
+    --slurpfile edge "$tmp/edge.json" --slurpfile logins "$tmp/logins.json" --slurpfile plex "$tmp/plex.json" --slurpfile kernel "$tmp/kernel.json" \
+    --slurpfile errors "$tmp/errors.json" \
     '{host:$host, ts:$ts, agent_version:$v, system:$system[0], disks:$disks[0], mounts:$mounts[0], backup:$backup[0],
-      docker:$docker[0], media:$media[0], logins:$logins[0], edge:$edge[0], errors:$errors[0]}' >"$tmp/report.json" 2>"$tmp/report.err"
+      docker:$docker[0], media:$media[0], logins:$logins[0], edge:$edge[0], plex:$plex[0], kernel:$kernel[0], errors:$errors[0]}' >"$tmp/report.json" 2>"$tmp/report.err"
   why=$(tail -1 "$tmp/report.err" 2>/dev/null | cut -c1-200)
 fi
 if [ -n "$tmp" ] && jq -e 'type == "object"' "$tmp/report.json" >/dev/null 2>&1; then

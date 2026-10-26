@@ -13,8 +13,10 @@
 #   prowlarr-test <indexer id>      test an indexer, which re-enables a backed-off one
 #   docker-prune                    dangling images and build cache only
 #   remount-nas                     re-trigger the NAS automount, then recreate the services that bind it
+#   plex-remote-on                  switch Plex Remote Access back on, or off and on to re-publish
 #
-# Never: reboot, poweroff, anything under /mnt/nfs, compose pull, settings changes.
+# Never: reboot, poweroff, anything under /mnt/nfs, compose pull, settings changes (the one
+# exception: Plex Remote Access back on, which Goobs keeps on; D05 in the wiki).
 set -uo pipefail
 ALLOW=/etc/homelab-ops.allow            # "stack/service" per line, written by Ansible
 CONF=/etc/homelab-agent.conf
@@ -140,6 +142,28 @@ case "$verb" in
       done
       out ok "/mnt/nfs remounted and non-empty; recreated:${done_list:- nothing}${left:+; left as they were:$left}"
     else out failed "/mnt/nfs still not mounted or empty"; fi
+    ;;
+
+  plex-remote-on)
+    # Off: switch it on. Already on but plex.tv dropped the server: off and on again, which makes
+    # Plex publish itself to plex.tv again. The token stays on this VM (Plex on localhost only).
+    prefs="$APPDATA/plex/Library/Application Support/Plex Media Server/Preferences.xml"
+    [ -r "$prefs" ] || die "no Plex on this VM"
+    tok=$(sed -n 's/.*PlexOnlineToken="\([^"]*\)".*/\1/p' "$prefs" | head -1)
+    [ -n "$tok" ] || die "Plex is not signed in to plex.tv (no token); sign in from Plex Web"
+    plex() { curl -fsS -m 20 -H "X-Plex-Token: $tok" -H 'Accept: application/json' "$@"; }
+    was=$(plex 'http://127.0.0.1:32400/:/prefs' 2>/dev/null \
+      | jq -r '.MediaContainer.Setting[]? | select(.id == "PublishServerOnPlexOnlineKey") | .value')
+    [ "$was" = true ] || [ "$was" = false ] || { log "Plex did not answer"; out failed "Plex does not answer on 32400"; exit 1; }
+    log "publish was $was"
+    if [ "$was" = true ]; then plex -X PUT 'http://127.0.0.1:32400/:/prefs?PublishServerOnPlexOnlineKey=0' >/dev/null 2>&1; sleep 3; fi
+    plex -X PUT 'http://127.0.0.1:32400/:/prefs?PublishServerOnPlexOnlineKey=1' >/dev/null 2>&1 \
+      || { out failed "Plex refused the Remote Access setting"; exit 1; }
+    # Plex publishes and plex.tv tests the port within seconds.
+    sleep 20
+    st=$(plex http://127.0.0.1:32400/myplex/account 2>/dev/null \
+      | jq -r '.MyPlex | (.mappingState // "?") + (if (.mappingError // "") != "" then " (" + .mappingError + ")" else "" end)')
+    out ok "Plex Remote Access on (was $([ "$was" = true ] && echo "on, re-published" || echo off)); mapping ${st:-unknown}"
     ;;
 
   ""|help) die "no verb given";;
