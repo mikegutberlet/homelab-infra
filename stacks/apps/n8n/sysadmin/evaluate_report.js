@@ -133,6 +133,23 @@ for (const missing of dk.missing || []) {
 }
 if (dk.reclaimable_bytes > S.RECLAIM_WARN_GB * GB) add('docker-space', 'warning', `${host}: ${gb(dk.reclaimable_bytes)} of dangling images and build cache`, 'docker image prune (dangling only) frees it', { verb: 'docker-prune', target: 'docker' });
 
+// Image updates Diun found (Store event, sd.updates). A service on this VM's auto-update list
+// (hosts.yml auto_update, reported by the agent) gets the update fix, but only in the night window
+// (UPDATE_HOURS, Pacific) so nobody's film stops; the rest are listed to be updated by hand. An
+// entry clears once the running container's image changed, whoever updated it.
+sd.updates = sd.updates || {};
+const autoList = (dk.auto_update || []).map((x) => x.split('/')[1]);
+for (const [k, u] of Object.entries(sd.updates)) {
+  if (!k.startsWith(`${host}:`)) continue;
+  const c = (dk.containers || []).find((x) => x.service === u.svc);
+  if (!c) { if (now - u.t > 7 * 24 * H) delete sd.updates[k]; continue; }
+  if (!u.image_id) u.image_id = c.image_id || null;
+  else if (c.image_id && c.image_id !== u.image_id) { delete sd.updates[k]; continue; }
+  const inWindow = ptHour(now) >= S.UPDATE_HOURS[0] && ptHour(now) < S.UPDATE_HOURS[1];
+  if (autoList.includes(u.svc)) add(`update:${u.svc}`, 'info', `${host}: update available for ${u.svc}`, `${u.image}, found ${fmtT(u.t)}; the sysadmin installs it between ${S.UPDATE_HOURS[0]}:00 and ${S.UPDATE_HOURS[1]}:00 Pacific`, S.AUTO_UPDATE && inWindow ? { verb: 'update', target: u.svc } : null);
+  else add(`update:${u.svc}`, 'info', `${host}: update available for ${u.svc} (by hand)`, `${u.image}, found ${fmtT(u.t)}. Not on the auto-update list (databases and sign-in can break on upgrade): read the release notes, then ask the sysadmin chat for the commands, or run: sudo docker compose -f /opt/stacks/${c.stack || host}/compose.yaml pull ${u.svc}, then the same with up -d --no-deps ${u.svc}`);
+}
+
 // ---- media apps ----
 const md = r.media || {};
 const pmd = (prev && prev.media) || {};

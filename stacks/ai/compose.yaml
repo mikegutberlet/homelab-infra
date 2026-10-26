@@ -66,6 +66,25 @@ services:
       interval: 30s
       retries: 3
 
+  # Reports new image versions to the n8n digest on the apps VM; updates nothing itself
+  # (ansible role ops auto-updates the hosts.yml auto_update list weekly).
+  diun:
+    <<: *common
+    image: crazymax/diun:4
+    command: serve
+    hostname: ai # Diun names the host it watches by its own hostname (else the container id)
+    environment:
+      TZ: ${TZ}
+      DIUN_WATCH_SCHEDULE: "0 */6 * * *"
+      DIUN_PROVIDERS_DOCKER: "true"
+      DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT: "true"
+      DIUN_NOTIF_WEBHOOK_ENDPOINT: http://192.168.1.53:5678/webhook/homelab/diun # daily digest (n8n)
+      DIUN_NOTIF_WEBHOOK_METHOD: POST
+      DIUN_NOTIF_WEBHOOK_HEADERS_CONTENT-TYPE: application/json # Diun sets none; n8n then sees an empty body
+    volumes:
+      - /opt/appdata/diun:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
   autoheal:
     image: willfarrell/autoheal:1.2.0
     restart: unless-stopped
