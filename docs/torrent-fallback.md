@@ -69,6 +69,12 @@ to have. Public trackers only. Never a cam, telesync or screener; nothing below 
 - Radarr minimum availability **Released** on every movie and as Jellyseerr's default: Radarr
   only searches once a movie has a digital/physical release, so the cam-era window is skipped;
   a good WEB-DL at digital release still comes in early.
+  Caveat (found 2026-10-26): Radarr applies minimum availability to RSS and automatic searches
+  only. A search someone starts (the Search button, an API `MoviesSearch`, a Jellyseerr request)
+  skips it, so a manual search on an in-cinemas film takes the best-scoring fake. That is how a
+  cam renamed "1080p WEB-DL" came in for Resident Evil (2026). Don't search a movie before its
+  digital release; **Homelab: Fake or Watermarked** (see docs/wiki/services/media.md) is the
+  backstop for known fake groups.
 
 ## Undo
 
