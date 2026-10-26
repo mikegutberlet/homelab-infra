@@ -46,9 +46,12 @@
 # rsync carries each file's mode from the Mac's working copy, not from git. A file that is 600
 # there (an editor or a download can leave it so) arrived 600 and root-owned, and a container
 # running as the storage user could not read it (sysadmin-telegram crash-looped on "can't open
-# file '/app/bot.py'"). Git keeps only 644 or 755, so make the tracked files readable again first.
-- name: Make the tracked stack files readable on the Mac
-  ansible.builtin.shell: cd "{{ playbook_dir }}/../.." && git ls-files -z stacks | xargs -0 chmod go+r
+# file '/app/bot.py'"; its folder was 700 too). Git keeps only 644 or 755, so make the tracked
+# files readable and every folder under stacks/ enterable again first.
+- name: Make the tracked stack files and their folders readable on the Mac
+  ansible.builtin.shell: >-
+    cd "{{ playbook_dir }}/../.." && git ls-files -z stacks | xargs -0 chmod go+r
+    && find stacks -type d -exec chmod go+rx {} +
   delegate_to: localhost
   run_once: true
   become: false
