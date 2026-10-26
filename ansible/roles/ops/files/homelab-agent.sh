@@ -84,7 +84,11 @@ kernel_json() {
   oops=$(journalctl -k -b --no-pager -o short-iso 2>/dev/null \
     | grep -E 'kernel BUG|Oops|list_(add|del) corruption|general protection fault|blocked for more than [0-9]+ seconds' \
     | grep -v 'traps:' | tail -1 | cut -c1-200)   # traps: = a user program's crash, not the kernel's
-  stuck=$(ps -eo pid=,stat=,lstart=,comm= 2>/dev/null | awk '$2 ~ /^D/ {pid=$1; $1=$2=""; sub(/^ +/,""); printf "%s\t%s\n", pid, $0}' \
+  # Five samples a second apart, and only processes in D in all five: busy I/O (jbd2 committing the
+  # journal, a big copy) dips into D for moments; a stuck one never leaves it (jbd2/sda1 raised a
+  # false stuck-io on 2026-10-26 when it was in D at two report times 15 minutes apart).
+  stuck=$(for _ in 1 2 3 4 5; do ps -eo pid=,stat=,lstart=,comm= 2>/dev/null; sleep 1; done \
+    | awk '$2 ~ /^D/ {pid=$1; $1=$2=""; sub(/^ +/,""); n[pid "\t" $0]++} END {for (k in n) if (n[k] == 5) print k}' \
     | jq -R -s -c 'split("\n") | map(select(length>0) | split("\t") | {pid:(.[0]|tonumber), what:.[1]}) | .[0:20]')
   j -n --argjson t "$(num "$tainted")" --arg o "$oops" --argjson s "${stuck:-[]}" \
     '{tainted:$t, oopsed:(($t / 128 | floor) % 2 == 1), last_oops:(if $o=="" then null else $o end), stuck:$s}'
