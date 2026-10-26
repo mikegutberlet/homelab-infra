@@ -255,7 +255,7 @@ if (px && px.answering) {
   const wasRefused = new Set((pp.refused || []).filter((x) => x.n >= 3).map((x) => x.ip));
   for (const x of (px.refused || []).filter((y) => y.n >= 3 && wasRefused.has(y.ip)))
     add(`plex-refused:${x.ip}`, 'warning', `Plex keeps refusing ${x.ip === '127.0.0.1' ? 'a remote app (through the relay)' : `the device at ${x.ip}`} (${x.n} times in 15 min)`, 'It holds a Plex sign-in that plex.tv no longer issues. In that device\'s Plex app: Settings > Sign out, then sign in again with the code at plex.tv/link');
-  // The forward on the router cannot help behind carrier NAT (seen 2026-10-25, router WAN 100.82.x).
+  // The forward on the router cannot help behind carrier NAT (Starlink: router WAN 100.82.x).
   if (S.PLEX_REMOTE && px.publish && px.mapping_error) add('plex-nat', 'info', `Plex is not reachable directly from outside the house (${px.mapping_error})`, px.mapping_error === 'doublenat' ? 'The router itself sits behind another NAT (carrier NAT or a second router), so the 6996 forward cannot work; remote apps fall back to the slow Plex relay. At home and over Tailscale it is fine' : 'Remote apps fall back to the slow Plex relay; check the 6996 forward on the router');
 }
 

@@ -25,7 +25,7 @@ Everything that is pending, waiting on a decision, or known but not yet verified
 | The 76 4K files and 231 unmatched movie folders | No-4K rule says they should go or be replaced by 1080p copies; unmatched folders may be mis-named or junk | Awaiting review |
 | 9 leftover folders (about 28 GB) in `sabnzb/complete` | Remains of the old failed-import backlog | Delete none without Goobs's OK |
 | 21 entries under `/mnt/backupsmb` on the old VM | Unknown purpose | Review before the old VMs are removed |
-| Plex from outside the house: the router's WAN is behind carrier NAT since at least 2026-10-25 (WAN 100.82.x, public 98.97.x) | The 6996 forward cannot work through carrier NAT; remote Plex apps (friends, phones off Wi-Fi without Tailscale) fall back to the bandwidth-limited Plex relay. It worked on 2026-10-21 | Ask Goobs whether the internet connection changed; options: a public IP from the ISP, Tailscale for remote viewers, or live with the relay |
+| Plex from outside the house: the internet is Starlink, whose IPv4 is carrier NAT (router WAN 100.82.x, public 98.97.x; Goobs 2026-10-26: "it's always been starlink") | The 6996 forward cannot work through carrier NAT, so remote Plex apps (friends, phones off Wi-Fi without Tailscale) use the bandwidth-limited Plex relay. Plex's "mapped" on 2026-10-21 did not mean the forward worked | Decision open, only if remote viewing matters: Tailscale on the remote devices, a public IPv4 from Starlink (business plans), or keep the relay |
 | Empty the holding folder `to-delete/2026-10-21` | 14-day review window for duplicate and junk removals | About **2026-11-04**, after Goobs confirms nothing is missing |
 
 ## In progress or scheduled
