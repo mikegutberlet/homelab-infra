@@ -13,9 +13,13 @@ nothing is ever downloaded because of a list, and only the top rows go on Home.
 | Home Screen Companion (HSC) | Emby plugin catalog | its own sync 04:00 + when home-rows asks | Keeps the Emby collections, home rows and "Your Next Watch" playlists |
 
 - Plex rows live in `movies.yml` and `shows.yml`. `HomeRow` rows go on Home in file order
-  (`auto_sort_hubs: configured`, New Releases pinned first with `hub_priority: 1`); `Row` rows
-  are on each library's Recommended tab and under Collections. Plex's own Continue Watching and
-  Recently Added rows always sit above the Kometa rows. Franchise boxed sets come from Kometa's
+  (`auto_sort_hubs: configured`); `Row` rows are on each library's Recommended tab and under
+  Collections. Plex keeps each library's Home rows in one block, in library pin order, so movie
+  and TV rows cannot be mixed. Goobs's order (2026-10-26): Continue Watching, New Releases,
+  Recently Added Movies, Recently Released Episodes, Recently Added TV, then the TV rows. So
+  New Releases is the only movie `HomeRow`; the built-in rows' order and Home switches are set
+  in Plex (Settings > Manage > Libraries > Manage Recommendations), which Kometa never touches.
+  Movies must be pinned above TV Shows. Franchise boxed sets come from Kometa's
   `franchise` default (2+ owned films).
 - Emby rows are listed in `ROWS` in `home_rows.py`. Rule rows (genres, decades, studios,
   networks, Family Night, Quick Watches, New Releases) use Emby's own metadata. List rows
