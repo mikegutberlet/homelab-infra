@@ -50,15 +50,21 @@ services:
       retries: 3
       start_period: 120s
 
+  # The -vaapi tag stopped at v25.2.0 and its health check now fails on purpose (deprecated);
+  # VAAPI/QSV ship in the base image. Pinned because upgrades migrate the database one way.
+  # Config stays on the legacy path: the image prefers it over its /config default whenever it
+  # exists, and the database stores absolute paths under it (sequential YAML schedules).
+  # /transcode is the image default and keeps transcode scratch on local disk.
   ersatztv:
     <<: *common
-    image: jasongdove/ersatztv:latest-vaapi
+    image: jasongdove/ersatztv:v26.3.0
     environment:
       TZ: ${TZ}
     ports: ["8409:8409"]
     devices: [/dev/dri:/dev/dri]
     volumes:
       - /opt/appdata/ersatztv:/root/.local/share/ersatztv
+      - /opt/appdata/transcode/ersatztv:/transcode
       - /mnt/nfs/Media:/mnt/nfs/Media:ro
 
   # Immich: upstream layout. Its own Postgres because it needs a pinned vector extension.
