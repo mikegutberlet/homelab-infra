@@ -1,0 +1,29 @@
+{
+  "trash_id": "2aae72e20159f2c4a1d28c853ab74a45",
+  "trash_scores": {
+    "default": -10000
+  },
+  "trash_description": "Groups that post cams renamed as WEB-DLs, and betting-site watermarks named in the title. rothebehap's 'Resident Evil 2026 1080p WEB-DL' (2026-10-22, a month before the digital release) was a telesync with a SapphireBet watermark burned in. Add a group to the regex when another fake gets through.",
+  "name": "Homelab: Fake or Watermarked",
+  "includeCustomFormatWhenRenaming": false,
+  "specifications": [
+    {
+      "name": "Fake release groups",
+      "implementation": "ReleaseGroupSpecification",
+      "negate": false,
+      "required": false,
+      "fields": {
+        "value": "^(rothebehap)$"
+      }
+    },
+    {
+      "name": "Fake groups or watermarks in title",
+      "implementation": "ReleaseTitleSpecification",
+      "negate": false,
+      "required": false,
+      "fields": {
+        "value": "\\b(rothebehap|sapphire[ ._-]?bet|1xbet|melbet|mostbet)\\b"
+      }
+    }
+  ]
+}
