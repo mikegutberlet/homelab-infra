@@ -17,11 +17,25 @@ const SETTINGS = {
   NEVER_RESTART: ['n8n', 'postgres', 'redis', 'autoheal', 'tailscale', 'immich-db', 'immich-redis', 'romm-db', 'authentik-db', 'authentik-redis', 'scrutiny-influx'],
   // Critical issues are emailed at once, then again only every 6 hours while they persist.
   EMAIL_REPEAT_H: 6,
+  // An issue resolves only after this many checks of its scope (15 min apart) without it, so a value
+  // hovering at a threshold or one failed API read does not open and close it all day. One that
+  // comes back within FLAP_WINDOW_H keeps its first-seen time and counts as "came and went".
+  CLEAR_AFTER_RUNS: 3,
+  FLAP_WINDOW_H: 6,
   // Thresholds
   POOL_WARN_TB: 4, POOL_CRIT_TB: 3,          // DeepData free; Tdarr pauses below 3 TB
   DISK_WARN: 80, DISK_CRIT: 90,              // percent used, VM disks and Proxmox storage
+  // A VM disk also needs to be this low before it counts: on big disks (gpu's 96 GB, where the
+  // transcode caches swing by 15 GB) 80% still leaves plenty. Small disks hit both at once.
+  DISK_WARN_FREE_GB: 15, DISK_CRIT_FREE_GB: 8,
+  DISK_SKIP: ['/srv/usenet-incomplete'],     // SABnzbd's scratch disk has its own rule (sab-disk)
   MEM_WARN: 90, MEM_CRIT: 95,                // percent used
-  SWAP_WARN_BYTES: 256 * 1024 * 1024,
+  // Proxmox hosts: VMs have fixed memory (no ballooning), so RicksGarage sits near 90% by design.
+  // Warn on headroom instead; host swap (SWAP_WARN_BYTES) is the real pressure signal.
+  PVE_MEM_FREE_WARN_GB: 1.5,
+  SWAP_WARN_BYTES: 256 * 1024 * 1024,        // Proxmox hosts
+  // VMs: swap left over from a spike is harmless; pages read back in from swap mean RAM is short now.
+  SWAP_IN_WARN_MB: 100,                      // per 15 minutes
   LOAD_FACTOR: 2,                            // 15-min load over this x cores = warning
   BACKUP_WARN_H: 26, BACKUP_CRIT_H: 50,
   RESTARTS_WARN: 3, RESTARTS_CRIT: 10,       // per container per hour
@@ -30,7 +44,8 @@ const SETTINGS = {
   STUCK_RETRY_H: 24, STUCK_BLOCKLIST_H: 48,
   // SABnzbd's temp disk is 200 GB (scratch disk, 2026-10-22); SABnzbd itself pauses at 20 GB free.
   SAB_DISK_WARN_GB: 30, SAB_DISK_CRIT_GB: 22,
-  TDARR_IDLE_H: 6,
+  TDARR_IDLE_H: 6,                           // hours of scheduled time; the library schedule pauses 17:00-23:00 PT
+  TDARR_PAUSE_HOURS: [17, 23],
   LOGIN_FAILS_CRIT: 3,                       // failed arr web logins per 15 min that email at once
   KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,
   SCRUB_WARN_DAYS: 45,
@@ -54,6 +69,9 @@ const now = Date.now();
 const fmtT = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: SETTINGS.TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const gb = (b) => `${(b / GB).toFixed(1)} GB`;
 const tb = (b) => `${(b / TB).toFixed(2)} TB`;
-const ago = (ms) => { const h = (now - ms) / H; return h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };
+const dur = (ms) => { const h = ms / H; return h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };
+const ago = (ms) => dur(now - ms);
+const size = (b) => (b >= GB ? gb(b) : `${Math.round(b / 1e6)} MB`);
+const ptHour = (ms) => Number(new Date(ms).toLocaleString('en-US', { timeZone: SETTINGS.TZ, hour: 'numeric', hourCycle: 'h23' }));
 // One issue: key is stable across runs so the store can track first/last seen and emails.
 const issue = (host, key, sev, title, detail, fix) => ({ host, key: `${host}:${key}`, sev, title, detail: detail || '', fix: fix || null });

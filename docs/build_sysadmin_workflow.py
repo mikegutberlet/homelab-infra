@@ -35,6 +35,12 @@ MAIL_TO = "mikegutberlet@gmail.com"
 # The Telegram bot (stacks/apps/sysadmin-telegram) on the apps stack's network; /notify sends
 # {subject, text} to the allowed chats. Switches: TELEGRAM_ALERTS / TELEGRAM_DIGEST in settings.js.
 TELEGRAM_NOTIFY_URL = "http://sysadmin-telegram:3004/notify"
+# n8n posting to its own webhooks (same container). Decide and Record fix result hand their emails
+# and fixes to homelab/act, and the fix run posts the answer to homelab/fixresult, so no report,
+# infra or fix-result run waits on SMTP or SSH (n8n saves the whole static data when a run ends,
+# last writer wins). The chat's propose and confirm paths still write and then wait (the model, the
+# ops door). Both webhooks take the "Sysadmin chat token" header like the chat webhook.
+INTERNAL = "http://127.0.0.1:5678/webhook"
 HOSTS = {"edge": "192.168.1.50", "media": "192.168.1.51", "gpu": "192.168.1.52", "apps": "192.168.1.53", "ai": "192.168.1.54"}
 HOSTS_LIST = list(HOSTS)
 NS = uuid.UUID("3f1d2a8e-6b44-4c1a-9a3e-0d5c7b2f9e10")
@@ -78,14 +84,22 @@ def link(src, dst, out=0, kind="main", index=0):
     conn[src][kind][out].append({"node": dst, "type": kind, "index": index})
 
 
-def webhook(name, path, pos):
-    return node(name, "n8n-nodes-base.webhook", 2, pos, {"httpMethod": "POST", "path": path, "responseMode": "onReceived", "options": {}}, webhookId=nid("wh-" + name))
+def webhook(name, path, pos, auth=None):
+    """A POST webhook that answers at once; auth names a Header Auth credential the caller must send."""
+    p = {"httpMethod": "POST", "path": path, "responseMode": "onReceived", "options": {}}
+    extra = {}
+    if auth:
+        p["authentication"] = "headerAuth"
+        c = cred("httpHeaderAuth", auth)
+        if c:
+            extra["credentials"] = c
+    return node(name, "n8n-nodes-base.webhook", 2, pos, p, webhookId=nid("wh-" + name), **extra)
 
 
-def http(name, url, pos, auth=None, insecure=False, body=None, timeout=15000):
+def http(name, url, pos, auth=None, insecure=False, body=None, timeout=15000, **more):
     """GET url, or POST body ({field: expression}) as JSON. A failure only marks this node."""
     p = {"method": "POST" if body else "GET", "url": url, "options": {"timeout": timeout, "allowUnauthorizedCerts": insecure}}
-    extra = {"onError": "continueRegularOutput"}
+    extra = {"onError": "continueRegularOutput", **more}
     if auth:
         p.update({"authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth"})
         c = cred("httpHeaderAuth", auth)
@@ -95,6 +109,16 @@ def http(name, url, pos, auth=None, insecure=False, body=None, timeout=15000):
         p.update({"sendBody": True, "contentType": "json", "specifyBody": "keypair",
                   "bodyParameters": {"parameters": [{"name": k, "value": v} for k, v in body.items()]}})
     return node(name, "n8n-nodes-base.httpRequest", 4.2, pos, p, **extra)
+
+
+def handoff(name, path, pos, source=None):
+    """POST to one of this workflow's internal webhooks, once: all of `source`'s items as {items: [...]},
+    or (no source) the one input item as it is."""
+    body = f"={{{{ JSON.stringify({{ items: $('{source}').all().map((i) => i.json) }}) }}}}" if source else "={{ JSON.stringify($json) }}"
+    p = {"method": "POST", "url": f"{INTERNAL}/{path}", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
+         "sendBody": True, "contentType": "json", "specifyBody": "json", "jsonBody": body, "options": {"timeout": 10000}}
+    c = cred("httpHeaderAuth", "Sysadmin chat token")
+    return node(name, "n8n-nodes-base.httpRequest", 4.2, pos, p, onError="continueRegularOutput", executeOnce=True, **({"credentials": c} if c else {}))
 
 
 def telegram_push(name, pos):
@@ -164,14 +188,19 @@ def _build(ops_door_id=OPS_DOOR_ID):
     link("report", "Evaluate report")
 
     # ---- infra reads every 15 min ----
-    node("Every 15 min", "n8n-nodes-base.scheduleTrigger", 1.2, (0, 300), {"rule": {"interval": [{"field": "cronExpression", "expression": "7/15 * * * *"}]}})
+    # At :14/:29/:44/:59, clear of the VM reports (homelab-agent.timer: edge :01, media :04, gpu :07,
+    # apps :10, ai :12) and of the 08:00 digest. Each read runs once (an array answer, like TrueNAS's
+    # pools and alerts, becomes one item per element and would run the next read once per item), and
+    # an empty answer still passes one empty item on, so the chain never stops early.
+    node("Every 15 min", "n8n-nodes-base.scheduleTrigger", 1.2, (0, 300), {"rule": {"interval": [{"field": "cronExpression", "expression": "14/15 * * * *"}]}})
+    once = {"executeOnce": True, "alwaysOutputData": True}
     chain = [
-        http("PVE resources", "https://192.168.1.137:8006/api2/json/cluster/resources", (260, 300), auth=PVE, insecure=True),
-        http("PVE cluster status", "https://192.168.1.137:8006/api2/json/cluster/status", (480, 300), auth=PVE, insecure=True),
-        http("NAS pools", "https://192.168.1.209/api/v2.0/pool", (700, 300), auth=NAS, insecure=True),
-        http("NAS dataset", "https://192.168.1.209/api/v2.0/pool/dataset/id/DeepData", (920, 300), auth=NAS, insecure=True),
-        http("NAS alerts", "https://192.168.1.209/api/v2.0/alert/list", (1140, 300), auth=NAS, insecure=True),
-        http("Scrutiny", "http://scrutiny:8080/api/summary", (1360, 300)),
+        http("PVE resources", "https://192.168.1.137:8006/api2/json/cluster/resources", (260, 300), auth=PVE, insecure=True, **once),
+        http("PVE cluster status", "https://192.168.1.137:8006/api2/json/cluster/status", (480, 300), auth=PVE, insecure=True, **once),
+        http("NAS pools", "https://192.168.1.209/api/v2.0/pool", (700, 300), auth=NAS, insecure=True, **once),
+        http("NAS dataset", "https://192.168.1.209/api/v2.0/pool/dataset/id/DeepData", (920, 300), auth=NAS, insecure=True, **once),
+        http("NAS alerts", "https://192.168.1.209/api/v2.0/alert/list", (1140, 300), auth=NAS, insecure=True, **once),
+        http("Scrutiny", "http://scrutiny:8080/api/summary", (1360, 300), **once),
     ]
     link("Every 15 min", chain[0])
     for a, b in zip(chain, chain[1:]):
@@ -190,48 +219,56 @@ def _build(ops_door_id=OPS_DOOR_ID):
     node("Evaluate infra", "n8n-nodes-base.code", 2, (2020, 300), {"jsCode": code("evaluate_infra.js")})
     link("PVE node status", "Evaluate infra")
 
-    # ---- decide, email, fix ----
+    # ---- decide, then hand off: the run's email and fixes go to homelab/act in one post ----
     node("Decide", "n8n-nodes-base.code", 2, (2300, 150), {"jsCode": code("decide.js")})
     link("Evaluate report", "Decide")
     link("Evaluate infra", "Decide")
-    node("Email or fix", "n8n-nodes-base.switch", 3.2, (2520, 150), {"rules": {"values": [
-        {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.kind }}", "rightValue": "email", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "renameOutput": True, "outputKey": "email"},
-        {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.kind }}", "rightValue": "fix", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "renameOutput": True, "outputKey": "fix"},
-    ]}, "options": {}})
-    link("Decide", "Email or fix")
-    email("Email critical", (2780, 40))
+    handoff("Hand off", "homelab/act", (2520, 150), source="Decide")
+    link("Decide", "Hand off")
+
+    # ---- act: emails and fixes, in a run that never touches static data ----
+    webhook("act", "homelab/act", (0, 2600), auth="Sysadmin chat token")
+    node("Act", "n8n-nodes-base.code", 2, (260, 2600), {"jsCode": code("act.js")})
+    link("act", "Act")
+    node("Email or fix", "n8n-nodes-base.switch", 3.2, (520, 2600), {"rules": {"values": [is_("kind", "email", "email"), is_("kind", "fix", "fix")]}, "options": {}})
+    link("Act", "Email or fix")
+    # Every critical email is also pushed to Telegram (TELEGRAM_ALERTS). These nodes sit above
+    # "Email critical" on the canvas, so n8n (execution order v1) runs them first: if Gmail fails,
+    # the alert has already reached Telegram; a Telegram failure only marks "Telegram push".
+    node("Telegram alert?", "n8n-nodes-base.code", 2, (780, 2360), {"jsCode": code("telegram_alert.js")})
+    link("Email or fix", "Telegram alert?", 0)
+    telegram_push("Telegram push", (1040, 2360))
+    link("Telegram alert?", "Telegram push")
+    email("Email critical", (780, 2480))
     link("Email or fix", "Email critical", 0)
-    node("Route fix by host", "n8n-nodes-base.switch", 3.2, (2780, 260), {"rules": {"values": [
-        {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.host }}", "rightValue": h, "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "renameOutput": True, "outputKey": h}
-        for h in HOSTS]}, "options": {}})
-    link("Email or fix", "Route fix by host", 1)
+    # A follow-up (gluetun -> qbittorrent) waits a minute first; Wait under 65 s stays in this run.
+    node("Now or later", "n8n-nodes-base.switch", 3.2, (780, 2720), {"rules": {"values": [
+        {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.delay ? 'later' : 'now' }}", "rightValue": v, "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "renameOutput": True, "outputKey": v}
+        for v in ("now", "later")]}, "options": {}})
+    link("Email or fix", "Now or later", 1)
+    node("Wait 60 s", "n8n-nodes-base.wait", 1.1, (1040, 2820), {"amount": 60, "unit": "seconds"}, webhookId=nid("wait"))
+    link("Now or later", "Wait 60 s", 1)
+    node("Route fix by host", "n8n-nodes-base.switch", 3.2, (1300, 2720), {"rules": {"values": [is_("host", h, h) for h in HOSTS]}, "options": {}})
+    link("Now or later", "Route fix by host", 0)
+    link("Wait 60 s", "Route fix by host")
     for i, h in enumerate(HOSTS):
         # The SSH credential "ops <vm>" carries host, port and user; the command is what Decide planned.
         # cwd is a required parameter (n8n refuses "" as missing); node-ssh turns "/" into "cd / ; <cmd>"
         # (quoted "cd '/' ; " in other versions), and homelab-ops-door.sh strips that prefix before its check.
         c = cred("sshPrivateKey", f"ops {h}")
-        node(f"ops {h}", "n8n-nodes-base.ssh", 1, (3040, 160 + 110 * i), {"resource": "command", "operation": "execute", "authentication": "privateKey", "command": "={{ $json.cmd }}", "cwd": "/"}, onError="continueRegularOutput", **({"credentials": c} if c else {}))
+        node(f"ops {h}", "n8n-nodes-base.ssh", 1, (1560, 2500 + 110 * i), {"resource": "command", "operation": "execute", "authentication": "privateKey", "command": "={{ $json.cmd }}", "cwd": "/"}, onError="continueRegularOutput", **({"credentials": c} if c else {}))
         link("Route fix by host", f"ops {h}", i)
-        link(f"ops {h}", "Record fix result")
-    node("Record fix result", "n8n-nodes-base.code", 2, (3300, 380), {"jsCode": code("record_fix.js")})
-    # A failed fix emails; a follow-up (gluetun -> qbittorrent) waits a minute and goes round again.
-    node("Failed or follow-up", "n8n-nodes-base.switch", 3.2, (3520, 380), {"rules": {"values": [
-        {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.kind }}", "rightValue": "email", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "renameOutput": True, "outputKey": "email"},
-        {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.kind }}", "rightValue": "fix", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "renameOutput": True, "outputKey": "fix"},
-    ]}, "options": {}})
-    link("Record fix result", "Failed or follow-up")
-    link("Failed or follow-up", "Email critical", 0)
-    # Every critical email is also pushed to Telegram (TELEGRAM_ALERTS). These nodes sit above
-    # "Email critical" on the canvas, so n8n (execution order v1) runs them first: if Gmail fails,
-    # the alert has already reached Telegram; a Telegram failure only marks "Telegram push".
-    node("Telegram alert?", "n8n-nodes-base.code", 2, (2780, -120), {"jsCode": code("telegram_alert.js")})
-    link("Email or fix", "Telegram alert?", 0)
-    link("Failed or follow-up", "Telegram alert?", 0)
-    telegram_push("Telegram push", (3040, -120))
-    link("Telegram alert?", "Telegram push")
-    node("Wait 60 s", "n8n-nodes-base.wait", 1.1, (3760, 480), {"amount": 60, "unit": "seconds"}, webhookId=nid("wait"))
-    link("Failed or follow-up", "Wait 60 s", 1)
-    link("Wait 60 s", "Route fix by host")
+        link(f"ops {h}", "Fix answer")
+    node("Fix answer", "n8n-nodes-base.code", 2, (1820, 2720), {"jsCode": code("fix_answer.js")})
+    handoff("Post fix result", "homelab/fixresult", (2080, 2720))
+    link("Fix answer", "Post fix result")
+
+    # ---- fixresult: log the answer (a short run), then hand off its email or follow-up ----
+    webhook("fixresult", "homelab/fixresult", (0, 3100), auth="Sysadmin chat token")
+    node("Record fix result", "n8n-nodes-base.code", 2, (260, 3100), {"jsCode": code("record_fix.js")})
+    link("fixresult", "Record fix result")
+    handoff("Hand off result", "homelab/act", (520, 3100), source="Record fix result")
+    link("Record fix result", "Hand off result")
 
     # ---- chat page (stacks/apps/sysadmin-chat): a question goes to the AI Agent, which reads the
     # sysadmin's state through Code Tools and the ops door through the sub-workflow; a fix it proposes
@@ -294,6 +331,9 @@ def _build(ops_door_id=OPS_DOOR_ID):
     email("Email digest", (520, 900))
     link("Every day 08:00", "Build digest")
     link("Build digest", "Email digest")
+    # Clears what the digest reported, only once the email is out.
+    node("Digest sent", "n8n-nodes-base.code", 2, (780, 900), {"jsCode": code("digest_sent.js")})
+    link("Email digest", "Digest sent")
     # The digest to Telegram too, only while TELEGRAM_DIGEST is on (off by default).
     node("Telegram digest?", "n8n-nodes-base.code", 2, (520, 760), {"jsCode": code("telegram_digest.js")})
     link("Build digest", "Telegram digest?")

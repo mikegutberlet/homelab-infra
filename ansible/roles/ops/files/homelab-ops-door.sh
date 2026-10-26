@@ -12,4 +12,6 @@ re='^[A-Za-z0-9 _./:-]*$'
 [[ "$cmd" =~ $re ]] || { echo '{"result":"refused","detail":"bad characters in command"}'; exit 2; }
 # shellcheck disable=SC2206
 words=($cmd)
-exec sudo -n /usr/local/sbin/homelab-ops "${words[@]}"
+# Every verb finishes in seconds; 150 s caps a hung one (docker on a stuck NFS mount), so an n8n
+# run never waits on it for long. -k: KILL 10 s later if TERM is not enough.
+exec timeout -k 10 150 sudo -n /usr/local/sbin/homelab-ops "${words[@]}"
