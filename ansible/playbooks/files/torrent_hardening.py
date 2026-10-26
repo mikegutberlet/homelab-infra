@@ -44,10 +44,10 @@ def note(what):
     print(("would: " if DRY else "set: ") + what)
 
 
-def http(url, data=None, headers=None, method=None):
+def http(url, data=None, headers=None, method=None, timeout=60):
     req = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             body = r.read().decode()
             return r.status, (json.loads(body) if body.strip().startswith(("{", "[")) else body)
     except urllib.error.HTTPError as e:
@@ -137,8 +137,9 @@ def prowlarr():
     key = re.search(r"<ApiKey>(.*?)</ApiKey>", open(f"{APPDATA}/prowlarr/config.xml").read()).group(1)
     H = {"X-Api-Key": key, "Content-Type": "application/json"}
 
-    def api(path, method="GET", body=None):
-        status, out = http(f"{PROWLARR}/{path}", data=json.dumps(body).encode() if body is not None else None, headers=H, method=method)
+    def api(path, method="GET", body=None, timeout=60):
+        status, out = http(f"{PROWLARR}/{path}", data=json.dumps(body).encode() if body is not None else None,
+                           headers=H, method=method, timeout=timeout)
         if status >= 300 and not (method == "POST" and path.startswith("indexer/test")):
             sys.exit(f"Prowlarr {method} {path} -> {status}: {str(out)[:300]}")
         return status, out
@@ -201,14 +202,20 @@ def prowlarr():
         if upd:
             note(f"Prowlarr indexer {i['name']}: {', '.join(upd)}")
             if not DRY:
-                api(f"indexer/{i['id']}", "PUT", i)
+                # forceSave: Prowlarr otherwise tests the indexer inside the save, and a FlareSolverr
+                # site can take minutes (the first deploy timed out on 1337x). Tests run below.
+                api(f"indexer/{i['id']}?forceSave=true", "PUT", i)
     if DRY:
         return
 
-    # Test every torrent indexer through the new path (each hits the site once).
+    # Test every torrent indexer through the new path (each hits the site once; FlareSolverr
+    # sites are slow, so a long timeout and a timeout counts as a failure, not a crash).
     _, indexers = api("indexer")
     for i in (x for x in indexers if x["protocol"] == "torrent"):
-        status, out = api("indexer/test", "POST", i)
+        try:
+            status, out = api("indexer/test", "POST", i, timeout=240)
+        except (TimeoutError, OSError) as e:
+            status, out = 599, [{"errorMessage": f"no answer within 240 s ({e.__class__.__name__})"}]
         ok = status < 300
         msg = "" if ok else "; ".join(e.get("errorMessage", str(e)) for e in (out if isinstance(out, list) else [out]))[:160]
         print(f"test {i['name']}: {'ok' if ok else 'FAILED ' + msg}")
