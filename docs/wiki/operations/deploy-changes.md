@@ -90,6 +90,7 @@ For a new VM: add it to `vms` in `terraform.tfvars`, apply, add it to `inventory
 ansible-playbook playbooks/proxmox-scrutiny.yml       # safe, no reboot
 ansible-playbook playbooks/proxmox-heartbeat.yml      # safe; needs heartbeat_url set per host
 ansible-playbook playbooks/proxmox-igpu.yml           # changes boot config: follow Reboot a host
+ansible-playbook playbooks/torrent-hardening.yml      # media VM app settings for the torrent path (safe, --check to preview)
 ```
 
 ## Checking a deploy

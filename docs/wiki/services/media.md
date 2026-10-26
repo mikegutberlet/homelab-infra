@@ -115,7 +115,8 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Images | `qmcgaw/gluetun:v3.40` (OpenVPN to PIA, `NET_ADMIN`, `/dev/net/tun`) and `lscr.io/linuxserver/qbittorrent:latest` with `network_mode: service:gluetun` |
 | Port | qBittorrent WebUI 8085, published by gluetun; https://qbittorrent.tail9af84.ts.net (SSO), user `admin`, password on the Mac (`~/.config/homelab/qbittorrent-webui`) |
 | VPN | `PIA_USER`, `PIA_PASSWORD`, `PIA_REGION` in the media secrets (origin: `~/.config/homelab/pia.env` on the Mac). `PORT_FORWARD_ONLY=on` because PIA has no port forwarding in US regions; Vancouver was chosen at build time. `VPN_PORT_FORWARDING_UP_COMMAND` posts the forwarded port into qBittorrent's preferences over localhost |
-| Kill switch | If the tunnel drops, qBittorrent has no network at all (shared namespace). Gluetun's own healthcheck gates qBittorrent's start |
+| Kill switch | If the tunnel drops, qBittorrent has no network at all (shared namespace). Gluetun's own healthcheck gates qBittorrent's start. Checked 2026-10-26: OUTPUT policy DROP except tun0 and the PIA endpoint, IPv6 blocked, DNS over TLS to Cloudflare with `BLOCK_MALICIOUS` |
+| Safety (2026-10-26) | qBittorrent skips executable file types (`*.exe`, `*.lnk`, `*.scr`, ... see [docs/torrent-fallback.md](../../torrent-fallback.md)), is bound to `tun0`, anonymous mode on, LSD off. gluetun's HTTP proxy (`gluetun:8888`, compose network only) carries Prowlarr's torrent indexers (tag `vpn`) and FlareSolverr runs in gluetun's namespace (`http://gluetun:8191`), so tracker searches leave through PIA too. Applied by `playbooks/torrent-hardening.yml` |
 | Data | `/opt/appdata/gluetun`, `/opt/appdata/qbittorrent`; downloads under `/mnt/nfs` |
 | Monitor | Kuma accepts any HTTP answer from 8085, even 403, as "both up" |
 

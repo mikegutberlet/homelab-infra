@@ -109,6 +109,12 @@ services:
       SERVER_REGIONS: ${PIA_REGION}
       PORT_FORWARD_ONLY: "on" # PIA has no port forwarding in US regions
       VPN_PORT_FORWARDING: "on"
+      # HTTP proxy on gluetun:8888 (compose network only, not published): Prowlarr's torrent
+      # indexers are tagged `vpn` and fetch tracker pages and .torrent files through it, so
+      # searches leave through PIA too, not the home IP (2026-10-26, docs/torrent-fallback.md).
+      # Usenet indexers stay direct on purpose: a PIA hiccup must not stop Usenet.
+      HTTPPROXY: "on"
+      HTTPPROXY_STEALTH: "on"
       # Hand the forwarded port to qBittorrent (same network namespace, so localhost;
       # qBittorrent skips its login for localhost clients).
       VPN_PORT_FORWARDING_UP_COMMAND: >-
@@ -143,16 +149,27 @@ services:
       test: ["CMD", "curl", "-fsS", "--max-time", "10", "https://api.ipify.org"]
       retries: 6
 
-  # Solves Cloudflare challenges for Prowlarr (1337x, EZTV). Only Prowlarr talks to it, on the
-  # compose network (http://flaresolverr:8191); no published port. Headless Chromium, so
-  # 300-500 MB RAM. Added 2026-10-22 on Goobs's OK.
+  # Solves Cloudflare challenges for Prowlarr (1337x, EZTV). Only Prowlarr talks to it; since
+  # 2026-10-26 it shares gluetun's network namespace so its browser leaves through PIA like the
+  # rest of the torrent path, and Prowlarr reaches it at http://gluetun:8191 (set in Prowlarr's
+  # FlareSolverr indexer proxy by playbooks/torrent-hardening.yml). No published port. Headless
+  # Chromium, so 300-500 MB RAM. Added 2026-10-22 on Goobs's OK.
   flaresolverr:
     <<: *common
     image: ghcr.io/flaresolverr/flaresolverr:latest
     mem_limit: 1g
+    network_mode: service:gluetun
     environment:
       TZ: ${TZ}
       LOG_LEVEL: info
+    depends_on:
+      gluetun: {condition: service_healthy}
+    # Same reason as qBittorrent's check: after a gluetun restart this container sits in a dead
+    # network namespace until autoheal restarts it, and only a check through the tunnel notices.
+    healthcheck:
+      <<: *arr-health
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('https://api.ipify.org', timeout=10)"]
+      retries: 6
 
   recyclarr:
     <<: *common
