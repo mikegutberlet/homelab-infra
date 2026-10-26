@@ -106,8 +106,10 @@ HDHomeRun tuner at `http://192.168.1.52:8409`. Inventory TSVs and an undo log ar
 a channel.
 
 Image: `jasongdove/ersatztv:v26.3.0` (2026-10-26). The old `latest-vaapi` tag was frozen at v25.2.0
-and reported itself unhealthy as deprecated. The appdata folder is mounted at `/config` (it used to
-be `/root/.local/share/ersatztv`). Port 8409 is blocked on the LAN like every admin port: use
+and reported itself unhealthy as deprecated. The appdata folder stays mounted at the legacy
+`/root/.local/share/ersatztv` (the image prefers it over `/config`), because the database stores
+absolute paths there for the sequential YAML schedules in `sequential/`. Moving it to `/config`
+means rewriting those paths and resetting every playout. Port 8409 is blocked on the LAN like every admin port: use
 https://ersatztv.tail9af84.ts.net, or from the Mac an SSH tunnel
 (`ssh goobs@192.168.1.52 -N -L 18409:localhost:8409`, then http://localhost:18409). Plex on the
 same VM still reaches the tuner at `http://192.168.1.52:8409`.

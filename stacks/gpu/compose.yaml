@@ -52,8 +52,9 @@ services:
 
   # The -vaapi tag stopped at v25.2.0 and its health check now fails on purpose (deprecated);
   # VAAPI/QSV ship in the base image. Pinned because upgrades migrate the database one way.
-  # /config and /transcode are the image defaults; same appdata folder as the old
-  # /root/.local/share/ersatztv mount, so the database and settings carry over.
+  # Config stays on the legacy path: the image prefers it over its /config default whenever it
+  # exists, and the database stores absolute paths under it (sequential YAML schedules).
+  # /transcode is the image default and keeps transcode scratch on local disk.
   ersatztv:
     <<: *common
     image: jasongdove/ersatztv:v26.3.0
@@ -62,7 +63,7 @@ services:
     ports: ["8409:8409"]
     devices: [/dev/dri:/dev/dri]
     volumes:
-      - /opt/appdata/ersatztv:/config
+      - /opt/appdata/ersatztv:/root/.local/share/ersatztv
       - /opt/appdata/transcode/ersatztv:/transcode
       - /mnt/nfs/Media:/mnt/nfs/Media:ro
 
