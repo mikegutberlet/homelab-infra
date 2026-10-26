@@ -14,9 +14,11 @@
 #   docker-prune                    dangling images and build cache only
 #   remount-nas                     re-trigger the NAS automount, then recreate the services that bind it
 #   plex-remote-on                  switch Plex Remote Access back on, or off and on to re-publish
+#   update <service>                pull the service's image tag and recreate it if the image changed;
+#                                   only services in /etc/homelab-autoupdate.conf (hosts.yml auto_update)
 #
-# Never: reboot, poweroff, anything under /mnt/nfs, compose pull, settings changes (the one
-# exception: Plex Remote Access back on, which Goobs keeps on; D05 in the wiki).
+# Never: reboot, poweroff, anything under /mnt/nfs, pulls beyond the auto-update list, settings
+# changes (the one exception: Plex Remote Access back on, which Goobs keeps on; D05 in the wiki).
 set -uo pipefail
 ALLOW=/etc/homelab-ops.allow            # "stack/service" per line, written by Ansible
 CONF=/etc/homelab-agent.conf
@@ -164,6 +166,28 @@ case "$verb" in
     st=$(plex http://127.0.0.1:32400/myplex/account 2>/dev/null \
       | jq -r '.MyPlex | (.mappingState // "?") + (if (.mappingError // "") != "" then " (" + .mappingError + ")" else "" end)')
     out ok "Plex Remote Access on (was $([ "$was" = true ] && echo "on, re-published" || echo off)); mapping ${st:-unknown}"
+    ;;
+
+  update)
+    # Goobs, 2026-10-26: internet-facing media apps update themselves (security fixes); the rest
+    # stays by hand. The config bind mounts under /opt/appdata are kept, so settings survive.
+    resolve "${1:-}"
+    grep -qE "^$stack( .*)? $1( |$)" /etc/homelab-autoupdate.conf 2>/dev/null || die "$1 is not on the auto-update list (hosts.yml auto_update)"
+    f="/opt/stacks/$stack/compose.yaml"
+    before=$(docker inspect -f '{{.Image}}' "$container" 2>/dev/null | cut -c8-19)
+    log "$container (image ${before:-none})"
+    # The door cuts every verb off at 150 s: 100 s for the pull (layers already fetched are kept,
+    # so a retry picks up where this one stopped), the rest for the recreate.
+    timeout 100 docker compose -f "$f" pull -q "$1" >/dev/null 2>&1 || { out failed "pulling the $1 image failed or took over 100 s"; exit 1; }
+    after_pull=$(docker image inspect -f '{{.Id}}' "$(docker inspect -f '{{.Config.Image}}' "$container" 2>/dev/null)" 2>/dev/null | cut -c8-19)
+    if [ -n "$before" ] && [ "$after_pull" = "$before" ]; then out ok "$1 already current (image $before)"; exit 0; fi
+    # --no-deps: never recreate a database or gluetun along with the app.
+    docker compose -f "$f" up -d --no-deps "$1" >/dev/null 2>&1 || { out failed "compose up $1 failed after the pull"; exit 1; }
+    sleep 5
+    after=$(docker inspect -f '{{.Image}}' "$container" 2>/dev/null | cut -c8-19)
+    st=$(docker inspect -f '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || echo absent)
+    docker image prune -f >/dev/null 2>&1 # the old image, now dangling; tagged images stay
+    out ok "$1 updated: image ${before:-none} -> ${after:-?}, now $st"
     ;;
 
   ""|help) die "no verb given";;

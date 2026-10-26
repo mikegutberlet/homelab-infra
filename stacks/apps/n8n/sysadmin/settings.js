@@ -7,6 +7,11 @@ const SETTINGS = {
   // arr-blocklist: dead downloads (0 bytes after 48 h) and "not an upgrade" imports stuck 48 h.
   // On since 2026-10-26 (Goobs: "blocklist"); false = those are only reported.
   BLOCKLIST_ENABLED: true,
+  // Image updates (Goobs, 2026-10-26): Diun reports new images; services on a VM's auto-update
+  // list (hosts.yml auto_update) get the "update" fix between UPDATE_HOURS (Pacific), the rest are
+  // listed for a manual update. false = all of them are only listed.
+  AUTO_UPDATE: true,
+  UPDATE_HOURS: [3, 5],
   // Plex Remote Access stays on (see D05): when it is off, or plex.tv stops listing the
   // server, plex-remote-on puts it back. false = Plex is meant to be LAN/Tailscale-only.
   PLEX_REMOTE: true,

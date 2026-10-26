@@ -302,7 +302,8 @@ services:
     volumes:
       - /opt/appdata/scrutiny/influxdb:/var/lib/influxdb2
 
-  # Watches images on every VM and posts new versions to n8n; nothing updates itself.
+  # Watches this VM's images and posts new versions to n8n (the other VMs run their own Diun);
+  # nothing updates itself.
   diun:
     <<: *common
     image: crazymax/diun:4

@@ -151,13 +151,16 @@ backup_json() {
 
 # ---------- docker ----------
 docker_json() {
-  local containers='[]' missing='[]' reclaim=0
+  local containers='[]' missing='[]' reclaim=0 auto='[]'
+  # Services the sysadmin may update itself (role ops, hosts.yml auto_update): "stack/service".
+  [ -r /etc/homelab-autoupdate.conf ] && auto=$(awk '!/^#/ && NF > 1 { for (i = 2; i <= NF; i++) print $1 "/" $i }' \
+    /etc/homelab-autoupdate.conf | jq -R -s -c 'split("\n") | map(select(length > 0))')
   if docker info >/dev/null 2>&1; then
     containers=$(docker ps -a --format '{{.Names}}' | while read -r n; do
       docker inspect "$n" 2>/dev/null | jq -c '.[0] | {
         name:.Name|ltrimstr("/"), id:.Id[0:12], state:.State.Status, health:(.State.Health.Status // "none"),
         restarts:.RestartCount, started_at:.State.StartedAt, exit_code:.State.ExitCode,
-        image:.Config.Image, stack:(.Config.Labels["com.docker.compose.project"] // null),
+        image:.Config.Image, image_id:.Image[7:19], stack:(.Config.Labels["com.docker.compose.project"] // null),
         service:(.Config.Labels["com.docker.compose.service"] // null)}'
     done | jq -s '.')
     # Expected services (from hosts.yml stack_services, or the whole compose file) that are not running.
@@ -179,8 +182,8 @@ docker_json() {
         m=1; if (u ~ /^kB/) m=1e3; if (u ~ /^MB/) m=1e6; if (u ~ /^GB/) m=1e9; if (u ~ /^TB/) m=1e12; t+=v*m }
       END { printf "%d", t }')
   fi
-  j -n --argjson c "$containers" --argjson m "$missing" --argjson r "$(num "$reclaim")" \
-    '{containers:$c, missing:$m, reclaimable_bytes:$r}'
+  j -n --argjson c "$containers" --argjson m "$missing" --argjson r "$(num "$reclaim")" --argjson a "$auto" \
+    '{containers:$c, missing:$m, reclaimable_bytes:$r, auto_update:$a}'
 }
 
 # ---------- media apps (only where their config exists) ----------

@@ -220,3 +220,13 @@ are now").** The household uses them from TVs that do not run Tailscale.
 **Decision (Goobs, 2026-10-21 04:28 to 04:33 UTC).** Existing pool, folders and layout are kept;
 apps move one at a time with the old one stopped first; the old VMs stay off, not deleted, for at
 least a week. The sabnzb/complete leftovers are never deleted without an explicit OK.
+
+### D31: Media apps update themselves; database apps stay manual
+
+**Decision (Goobs, card 2026-10-26 19:46 UTC, "Alerts + auto-update safe apps"; then "Can the alerts
+and updates following the alert come directly from and to my Sys Admin").** Diun runs on every VM and
+reports to the sysadmin. Internet-facing media apps (Plex, Emby, Jellyseerr, the *arr apps, SABnzbd,
+qBittorrent, FlareSolverr) are updated by the sysadmin between 03:00 and 05:00 Pacific. **Cost.** A bad
+upstream release can break one of them overnight until it is rolled back. **Consequence.** Authentik,
+Nextcloud, Immich, Paperless, databases and pinned images (ErsatzTV, Kometa) stay manual; they show as
+"update available (by hand)".

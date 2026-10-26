@@ -166,3 +166,17 @@
       {% for s in ops_allow %}
       {{ s }}
       {% endfor %}
+
+# Services the sysadmin may update (ops verb "update"): hosts.yml auto_update, {stack: [service, ...]}.
+# Internet-facing media apps only; apps with a database migration risk (Authentik, Nextcloud,
+# Immich, Paperless) stay manual and only show up as "update available".
+- name: Auto-update list
+  ansible.builtin.copy:
+    dest: /etc/homelab-autoupdate.conf
+    mode: "0644"
+    content: |
+      # Written by Ansible (role ops, hosts.yml auto_update): "stack service ..." per line.
+      # Read by homelab-ops (verb update) and homelab-agent (reported to n8n).
+      {% for stack, svcs in (auto_update | default({})).items() %}
+      {{ stack }} {{ svcs | join(' ') }}
+      {% endfor %}

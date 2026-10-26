@@ -34,11 +34,12 @@ Per-VM side: Ansible role `ops` (`homelab-agent`, `homelab-ops`).
 | `prowlarr-test <id>` | indexer disabled by backoff and the backoff has expired | re-tests, which re-enables it |
 | `docker-prune` | over 20 GB reclaimable | dangling images and build cache only |
 | `plex-remote-on` | Plex Remote Access off (critical at once), or plex.tv not listing the server in two reports in a row (`PLEX_REMOTE` in settings.js; false = Plex is meant to be LAN/Tailscale-only). Signed out of plex.tv is critical with no fix | switches Remote Access on, or off and on again so Plex re-publishes itself; answers with the new mapping state |
+| `update <service>` | Diun (on every VM) found a newer image for a service on that VM's auto-update list (`auto_update` in hosts.yml: Plex and Emby on gpu; Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd, qBittorrent, FlareSolverr and Jellyseerr on media), and it is between 03:00 and 05:00 Pacific (`UPDATE_HOURS`; `AUTO_UPDATE` false = list only). Other services get an info issue "update available (by hand)" and no fix | pulls that service's image tag (100 s limit) and recreates only that container (`--no-deps`) if the image changed; config under `/opt/appdata` is kept. The door refuses any service not in `/etc/homelab-autoupdate.conf` |
 | `remount-nas` | `/mnt/nfs` empty or unmounted while TrueNAS answers on 2049 (a mount that hangs is critical but gets no fix: that is the NAS) | lazy unmount, re-trigger the automount, then recreate only the services that use `/mnt/nfs` (and the ones that depend on them), from `NFS_SERVICES` in `/etc/homelab-agent.conf`, and only the ones that are up: a service that was stopped on purpose stays stopped. n8n, Postgres and the rest of the stack keep running |
 
 Limits: one fix per target per hour, three per day; `ops_never` services (n8n, Postgres, Redis,
 MariaDB, autoheal, tailscale) are never touched. Never: reboot or power off anything, delete
-under `/mnt/nfs`, pull images, change app settings (except Plex Remote Access back on), touch the Tdarr queue.
+under `/mnt/nfs`, pull images (the `update` fix aside, auto-update list only), change app settings (except Plex Remote Access back on), touch the Tdarr queue.
 
 Fixes run in a separate n8n execution from the one that planned them. n8n saves a workflow's
 memory (static data) whole at the end of an execution, so two executions that overlap overwrite
@@ -57,6 +58,12 @@ chat write that lands in that window is lost: a report is redone 15 minutes late
 can bring a used proposal back (its buttons are already gone, and it expires) or drop a confirmed
 fix's log entry and hold (the fix's answer logs it again and an `ok` stop is held again, unless that
 write lands in the same window).
+
+Image updates (since 2026-10-26, Goobs): Diun on each VM posts to `/webhook/homelab/diun`; Store
+event keeps the newest per VM and service (`sd.updates`), and Evaluate report raises it as an info issue
+on that VM's next report, so it shows in the digest, in `lab_overview` and in the chat, which can also
+propose `update <service>` for Confirm. An entry clears once the running container's image id changes
+(the agent reports `image_id`), whoever updated it.
 
 ## Issues: when they open, close and repeat
 
