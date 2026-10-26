@@ -97,7 +97,8 @@ TrueNAS has no dashboard yet: the metric names depend on what the NAS sends. Onc
 
    Put the token's value in `PVE_EXPORTER_TOKEN` and a random `GRAFANA_ADMIN_PASSWORD` in the apps
    secrets: `sops stacks/apps/secrets.sops.env`.
-2. **TrueNAS exporter**: System > Reporting > Exporters > Add: type GRAPHITE, destination
+2. **TrueNAS exporter** (after the NAS is upgraded to 25.10; the screen moves between versions,
+   so check the path there): Reporting > Exporters > Add: type GRAPHITE, destination
    192.168.1.53, port 2003, prefix `truenas`, namespace `nas`, update every 10 s.
 3. Deploy (below), then run `docs/kuma_setup.py` for the Grafana and Prometheus monitors (digest only).
 
