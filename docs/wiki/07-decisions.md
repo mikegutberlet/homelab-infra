@@ -40,10 +40,13 @@ machine arrives.
 
 ### D05: Remote access only through Tailscale
 
-**Decision (Goobs, 2026-10-21).** No open router ports; the Tailnet is the way in. **Exception
-(Goobs, 2026-10-21 18:31 UTC).** The existing Plex forward (6996 to 32400) was re-pointed to the new
-Plex so clients without Tailscale keep working. That also needs Plex's own Remote Access switch on;
-the sysadmin turns it back on when it finds it off (2026-10-25, after it went off in a power cut). **Fallback.** wg-easy stays in the edge stack for a
+**Decision (Goobs, 2026-10-21).** No open router ports; the Tailnet is the way in. **Former
+exception (Goobs, 2026-10-21 18:31 UTC).** The existing Plex forward (6996 to 32400) was re-pointed
+to the new Plex so clients without Tailscale keep working. The internet is Starlink (carrier NAT),
+so it never could, and Goobs had it **removed on 2026-10-26**; remote Plex apps use the plex.tv
+relay. Plex's own Remote Access switch must still stay on, or plex.tv stops listing the server and
+even home devices lose it; the sysadmin turns it back on when it finds it off (2026-10-25, after it
+went off in a power cut). **Fallback.** wg-easy stays in the edge stack for a
 Tailscale outage, not started yet.
 
 ### D06: Authentik forward auth, with exceptions
