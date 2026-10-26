@@ -38,7 +38,7 @@ function checkFix(sd, p) {
   // Own keys only: Chat state passes the posted verb straight in, and CHAT_VERBS.constructor exists.
   const kind = Object.prototype.hasOwnProperty.call(CHAT_VERBS, p.verb) ? CHAT_VERBS[p.verb] : null;
   if (!kind) return { error: `"${p.verb}" is not one of the safe fixes` };
-  if (p.verb === 'arr-blocklist' && !S.BLOCKLIST_ENABLED) return { error: 'arr-blocklist stays off until arr-retry has run clean for a week' };
+  if (p.verb === 'arr-blocklist' && !S.BLOCKLIST_ENABLED) return { error: 'arr-blocklist stays off (BLOCKLIST_ENABLED is false)' };
   const a = (Array.isArray(p.args) ? p.args : String(p.args || '').split(/\s+/)).map((x) => String(x).trim()).filter(Boolean);
   let target;
   if (kind === 'service') {
