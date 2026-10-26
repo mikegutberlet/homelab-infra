@@ -73,7 +73,7 @@ at 230 to 308 MB/s. The pre-change VM config is saved on the Mac
 
 | Item | What is known |
 | --- | --- |
-| Router / gateway | 192.168.1.1, also the DNS server handed to the VMs. Model `(unverified)`. Does not do VLANs. No port forwards (the Plex 6996 forward was removed on 2026-10-26; it never worked behind Starlink's carrier NAT) |
+| Router / gateway | 192.168.1.1, also the DNS server handed to the VMs. Linksys Velop mesh Wi-Fi (Goobs, 2026-10-26; exact model not recorded), behind the Starlink connection. Does not do VLANs. No port forwards (the Plex 6996 forward was removed by Goobs on 2026-10-26; it never worked behind Starlink's carrier NAT) |
 | Switch | A flat, unmanaged switch; everything is on one 192.168.1.0/24 segment |
 | DHCP range | Not recorded. 192.168.1.50 to .54 were checked free before use `(router range unverified)` |
 | Internet | Residential connection; provider and speed not recorded |
