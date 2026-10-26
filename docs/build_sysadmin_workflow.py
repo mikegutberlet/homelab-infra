@@ -358,11 +358,14 @@ def _build(ops_door_id=OPS_DOOR_ID):
     link("Chat next", "Sysadmin agent", 1)
     # Retry each call; when the main model still fails, the agent falls back to Gemini, another
     # provider, so an Anthropic outage does not take the chat down. Haiku 5.5 rejects any temperature
-    # but its default, so none is set; its thinking counts toward the token cap, hence 4096.
+    # but its default, so none is set. Thinking is switched off: Haiku 5.5 thinks by default, and
+    # after a turn with parallel tool calls n8n sends the thinking blocks back in a form the API
+    # rejects ("Invalid `signature` in `thinking` block"), which the Gemini fallback cannot read
+    # either ("Unknown content type thinking"). Node 1.3 sends thinking {type: disabled} for false.
     retry = {"retryOnFail": True, "maxTries": 3, "waitBetweenTries": 5000}
     a = cred("anthropicApi", "Anthropic API key")
     node("Claude", "@n8n/n8n-nodes-langchain.lmChatAnthropic", 1.3, (640, 1900),
-         {"model": {"__rl": True, "mode": "id", "value": CHAT_MODEL}, "options": {"maxTokensToSample": 4096}}, **retry, **({"credentials": a} if a else {}))
+         {"model": {"__rl": True, "mode": "id", "value": CHAT_MODEL}, "options": {"maxTokensToSample": 4096, "thinking": False}}, **retry, **({"credentials": a} if a else {}))
     link("Claude", "Sysadmin agent", 0, "ai_languageModel")
     g = cred("googlePalmApi", "Gemini API key")
     node("Gemini fallback", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1.2, (760, 1900), {"modelName": CHAT_FALLBACK_MODEL, "options": {"temperature": 0.2}}, **retry, **({"credentials": g} if g else {}))

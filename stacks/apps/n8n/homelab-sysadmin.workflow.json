@@ -986,7 +986,8 @@
           "value": "claude-haiku-5-5"
         },
         "options": {
-          "maxTokensToSample": 4096
+          "maxTokensToSample": 4096,
+          "thinking": false
         }
       },
       "retryOnFail": true,
