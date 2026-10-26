@@ -11,9 +11,12 @@ What it does, in order:
      from the ai VM's /opt/stacks/ai/.env (LLM_API_KEY, the one Open WebUI uses), and the Anthropic
      key (~/.config/homelab/anthropic_api_key) and ops private key from the Mac. Nothing is printed.
   2. Imports five SSH credentials (ops edge/media/gpu/apps/ai), four Header Auth credentials
-     (Proxmox API token, TrueNAS API key, Gemini API key, Sysadmin chat token) and the "Anthropic
-     API key" into n8n through its CLI, replacing same-named ones. The chat token is made here on first run and kept in
+     (Proxmox API token, TrueNAS API key, Sysadmin chat token, Sysadmin internal token), the
+     "Gemini API key" and the "Anthropic API key" into n8n through its CLI, replacing same-named
+     ones. The chat token is made here on first run and kept in
      /opt/appdata/sysadmin-chat/token.env on the apps VM, where the chat page's nginx reads it.
+     The internal token (n8n's calls to its own act, fixresult and chatstate webhooks) is new on
+     every run and kept only in n8n, so the chat page and the bot cannot call those webhooks.
   3. Imports the "Homelab ops door" sub-workflow (the chat agent's SSH lookups and confirmed fixes),
      then builds the sysadmin workflow with those credential ids plus the existing "Gmail SMTP" id,
      imports it (replacing an earlier "Homelab sysadmin"), deactivates the old "Homelab digest" (same
@@ -97,6 +100,8 @@ if not chat_token:
     chat_token = secrets.token_urlsafe(32)
     ssh(f"sudo install -d -m 750 -o root -g root {TOKEN_ENV.rsplit('/', 1)[0]} && sudo sh -c 'umask 077; cat > {TOKEN_ENV}'", stdin=f"CHAT_TOKEN={chat_token}\n")
     print(f"  new chat token written to {TOKEN_ENV}")
+# n8n's token for its own internal webhooks: both ends are in n8n, so a fresh one each run is enough.
+internal_token = secrets.token_urlsafe(32)
 
 print("Existing credentials...")
 all_creds = n8n_json("n8n export:credentials --all")
@@ -116,7 +121,8 @@ for h in HOSTS:
                   "data": {"host": builder.HOSTS[h], "port": 22, "username": "ops", "privateKey": priv, "passphrase": ""}})
 for name, header, value in (("Proxmox API token", "Authorization", f"PVEAPIToken=homepage@pve!homepage={pve_secret}"),
                             ("TrueNAS API key", "Authorization", f"Bearer {nas_key}"),
-                            ("Sysadmin chat token", "X-Chat-Token", chat_token)):
+                            ("Sysadmin chat token", "X-Chat-Token", chat_token),
+                            (builder.INTERNAL_TOKEN, "X-Internal-Token", internal_token)):
     ids[name] = existing.get(name, new_id())
     creds.append({"id": ids[name], "name": name, "type": "httpHeaderAuth", "data": {"name": header, "value": value}})
 ids["Gemini API key"] = existing.get("Gemini API key", new_id())

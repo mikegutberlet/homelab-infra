@@ -14,6 +14,9 @@ Credentials are not in the file; n8n asks on import. Names it expects:
   "Gemini API key"      Google Gemini(PaLM) Api: the ai stack's LLM_API_KEY (chat agent's fallback model)
   "Sysadmin chat token" Header Auth: X-Chat-Token = <token> (the chat page's nginx and the Telegram
                         bot send it to the chat webhook; the Telegram push nodes send it to the bot)
+  "Sysadmin internal token" Header Auth: X-Internal-Token = <token> (n8n sends it to its own act,
+                        fixresult and chatstate webhooks; sysadmin_deploy.py makes a new one on every
+                        run and keeps it only in n8n)
 
 The chat agent's lookups and confirmed fixes go through a second, small workflow, "Homelab ops
 door" (stacks/apps/n8n/homelab-ops-door.workflow.json, fixed id OPS_DOOR_ID): one SSH node per VM
@@ -21,6 +24,7 @@ behind a host switch, so the sysadmin workflow does not need a second copy of th
 """
 import json
 import pathlib
+import re
 import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -38,9 +42,17 @@ TELEGRAM_NOTIFY_URL = "http://sysadmin-telegram:3004/notify"
 # n8n posting to its own webhooks (same container). Decide and Record fix result hand their emails
 # and fixes to homelab/act, and the fix run posts the answer to homelab/fixresult, so no report,
 # infra or fix-result run waits on SMTP or SSH (n8n saves the whole static data when a run ends,
-# last writer wins). The chat's propose and confirm paths still write and then wait (the model, the
-# ops door). Both webhooks take the "Sysadmin chat token" header like the chat webhook.
+# last writer wins). The chat follows the same rule: its run waits on the model and the ops door and
+# writes nothing; it posts proposals and Confirm/Cancel to homelab/chatstate (a short run, the chat's
+# only writer) and a confirmed fix's answer to homelab/fixresult. build() checks that no Code node of
+# the chat run writes static data. Two runs still load the static data, wait, then write: the
+# 15-minute infra run (its HTTP reads come before Evaluate infra and Decide; normally 1-3 s, up to
+# about 2 min when reads time out) and the 08:00 digest (the Telegram push and the email come before
+# Digest sent). A report, chatstate or fixresult write that lands in that window is lost.
+# The three internal webhooks take their own token (INTERNAL_TOKEN), not the chat token the chat
+# page's nginx and the Telegram bot hold: act runs any fix and sends any email it is given.
 INTERNAL = "http://127.0.0.1:5678/webhook"
+INTERNAL_TOKEN = "Sysadmin internal token"
 HOSTS = {"edge": "192.168.1.50", "media": "192.168.1.51", "gpu": "192.168.1.52", "apps": "192.168.1.53", "ai": "192.168.1.54"}
 HOSTS_LIST = list(HOSTS)
 NS = uuid.UUID("3f1d2a8e-6b44-4c1a-9a3e-0d5c7b2f9e10")
@@ -84,9 +96,10 @@ def link(src, dst, out=0, kind="main", index=0):
     conn[src][kind][out].append({"node": dst, "type": kind, "index": index})
 
 
-def webhook(name, path, pos, auth=None):
-    """A POST webhook that answers at once; auth names a Header Auth credential the caller must send."""
-    p = {"httpMethod": "POST", "path": path, "responseMode": "onReceived", "options": {}}
+def webhook(name, path, pos, auth=None, respond="onReceived"):
+    """A POST webhook that answers at once (respond="responseNode": a Respond to Webhook node answers);
+    auth names a Header Auth credential the caller must send."""
+    p = {"httpMethod": "POST", "path": path, "responseMode": respond, "options": {}}
     extra = {}
     if auth:
         p["authentication"] = "headerAuth"
@@ -111,14 +124,16 @@ def http(name, url, pos, auth=None, insecure=False, body=None, timeout=15000, **
     return node(name, "n8n-nodes-base.httpRequest", 4.2, pos, p, **extra)
 
 
-def handoff(name, path, pos, source=None):
+def handoff(name, path, pos, source=None, body=None, timeout=10000, **more):
     """POST to one of this workflow's internal webhooks, once: all of `source`'s items as {items: [...]},
-    or (no source) the one input item as it is."""
-    body = f"={{{{ JSON.stringify({{ items: $('{source}').all().map((i) => i.json) }}) }}}}" if source else "={{ JSON.stringify($json) }}"
+    `body` (a JS expression for the JSON object), or the one input item as it is. A failure (or
+    timeout) only marks this node, and the next node gets {error}."""
+    body = (f"={{{{ JSON.stringify({{ items: $('{source}').all().map((i) => i.json) }}) }}}}" if source
+            else f"={{{{ JSON.stringify({body}) }}}}" if body else "={{ JSON.stringify($json) }}")
     p = {"method": "POST", "url": f"{INTERNAL}/{path}", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
-         "sendBody": True, "contentType": "json", "specifyBody": "json", "jsonBody": body, "options": {"timeout": 10000}}
-    c = cred("httpHeaderAuth", "Sysadmin chat token")
-    return node(name, "n8n-nodes-base.httpRequest", 4.2, pos, p, onError="continueRegularOutput", executeOnce=True, **({"credentials": c} if c else {}))
+         "sendBody": True, "contentType": "json", "specifyBody": "json", "jsonBody": body, "options": {"timeout": timeout}}
+    c = cred("httpHeaderAuth", INTERNAL_TOKEN)
+    return node(name, "n8n-nodes-base.httpRequest", 4.2, pos, p, onError="continueRegularOutput", executeOnce=True, **more, **({"credentials": c} if c else {}))
 
 
 def telegram_push(name, pos):
@@ -141,6 +156,7 @@ def build(cred_ids=None, cred_names=None, ops_door_id=OPS_DOOR_ID):
     """Return the sysadmin workflow dict; cred_ids maps credential names to n8n ids (optional)."""
     _reset(cred_ids, cred_names)
     _build(ops_door_id)
+    check_chat_run_writes_nothing()
     return {"name": "Homelab sysadmin", "nodes": list(nodes), "connections": dict(conn),
             "settings": {"executionOrder": "v1", "timezone": "America/Los_Angeles", "saveExecutionProgress": False}}
 
@@ -175,6 +191,53 @@ def tool_code(name, description, file, schema=None, pos=(0, 0)):
     if schema:
         p.update({"schemaType": "manual", "inputSchema": json.dumps(schema, indent=2)})
     return node(f"tool {name}", "@n8n/n8n-nodes-langchain.toolCode", 1.3, pos, p)
+
+
+# A write to static data in the chat run would be saved whole when that run ends, after the model
+# or the ops door (up to minutes), over whatever the VM reports wrote meanwhile. Only Chat state
+# (homelab/chatstate, a run of its own) writes. A chat-run node may read, as `const sd = ...`; the
+# check looks for writes through sd and through names bound straight to it (const e = (sd.x || [])...).
+def _writes(v):
+    path = rf"\b{v}(?:\.[A-Za-z_$][\w$]*|\[[^\]\n]*\])"
+    return [
+        (path + r"+\s*(?:\*\*|<<|>>>?|\?\?|\|\||&&|[-+*/%&|^])?=(?![=>])", "assigns into static data"),
+        (path + r"+\s*(?:\+\+|--)|(?:\+\+|--)\s*" + path + "+", "counts up or down in static data"),
+        (rf"\bdelete\s+{v}\b", "deletes from static data"),
+        (path + r"*\.(?:push|pop|shift|unshift|splice|sort|reverse|fill|copyWithin)\s*\(", "changes an array in static data"),
+        (rf"\bObject\.assign\s*\(\s*{v}\b", "assigns into static data"),
+    ]
+
+
+def check_chat_run_writes_nothing():
+    """Fail the build when a Code node or Code Tool on the chat webhook's run could write static data."""
+    shared = [(SRC / f).read_text() for f in ("settings.js", "chat_common.js")]
+    by_name = {n["name"]: n for n in nodes}
+    run, todo = set(), ["chat"]
+    while todo:  # the main connections from the chat webhook, plus the sub-nodes (tools) of each node reached
+        name = todo.pop()
+        if name in run:
+            continue
+        run.add(name)
+        todo += [t["node"] for out in conn.get(name, {}).get("main", []) for t in out]
+        todo += [src for src, kinds in conn.items() for kind, outs in kinds.items() if kind != "main" for out in outs for t in out if t["node"] == name]
+    bad = []
+    for name in sorted(run):
+        js = by_name[name]["parameters"].get("jsCode")
+        if js is None:
+            continue
+        for part in shared:
+            js = js.replace(part, "", 1)
+        js = re.sub(r"(^|\s)//.*", r"\1", js)
+        if re.search(r"\bchatStore\s*\(", js):
+            bad.append(f"{name}: calls chatStore (it creates sd.chat)")
+        if js.count("$getWorkflowStaticData") != len(re.findall(r"\bconst sd = \$getWorkflowStaticData\('global'\);", js)):
+            bad.append(f"{name}: reads static data under another name than `const sd`")
+        names = {"sd"} | set(re.findall(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*[(\s]*sd\b", js))
+        bad += [f"{name}: {why}: {m.group(0).strip()}" for v in sorted(names) for rx, why in _writes(re.escape(v)) for m in re.finditer(rx, js)]
+    if "Chat prepare" not in run or "tool propose_fix" not in run or "Chat state" in run:
+        bad.append(f"the chat run is not what this check expects: {sorted(run)}")
+    if bad:
+        raise SystemExit("The chat run must not write static data (only Chat state, homelab/chatstate, does):\n  " + "\n  ".join(bad))
 
 
 def _build(ops_door_id=OPS_DOOR_ID):
@@ -227,7 +290,7 @@ def _build(ops_door_id=OPS_DOOR_ID):
     link("Decide", "Hand off")
 
     # ---- act: emails and fixes, in a run that never touches static data ----
-    webhook("act", "homelab/act", (0, 2600), auth="Sysadmin chat token")
+    webhook("act", "homelab/act", (0, 2600), auth=INTERNAL_TOKEN)
     node("Act", "n8n-nodes-base.code", 2, (260, 2600), {"jsCode": code("act.js")})
     link("act", "Act")
     node("Email or fix", "n8n-nodes-base.switch", 3.2, (520, 2600), {"rules": {"values": [is_("kind", "email", "email"), is_("kind", "fix", "fix")]}, "options": {}})
@@ -264,29 +327,34 @@ def _build(ops_door_id=OPS_DOOR_ID):
     link("Fix answer", "Post fix result")
 
     # ---- fixresult: log the answer (a short run), then hand off its email or follow-up ----
-    webhook("fixresult", "homelab/fixresult", (0, 3100), auth="Sysadmin chat token")
+    webhook("fixresult", "homelab/fixresult", (0, 3100), auth=INTERNAL_TOKEN)
     node("Record fix result", "n8n-nodes-base.code", 2, (260, 3100), {"jsCode": code("record_fix.js")})
     link("fixresult", "Record fix result")
     handoff("Hand off result", "homelab/act", (520, 3100), source="Record fix result")
     link("Record fix result", "Hand off result")
 
-    # ---- chat page (stacks/apps/sysadmin-chat): a question goes to the AI Agent, which reads the
-    # sysadmin's state through Code Tools and the ops door through the sub-workflow; a fix it proposes
-    # waits for Goobs's Confirm, which comes back as its own request and is checked in code ----
+    # ---- chat page (stacks/apps/sysadmin-chat) and Telegram bot: a question goes to the AI Agent,
+    # which reads the sysadmin's state through Code Tools and the ops door through the sub-workflow;
+    # a fix it proposes waits for Goobs's Confirm, which comes back as its own request and is checked
+    # in code. This run waits on the model or the ops door, so it writes no static data: Chat state
+    # (homelab/chatstate, below) registers proposals and claims Confirm/Cancel, and the fix's answer
+    # goes to homelab/fixresult like an automatic fix's ----
     c = cred("httpHeaderAuth", "Sysadmin chat token")
     node("chat", "n8n-nodes-base.webhook", 2, (0, 1700), {"httpMethod": "POST", "path": "homelab/chat", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}},
          webhookId=nid("wh-chat"), **({"credentials": c} if c else {}))
     node("Chat prepare", "n8n-nodes-base.code", 2, (260, 1700), {"jsCode": chat_code("chat_prepare.js")})
     link("chat", "Chat prepare")
-    node("Chat next", "n8n-nodes-base.switch", 3.2, (520, 1700), {"rules": {"values": [is_("route", "reply", "reply"), is_("route", "agent", "agent"), is_("route", "fix", "fix")]}, "options": {}})
+    node("Chat next", "n8n-nodes-base.switch", 3.2, (520, 1700), {"rules": {"values": [is_("route", "reply", "reply"), is_("route", "agent", "agent"), is_("route", "claim", "claim")]}, "options": {}})
     link("Chat prepare", "Chat next")
-    node("Chat respond", "n8n-nodes-base.respondToWebhook", 1.1, (1340, 1560), {"respondWith": "json", "responseBody": "={{ JSON.stringify($json.reply) }}", "options": {}})
+    # Every answer but a confirmed fix's leaves here; only $json.reply ({text} or {text, proposal}) is sent.
+    node("Chat respond", "n8n-nodes-base.respondToWebhook", 1.1, (1960, 1560), {"respondWith": "json", "responseBody": "={{ JSON.stringify($json.reply) }}", "options": {}})
     link("Chat next", "Chat respond", 0)
-    # The agent and its sub-nodes.
+    # The agent and its sub-nodes. Its steps come back with the answer (returnIntermediateSteps), so
+    # Chat finish can see which fix propose_fix allowed; they are never sent to the page or the bot.
     node("Sysadmin agent", "@n8n/n8n-nodes-langchain.agent", 3.1, (800, 1700), {
         "promptType": "define", "text": "={{ $json.chatInput }}", "hasOutputParser": False, "needsFallback": True,
         "options": {"systemMessage": (SRC / "chat_common.js").read_text().split("const CHAT_SYSTEM = `")[1].split("`;")[0],
-                    "maxIterations": 8, "returnIntermediateSteps": False, "enableStreaming": False}}, onError="continueRegularOutput")
+                    "maxIterations": 8, "returnIntermediateSteps": True, "enableStreaming": False}}, onError="continueRegularOutput")
     link("Chat next", "Sysadmin agent", 1)
     # Retry each call; when the main model still fails, the agent falls back to Gemini, another
     # provider, so an Anthropic outage does not take the chat down. Haiku 5.5 rejects any temperature
@@ -317,13 +385,49 @@ def _build(ops_door_id=OPS_DOOR_ID):
         link(t, "Sysadmin agent", 0, "ai_tool")
     node("Chat finish", "n8n-nodes-base.code", 2, (1080, 1700), {"jsCode": chat_code("chat_finish.js")})
     link("Sysadmin agent", "Chat finish")
-    link("Chat finish", "Chat respond")
-    # A confirmed fix: Chat prepare already logged it; the ops door runs it.
-    node("Run confirmed fix", "n8n-nodes-base.executeWorkflow", 1.2, (800, 2200), {"source": "database", "workflowId": DOOR, "mode": "once", "options": {}}, onError="continueRegularOutput")
-    link("Chat next", "Run confirmed fix", 2)
-    node("Chat after fix", "n8n-nodes-base.code", 2, (1080, 2200), {"jsCode": chat_code("chat_after_fix.js")})
+    node("Finish next", "n8n-nodes-base.switch", 3.2, (1300, 1700), {"rules": {"values": [is_("route", "reply", "reply"), is_("route", "register", "register")]}, "options": {}})
+    link("Chat finish", "Finish next")
+    link("Finish next", "Chat respond", 0)
+    # A proposal: Chat state numbers it and parks it for this session; Proposal reply adds the buttons.
+    handoff("Register proposal", "homelab/chatstate", (1520, 1800), timeout=15000,
+            body="{ op: 'propose', sessionId: $json.sessionId, fix: $json.fix, reason: $json.reason }")
+    link("Finish next", "Register proposal", 1)
+    node("Proposal reply", "n8n-nodes-base.code", 2, (1740, 1800), {"jsCode": chat_code("chat_proposal_reply.js")})
+    link("Register proposal", "Proposal reply")
+    link("Proposal reply", "Chat respond")
+    # Confirm or Cancel: Chat state claims the proposal (and logs a confirmed fix as started); only
+    # then does the ops door run it. Chat after fix answers Goobs first (Fix respond), then posts the
+    # door's answer to homelab/fixresult, so a failed post never changes or delays the reply.
+    # Claim waits long (Chat state normally answers in well under a second): giving up on a claim that
+    # Chat state then makes would leave a "started" fix that never ran. Not retried: a second claim
+    # finds the proposal gone.
+    handoff("Claim", "homelab/chatstate", (800, 2100), timeout=60000,
+            body="{ op: 'claim', sessionId: $json.sessionId, n: $json.n, action: $json.action, who: $json.who }")
+    link("Chat next", "Claim", 2)
+    node("Claim answer", "n8n-nodes-base.code", 2, (1020, 2100), {"jsCode": chat_code("chat_claim_answer.js")})
+    link("Claim", "Claim answer")
+    node("Claim next", "n8n-nodes-base.switch", 3.2, (1240, 2100), {"rules": {"values": [is_("route", "reply", "reply"), is_("route", "fix", "fix")]}, "options": {}})
+    link("Claim answer", "Claim next")
+    link("Claim next", "Chat respond", 0)
+    node("Run confirmed fix", "n8n-nodes-base.executeWorkflow", 1.2, (1460, 2200), {"source": "database", "workflowId": DOOR, "mode": "once", "options": {}}, onError="continueRegularOutput")
+    link("Claim next", "Run confirmed fix", 1)
+    node("Chat after fix", "n8n-nodes-base.code", 2, (1680, 2200), {"jsCode": chat_code("chat_after_fix.js")})
     link("Run confirmed fix", "Chat after fix")
-    link("Chat after fix", "Chat respond")
+    node("Fix respond", "n8n-nodes-base.respondToWebhook", 1.1, (1900, 2200), {"respondWith": "json", "responseBody": "={{ JSON.stringify($json.reply) }}", "options": {}})
+    link("Chat after fix", "Fix respond")
+    # Retried (n8n retries a node whose output is {error}): a lost post leaves the entry "started"
+    # for good. A second post of the same chat result is harmless (Record fix result sets it again).
+    handoff("Post chat fix result", "homelab/fixresult", (2120, 2200), body="{ results: $json.results }",
+            retryOnFail=True, maxTries=3, waitBetweenTries=2000)
+    link("Fix respond", "Post chat fix result")
+
+    # ---- chatstate: the chat's writes (register a proposal, claim a Confirm/Cancel) in a short run
+    # that answers the chat run's "Register proposal" or "Claim" ----
+    webhook("chatstate", "homelab/chatstate", (0, 3400), auth=INTERNAL_TOKEN, respond="responseNode")
+    node("Chat state", "n8n-nodes-base.code", 2, (260, 3400), {"jsCode": chat_code("chat_state.js")})
+    link("chatstate", "Chat state")
+    node("Chat state reply", "n8n-nodes-base.respondToWebhook", 1.1, (520, 3400), {"respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}", "options": {}})
+    link("Chat state", "Chat state reply")
 
     # ---- the 08:00 digest and the legacy webhooks (unchanged paths) ----
     node("Every day 08:00", "n8n-nodes-base.scheduleTrigger", 1.2, (0, 900), {"rule": {"interval": [{"field": "cronExpression", "expression": "0 8 * * *"}]}})

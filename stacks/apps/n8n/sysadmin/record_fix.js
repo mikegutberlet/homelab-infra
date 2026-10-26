@@ -2,6 +2,7 @@
 // (homelab/fixresult), so the slow SSH run never saves static data. Updates each fix log entry by
 // id, keeps a stopped service on hold, and hands any email and follow-up restart to homelab/act.
 // A failed fix emails only for a critical issue; a warning's failed fix waits for the digest.
+// A fix confirmed in chat comes here too (Chat after fix), after the chat has told Goobs the result.
 const sd = $getWorkflowStaticData('global');
 sd.fixlog = sd.fixlog || []; sd.held = sd.held || {}; sd.issues = sd.issues || {};
 const S = SETTINGS;
@@ -18,11 +19,20 @@ for (const j of b.results || []) {
     // The planning run had not saved yet (or this is a stray post): log what came back anyway.
     entry = { id: j.id, t: now, host: j.host, cmd: j.cmd, verb: String(j.cmd || '').split(' ')[0], target: String(j.cmd || '').split(' ').slice(1).join(' '), key: j.key, title: j.title || j.cmd, status: 'started' };
     entry.tkey = `${entry.host}:${entry.verb}:${entry.target}`;
+    // Chat state names chat fixes chat-<n>-<time>: they count toward CHAT_FIX_PER_DAY and are held as "from chat".
+    if (String(j.id).startsWith('chat-')) entry.source = 'chat';
     sd.fixlog.push(entry);
   }
   entry.status = ok ? 'ok' : answer && answer.result === 'refused' ? 'refused' : 'failed';
   entry.detail = detail; entry.done = now;
   const { host, verb, target } = entry;
+  // Confirmed in chat: Goobs already has the answer there, so no email and no follow-up. Chat state
+  // held a stop when it was claimed (and Evaluate report holds an ok one, as "from chat", if that
+  // write was lost); a failed one drops any hold, like an automatic stop.
+  if (entry.source === 'chat') {
+    if (verb === 'stop' && !ok) delete sd.held[`${host}:${target}`];
+    continue;
+  }
   const it = sd.issues[entry.key] || null;
   const sev = (it && it.sev) || entry.sev || 'warning';
   const about = it ? `${it.title}\n    ${it.detail}\n    open since ${fmtT(it.first)}` : entry.title;
