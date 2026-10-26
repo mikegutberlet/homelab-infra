@@ -249,6 +249,12 @@ if (px && px.answering) {
   // One plex.tv answer without the server can be a blip: critical (and a re-publish) from the second.
   else if (px.listed === false && pp.listed !== false) add('plex-listed', 'warning', 'plex.tv does not list Plex (Tahoe) as a server', 'Apps that find servers through plex.tv see nothing; re-published if it is still missing at the next check');
   else if (px.listed === false) add('plex-listed', 'critical', 'plex.tv does not list Plex (Tahoe) as a server', 'The Roku and other apps that find servers through plex.tv see nothing', on);
+  // A device Plex keeps turning away (401) holds a sign-in plex.tv no longer issues; only signing out
+  // and in on that device fixes it (the Roku, 2026-10-25). Three or more in two reports in a row,
+  // so one wrong PIN is not a warning. 127.0.0.1 is a remote app coming in through the Plex relay.
+  const wasRefused = new Set((pp.refused || []).filter((x) => x.n >= 3).map((x) => x.ip));
+  for (const x of (px.refused || []).filter((y) => y.n >= 3 && wasRefused.has(y.ip)))
+    add(`plex-refused:${x.ip}`, 'warning', `Plex keeps refusing ${x.ip === '127.0.0.1' ? 'a remote app (through the relay)' : `the device at ${x.ip}`} (${x.n} times in 15 min)`, 'It holds a Plex sign-in that plex.tv no longer issues. In that device\'s Plex app: Settings > Sign out, then sign in again with the code at plex.tv/link');
   // The forward on the router cannot help behind carrier NAT (seen 2026-10-25, router WAN 100.82.x).
   if (S.PLEX_REMOTE && px.publish && px.mapping_error) add('plex-nat', 'info', `Plex is not reachable directly from outside the house (${px.mapping_error})`, px.mapping_error === 'doublenat' ? 'The router itself sits behind another NAT (carrier NAT or a second router), so the 6996 forward cannot work; remote apps fall back to the slow Plex relay. At home and over Tailscale it is fine' : 'Remote apps fall back to the slow Plex relay; check the 6996 forward on the router');
 }

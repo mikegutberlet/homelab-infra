@@ -10,7 +10,8 @@
 //   - keep English + the title's original language + und/untagged + forced subs; drop other
 //     dubs and commentary (never drop the last audio track)
 //   - replace only if the result is at least 20% smaller and passes a full decode check
-//   - same file name (extension becomes .mkv); every original is moved to the NAS holding folder
+//   - same file name (extension becomes .mkv), copied to Media/.tdarr-staging and renamed into place;
+//     every original is moved to the NAS holding folder
 //     (to-delete/tdarr-originals/<date>/...), never deleted here: Goobs empties it after checking
 //   - stops encoding while the NAS has less than 3 TB free (originals pile up until emptied)
 //   - Radarr rescans the movie / Sonarr rescans the series afterwards
@@ -21,6 +22,11 @@ const { spawnSync } = require('child_process');
 
 const CFG = '/app/configs/hevc';
 const HOLD_ROOT = '/mnt/nfs/to-delete/tdarr-originals';
+// New files are copied here first, outside every library folder, and renamed into place once
+// complete. It sits on the /mnt/nfs/Media bind mount (to-delete is another one, and rename across
+// mounts fails). 2026-10-23: a copy next to the original hung in a kernel NFS bug, and Plex's
+// scanner froze on it for two days.
+const STAGING = '/mnt/nfs/Media/.tdarr-staging';
 const MIN_FREE = 3e12;
 const MIN_BPS = 5.5e6;
 const LOG = '/app/logs/hevc-run.tsv';
@@ -173,9 +179,10 @@ module.exports = async (args) => {
 
   if (args.dryRun) { log([src, size, newSize, secs, `dry run ok; output left at ${work}`]); return { outputFileObj: { _id: work }, outputNumber: 3, variables: args.variables }; }
 
-  // Replace: copy next to the original, then retire the original, then rename into place.
+  // Replace: copy to the staging folder, then retire the original, then rename into place.
   const dest = path.join(path.dirname(src), `${base}.mkv`);
-  const tmp = `${dest}.tdarr-tmp`;
+  fs.mkdirSync(STAGING, { recursive: true });
+  const tmp = path.join(STAGING, `${kind}-${item.id}-${path.basename(dest)}`);
   if (spawnSync('cp', [work, tmp]).status !== 0 || fs.statSync(tmp).size !== newSize) throw new Error('copy to NAS failed');
   fs.unlinkSync(work);
   // Retire the original into the holding folder (copy, verify size, then remove the source).

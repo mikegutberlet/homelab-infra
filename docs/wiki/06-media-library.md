@@ -63,6 +63,7 @@ pilot (23:32 UTC) to go straight to the full run.
 | Audio | Keep English plus the title's original language; drop other dubs and commentary; DTS, DTS-HD and TrueHD converted to E-AC3 640k; AC3/AAC/E-AC3 copied |
 | Subtitles | Keep English and original language; always keep forced subs and untagged (`und`) tracks |
 | Replace only if | at least 20% smaller **and** the output passes a health check; filenames kept |
+| How a file is replaced | The new file is copied to `Media/.tdarr-staging/` (outside every library folder, same share so the final rename works), the original is copied to the holding folder and removed, then the new file is renamed into place. Until 2026-10-25 the copy sat next to the original as `*.tdarr-tmp`; on 2026-10-23 one hung in a kernel NFS bug and froze Plex's scanner for two days. Leftover `*.tdarr-tmp` files from before are incomplete copies |
 | Radarr / Sonarr | H.265 penalty off (PR #6); the flow triggers a Radarr movie or Sonarr series rescan per file; the first 5 are verified by hand (new file shown, no download queued) |
 | Schedule | 1 worker, low priority, paused 17:00 to 23:00 Pacific |
 | Safety nets | First day's originals (about 40 files) moved to `to-delete/2026-10-21/tdarr-originals` instead of deleted; SSIM spot-check on 3 early outputs; run log under `~/HomeLab/tdarr-review/run/` on the Mac |

@@ -295,16 +295,29 @@ plex_json() {
     pset=$(get "${h[@]}" 'http://127.0.0.1:32400/:/prefs')
     res=$(get "${h[@]}" -H 'X-Plex-Client-Identifier: homelab-agent' 'https://plex.tv/api/v2/resources')
   else acct='{}'; pset='{}'; res='{}'; fi
+  # Devices Plex turned away (401) in the last 15 minutes, by address. A device that holds a
+  # sign-in plex.tv no longer issues (the Roku, 2026-10-25) keeps knocking and gets nothing.
+  local logf="${prefs%/Preferences.xml}/Logs/Plex Media Server.log" refused='[]'
+  if [ -r "$logf" ]; then
+    refused=$(tail -n 200000 "$logf" | awk -v since="$(date -d '15 min ago' '+%Y%m%d%H%M%S')" '
+      BEGIN { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", m, " "); for (i in m) mon[m[i]] = sprintf("%02d", i) }
+      /Completed: \[/ && / 401 / {
+        d = $2; sub(",", "", d); t = $4; gsub(/[:.]/, "", t)
+        if ($3 mon[$1] sprintf("%02d", d) substr(t, 1, 6) < since) next
+        ip = $0; sub(/.*Completed: \[/, "", ip); sub(/\].*/, "", ip); sub(/:[0-9]+$/, "", ip); n[ip]++ }
+      END { for (ip in n) printf "%s\t%d\n", ip, n[ip] }' \
+      | jq -R -s -c 'split("\n") | map(select(length>0) | split("\t") | {ip:.[0], n:(.[1]|tonumber)}) | sort_by(-.n) | .[0:5]')
+  fi
   # listed: plex.tv has this server (by machine id) as one that provides "server"; null when
   # plex.tv or Plex did not answer.
-  printf '%s\n%s\n%s\n%s\n' "$ident" "$acct" "$pset" "$res" | jq -c -s --argjson tok "$([ -n "$tok" ] && echo true || echo false)" '
+  printf '%s\n%s\n%s\n%s\n' "$ident" "$acct" "$pset" "$res" | jq -c -s --argjson tok "$([ -n "$tok" ] && echo true || echo false)" --argjson refused "${refused:-[]}" '
     .[0].MediaContainer.machineIdentifier as $id | (.[1].MyPlex // {}) as $a
     | ((.[2].MediaContainer.Setting // []) | map(select(.id == "PublishServerOnPlexOnlineKey")) | .[0].value) as $pub
     | {answering:($id != null), token:$tok,
        publish:(if $pub == null then null else ($pub == true or $pub == "1" or $pub == 1) end),
        sign_in:($a.signInState // null), mapping:($a.mappingState // null),
        mapping_error:(if ($a.mappingError // "") == "" then null else $a.mappingError end),
-       public_port:($a.publicPort // null),
+       public_port:($a.publicPort // null), refused:$refused,
        listed:(if (.[3] | type) == "array" and $id != null
                then (.[3] | map(select(.clientIdentifier == $id and ((.provides // "") | split(",") | index("server")))) | length > 0)
                else null end)}'
