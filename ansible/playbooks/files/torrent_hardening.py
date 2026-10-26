@@ -114,21 +114,28 @@ def sabnzbd():
             sys.exit(f"SABnzbd API {params.get('mode')} -> {status}")
         return body
 
-    misc = api(mode="get_config", section="misc")["config"]["misc"]
+    def exts(v):
+        # SABnzbd returns the list as a JSON array once set, as "" or "," while empty.
+        items = v if isinstance(v, list) else str(v or "").split(",")
+        return ",".join(x.strip() for x in items if x.strip())
+
+    def read():
+        misc = api(mode="get_config", section="misc")["config"]["misc"]
+        return {"unwanted_extensions": exts(misc.get("unwanted_extensions")),
+                "action_on_unwanted_extensions": int(misc.get("action_on_unwanted_extensions", 0)),
+                "unwanted_extensions_mode": int(misc.get("unwanted_extensions_mode", 0))}
+
     want = {"unwanted_extensions": ",".join(BAD_EXT), "action_on_unwanted_extensions": 1, "unwanted_extensions_mode": 0}
-    current = {"unwanted_extensions": ",".join(x.strip() for x in str(misc.get("unwanted_extensions", "")).split(",") if x.strip()),
-               "action_on_unwanted_extensions": int(misc.get("action_on_unwanted_extensions", 0)),
-               "unwanted_extensions_mode": int(misc.get("unwanted_extensions_mode", 0))}
+    current = read()
     for k, v in want.items():
         if current[k] != v:
             note(f"SABnzbd {k} = {v!r} (was {current[k]!r})")
             if not DRY:
                 api(mode="set_config", section="misc", keyword=k, value=v)
     if not DRY and any(current[k] != v for k, v in want.items()):
-        misc = api(mode="get_config", section="misc")["config"]["misc"]
-        if ",".join(x.strip() for x in str(misc.get("unwanted_extensions")).split(",")) != want["unwanted_extensions"] \
-                or int(misc.get("action_on_unwanted_extensions")) != 1:
-            problems.append("SABnzbd did not keep the unwanted-extensions settings")
+        after = read()
+        if any(after[k] != v for k, v in want.items()):
+            problems.append(f"SABnzbd did not keep the unwanted-extensions settings: {after}")
     print("SABnzbd: ok" if all(current[k] == v for k, v in want.items()) else "SABnzbd: updated")
 
 
