@@ -47,6 +47,14 @@ Sonarr/Radarr. Listenarr has no delay profiles and no RSS worker; it ranks index
 priority (Usenet 1, torrents 50) and searches when a monitored book is added or a "search all" is
 run, so for audiobooks the torrent fallback is "lower priority", not "24 hours later".
 
+Allowed file types (Listenarr → Settings, `AllowedFileExtensions`): `.mp3 .flac .m4a .m4b .ogg .mp4`.
+`.mp4` was added 2026-10-26: some Usenet audiobook releases are AAC in an `.mp4` container (one
+even named "(m4b)"), and without it Listenarr logs `reported no source files and no content path`,
+never imports, keeps the book missing and grabs the same release again on every automatic search
+(about every 6 hours; The Martian and Match Game were each downloaded 15 times). SABnzbd's duplicate
+check is off, so it does not stop this. If a book shows the same grab repeatedly, look for that
+warning in `/opt/appdata/listenarr/logs` (the container's `docker logs` is empty).
+
 Quality: Listenarr profile prefers M4B (AAC), then MP3; Chaptarr keeps Readarr's ebook profile
 (EPUB preferred, MOBI/AZW3/PDF allowed). The cam/480p rules of the video stack do not apply.
 
