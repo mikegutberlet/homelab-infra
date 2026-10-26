@@ -260,8 +260,8 @@ if (px && px.answering) {
   const wasRefused = new Set((pp.refused || []).filter((x) => x.n >= 3).map((x) => x.ip));
   for (const x of (px.refused || []).filter((y) => y.n >= 3 && wasRefused.has(y.ip)))
     add(`plex-refused:${x.ip}`, 'warning', `Plex keeps refusing ${x.ip === '127.0.0.1' ? 'a remote app (through the relay)' : `the device at ${x.ip}`} (${x.n} times in 15 min)`, 'It holds a Plex sign-in that plex.tv no longer issues. In that device\'s Plex app: Settings > Sign out, then sign in again with the code at plex.tv/link');
-  // The forward on the router cannot help behind carrier NAT (Starlink: router WAN 100.82.x).
-  if (S.PLEX_REMOTE && px.publish && px.mapping_error) add('plex-nat', 'info', `Plex is not reachable directly from outside the house (${px.mapping_error})`, px.mapping_error === 'doublenat' ? 'The router itself sits behind another NAT (carrier NAT or a second router), so the 6996 forward cannot work; remote apps fall back to the slow Plex relay. At home and over Tailscale it is fine' : 'Remote apps fall back to the slow Plex relay; check the 6996 forward on the router');
+  // No router forward can help behind carrier NAT (Starlink: router WAN 100.82.x).
+  if (S.PLEX_REMOTE && px.publish && px.mapping_error) add('plex-nat', 'info', `Plex is not reachable directly from outside the house (${px.mapping_error})`, px.mapping_error === 'doublenat' ? 'The router itself sits behind another NAT (carrier NAT or a second router), so no port forward can work; remote apps fall back to the slow Plex relay. At home and over Tailscale it is fine' : 'Remote apps fall back to the slow Plex relay');
 }
 
 // ---- logins and API keys (agent v2; fingerprints only) ----
@@ -312,7 +312,7 @@ for (const [who, fpv] of Object.entries(lg.consumers || {})) {
 // ---- edge: Tailscale and certificates ----
 if (r.edge) {
   const ts = r.edge.tailscale || {};
-  if (ts.online === false) add('ts-offline', 'critical', 'Tailscale subnet router is offline', 'Remote access is down (Plex port-forward still works)');
+  if (ts.online === false) add('ts-offline', 'critical', 'Tailscale subnet router is offline', 'Remote access is down (Plex still reaches outside apps through its relay)');
   if (ts.key_days_left != null && ts.key_days_left < S.KEY_WARN_DAYS) add('ts-key', ts.key_days_left < 3 ? 'critical' : 'warning', `Tailscale node key expires in ${ts.key_days_left} day(s)`, 'Re-authenticate the lab-router node or disable key expiry in the Tailscale admin console');
   if (ts.online && !(ts.routes || []).includes('192.168.1.0/24')) add('ts-route', 'critical', 'Tailscale is up but the 192.168.1.0/24 route is not advertised or approved', 'Approve the subnet route in the admin console');
   for (const c of r.edge.certs || []) {

@@ -19,7 +19,7 @@ The lab is built in layers, and each layer has one job:
 ```mermaid
 flowchart LR
     subgraph LAN["Home LAN 192.168.1.0/24 (flat, no VLANs)"]
-        RTR["Router 192.168.1.1<br/>DHCP, DNS, one port forward 6996"]
+        RTR["Router 192.168.1.1<br/>DHCP, DNS, no port forwards"]
         subgraph RG["RicksGarage 192.168.1.137"]
             direction TB
             DAS[("DAS 5 x 20 TB")] --> TN["truenas 110<br/>.209"]
@@ -37,7 +37,6 @@ flowchart LR
     INET((Internet)) --- RTR
     TSN((Tailnet<br/>tail9af84.ts.net)) -. "WireGuard" .- E
     PIA((PIA VPN)) -. "OpenVPN from gluetun" .- M
-    RTR -- "6996 -> .52:32400" --> G
 ```
 
 ## How a request reaches an app
@@ -94,7 +93,7 @@ flowchart TB
     end
     PH -- "any app name via SSO" --> EDGE["edge VM<br/>TSDProxy + Traefik + Authentik"]
     PH -- "subnet route 192.168.1.0/24" --> LANIP["Proxmox UIs, TrueNAS UI,<br/>LAN-open ports"]
-    PLX -- "router 6996 -> 32400" --> PLEX["Plex (gpu)"]
+    PLX -- "plex.tv relay" --> PLEX["Plex (gpu)"]
     TV -- "LAN" --> PLEX
     TV -- "LAN :8096" --> EMBY["Emby (gpu)"]
     TV -- "LAN :5055" --> REQ["Requests (media)"]

@@ -40,8 +40,8 @@ flowchart LR
 | --- | --- |
 | Purpose | Media server. Same claimed server identity ("Tahoe") and watch history as the old Plex VM |
 | Image | `lscr.io/linuxserver/plex:latest`, `VERSION=docker`, `network_mode: host` (port 32400 plus discovery) |
-| Address | https://plex.tail9af84.ts.net/web (no Authentik), LAN http://192.168.1.52:32400, remote via router forward 6996 |
-| Remote Access | Must stay **on** (Settings > Remote Access, manual port 6996). When it is off, plex.tv refuses the server's check-ins and after a few days stops listing it, and then the Roku and other apps cannot find Plex at all, at home too. That happened 2026-10-25: it went off during the 2026-10-21 power cut. The internet is Starlink, whose IPv4 is carrier NAT (the router's WAN address is 100.82.x), so the 6996 forward cannot be reached from outside and remote apps use the slow Plex relay; see [Open items](../08-open-items.md) |
+| Address | https://plex.tail9af84.ts.net/web (no Authentik), LAN http://192.168.1.52:32400, remote apps via the plex.tv relay (no router forward) |
+| Remote Access | Must stay **on** (Settings > Remote Access; its manual port 6996 is a leftover and harmless). When it is off, plex.tv refuses the server's check-ins and after a few days stops listing it, and then the Roku and other apps cannot find Plex at all, at home too. That happened 2026-10-25: it went off during the 2026-10-21 power cut. The internet is Starlink, whose IPv4 is carrier NAT (the router's WAN address is 100.82.x), so no router forward can be reached from outside (the 6996 one was removed on 2026-10-26) and remote apps use the slow Plex relay; see [Open items](../08-open-items.md) |
 | Data | `/opt/appdata/plex` (about 40 GB copied from the snap on the old VM on 2026-10-21, old copy left in place for rollback), transcodes in `/opt/appdata/transcode/plex` |
 | Libraries | Movies (3,368), TV Shows (522), plus two smaller ones (XRated, Other Videos); 4 libraries total, all under `/mnt/nfs/Media`, mounted read-only |
 | Hardware transcoding | Quick Sync through VA-API, verified (`h264_vaapi`) on 2026-10-21 |

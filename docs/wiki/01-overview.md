@@ -62,7 +62,7 @@ All Tailscale names end in `.tail9af84.ts.net`. "SSO" means the Authentik login 
 | --- | --- | --- | --- | --- |
 | Homepage | home | SSO | apps | Dashboard listing every app with a live up/down dot |
 | Authentik | auth | own (admin `akadmin`) | edge | Single sign-on in front of the admin apps |
-| Plex | plex, LAN :32400 | own (plex.tv) | gpu | Media server, hardware transcoding, remote access on router port 6996 |
+| Plex | plex, LAN :32400 | own (plex.tv) | gpu | Media server, hardware transcoding, remote viewers through the Plex relay (no router forward) |
 | Emby | emby, LAN :8096 | own (Premiere) | gpu | Second media server, Goobs's preferred one |
 | Requests (Jellyseerr) | requests, LAN :5055 | own (Plex sign-in) | media | Family media requests, feeds Radarr and Sonarr |
 | Sonarr / Radarr / Prowlarr / Bazarr | sonarr, radarr, prowlarr, bazarr | SSO + app login | media | TV, movies, indexers, subtitles |
