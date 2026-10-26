@@ -6,6 +6,9 @@ const SETTINGS = {
   FIXES_ENABLED: true,
   // arr-blocklist stays off until arr-retry has run clean for a week (Goobs, 2026-10-22).
   BLOCKLIST_ENABLED: false,
+  // Plex Remote Access stays on (D05 exception): when it is off, or plex.tv stops listing the
+  // server, plex-remote-on puts it back. false = Plex is meant to be LAN/Tailscale-only.
+  PLEX_REMOTE: true,
   // VMs that must report; a silent one is itself a critical issue.
   HOSTS: ['edge', 'media', 'gpu', 'apps', 'ai'],
   HOST_IP: { edge: '192.168.1.50', media: '192.168.1.51', gpu: '192.168.1.52', apps: '192.168.1.53', ai: '192.168.1.54' },

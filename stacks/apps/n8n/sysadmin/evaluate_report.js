@@ -227,6 +227,23 @@ if (md.tdarr) {
   }
 }
 
+// ---- Plex: can apps outside the LAN find it? (gpu only; the agent sends plex where Plex runs) ----
+// 2026-10-25: Remote Access had been off since the Oct 21 power cut. plex.tv refused Plex's
+// check-ins and then stopped listing it, so the Roku (which finds servers through plex.tv)
+// showed nothing while the container stayed healthy and Kuma's LAN probe stayed green.
+const px = r.plex;
+if (px && px.answering) {
+  const pp = (prev && prev.plex) || {};
+  const on = S.PLEX_REMOTE ? { verb: 'plex-remote-on', target: 'plex' } : null;
+  if (!px.token || (px.sign_in && px.sign_in !== 'ok')) add('plex-signin', 'critical', `Plex is signed out of plex.tv (${px.sign_in || 'no token'})`, 'Apps cannot find it or log in; sign in again from Plex Web on the LAN (http://192.168.1.52:32400/web > Settings > General). Nothing is fixed from here');
+  else if (S.PLEX_REMOTE && px.publish === false) add('plex-remote', 'critical', 'Plex Remote Access is switched off', 'plex.tv stops listing the server after a while, and then the Roku and other apps cannot find it, at home too', on);
+  // One plex.tv answer without the server can be a blip: critical (and a re-publish) from the second.
+  else if (px.listed === false && pp.listed !== false) add('plex-listed', 'warning', 'plex.tv does not list Plex (Tahoe) as a server', 'Apps that find servers through plex.tv see nothing; re-published if it is still missing at the next check');
+  else if (px.listed === false) add('plex-listed', 'critical', 'plex.tv does not list Plex (Tahoe) as a server', 'The Roku and other apps that find servers through plex.tv see nothing', on);
+  // The forward on the router cannot help behind carrier NAT (seen 2026-10-25, router WAN 100.82.x).
+  if (S.PLEX_REMOTE && px.publish && px.mapping_error) add('plex-nat', 'info', `Plex is not reachable directly from outside the house (${px.mapping_error})`, px.mapping_error === 'doublenat' ? 'The router itself sits behind another NAT (carrier NAT or a second router), so the 6996 forward cannot work; remote apps fall back to the slow Plex relay. At home and over Tailscale it is fine' : 'Remote apps fall back to the slow Plex relay; check the 6996 forward on the router');
+}
+
 // ---- logins and API keys (agent v2; fingerprints only) ----
 // 2026-10-22: a Sonarr/Radarr password mismatch went unnoticed for hours. Now a changed login,
 // a changed or rejected API key, a consumer holding a stale key, or repeated failed logins are

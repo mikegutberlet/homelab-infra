@@ -2,7 +2,7 @@
 # Reporter for the n8n "Homelab sysadmin" workflow. Collects this VM's facts every 15 minutes
 # and POSTs one JSON document to n8n. Read-only: nothing here restarts, deletes or changes
 # anything. App API keys are read from the app's own config under /opt/appdata and used only
-# against localhost; they never leave this VM.
+# against localhost (Plex's token also against plex.tv, its issuer); they never reach n8n.
 #
 # Usage: homelab-agent [--print]     (--print writes the report to stdout instead of n8n)
 set -uo pipefail
@@ -260,6 +260,39 @@ media_json() {
     '{sonarr:$s, radarr:$r, prowlarr:$p, sabnzbd:$sab, qbittorrent:$qb, tdarr:$t} | with_entries(select(.value != null))'
 }
 
+# ---------- Plex: can apps outside the LAN find it? ----------
+# 2026-10-25: Plex answered on the LAN for days while its Remote Access switch was off; plex.tv
+# refused its check-ins (422) and then stopped listing it as a server, so the Roku and every app
+# that finds servers through plex.tv showed nothing. The health check and Kuma stayed green.
+# The token is Plex's own (Preferences.xml); it goes only to Plex on localhost and to plex.tv,
+# which issued it.
+plex_json() {
+  local prefs="$APPDATA/plex/Library/Application Support/Plex Media Server/Preferences.xml"
+  [ -r "$prefs" ] || { echo null; return; }
+  local tok ident acct pset res
+  tok=$(sed -n 's/.*PlexOnlineToken="\([^"]*\)".*/\1/p' "$prefs" | head -1)
+  ident=$(get -H 'Accept: application/json' http://127.0.0.1:32400/identity)
+  if [ -n "$tok" ]; then
+    local h=(-H 'Accept: application/json' -H "X-Plex-Token: $tok")
+    acct=$(get "${h[@]}" http://127.0.0.1:32400/myplex/account)
+    pset=$(get "${h[@]}" 'http://127.0.0.1:32400/:/prefs')
+    res=$(get "${h[@]}" -H 'X-Plex-Client-Identifier: homelab-agent' 'https://plex.tv/api/v2/resources')
+  else acct='{}'; pset='{}'; res='{}'; fi
+  # listed: plex.tv has this server (by machine id) as one that provides "server"; null when
+  # plex.tv or Plex did not answer.
+  printf '%s\n%s\n%s\n%s\n' "$ident" "$acct" "$pset" "$res" | jq -c -s --argjson tok "$([ -n "$tok" ] && echo true || echo false)" '
+    .[0].MediaContainer.machineIdentifier as $id | (.[1].MyPlex // {}) as $a
+    | ((.[2].MediaContainer.Setting // []) | map(select(.id == "PublishServerOnPlexOnlineKey")) | .[0].value) as $pub
+    | {answering:($id != null), token:$tok,
+       publish:(if $pub == null then null else ($pub == true or $pub == "1" or $pub == 1) end),
+       sign_in:($a.signInState // null), mapping:($a.mappingState // null),
+       mapping_error:(if ($a.mappingError // "") == "" then null else $a.mappingError end),
+       public_port:($a.publicPort // null),
+       listed:(if (.[3] | type) == "array" and $id != null
+               then (.[3] | map(select(.clientIdentifier == $id and ((.provides // "") | split(",") | index("server")))) | length > 0)
+               else null end)}'
+}
+
 # ---------- logins: are the app credentials still what they were? ----------
 # Fingerprints only (sha256, first 16 hex chars); no password, hash or API key leaves the VM.
 # n8n compares each run with the previous one and emails when a login or key changes, when the
@@ -408,13 +441,15 @@ why="no writable temp folder"
 if [ -n "$tmp" ]; then
   section system host_json; section disks disks_all; section mounts mounts_json; section backup backup_json
   section docker docker_json; section media media_json; section edge edge_json; section logins logins_json
+  section plex plex_json
   jq -n '$ARGS.positional' --args "${errors[@]}" >"$tmp/errors.json"
   jq -c -n --arg host "$(hostname)" --argjson ts "$now" --argjson v "$AGENT_VERSION" \
     --slurpfile system "$tmp/system.json" --slurpfile disks "$tmp/disks.json" --slurpfile mounts "$tmp/mounts.json" \
     --slurpfile backup "$tmp/backup.json" --slurpfile docker "$tmp/docker.json" --slurpfile media "$tmp/media.json" \
-    --slurpfile edge "$tmp/edge.json" --slurpfile logins "$tmp/logins.json" --slurpfile errors "$tmp/errors.json" \
+    --slurpfile edge "$tmp/edge.json" --slurpfile logins "$tmp/logins.json" --slurpfile plex "$tmp/plex.json" \
+    --slurpfile errors "$tmp/errors.json" \
     '{host:$host, ts:$ts, agent_version:$v, system:$system[0], disks:$disks[0], mounts:$mounts[0], backup:$backup[0],
-      docker:$docker[0], media:$media[0], logins:$logins[0], edge:$edge[0], errors:$errors[0]}' >"$tmp/report.json" 2>"$tmp/report.err"
+      docker:$docker[0], media:$media[0], logins:$logins[0], edge:$edge[0], plex:$plex[0], errors:$errors[0]}' >"$tmp/report.json" 2>"$tmp/report.err"
   why=$(tail -1 "$tmp/report.err" 2>/dev/null | cut -c1-200)
 fi
 if [ -n "$tmp" ] && jq -e 'type == "object"' "$tmp/report.json" >/dev/null 2>&1; then

@@ -41,6 +41,7 @@ flowchart LR
 | Purpose | Media server. Same claimed server identity ("Tahoe") and watch history as the old Plex VM |
 | Image | `lscr.io/linuxserver/plex:latest`, `VERSION=docker`, `network_mode: host` (port 32400 plus discovery) |
 | Address | https://plex.tail9af84.ts.net/web (no Authentik), LAN http://192.168.1.52:32400, remote via router forward 6996 |
+| Remote Access | Must stay **on** (Settings > Remote Access, manual port 6996). When it is off, plex.tv refuses the server's check-ins and after a few days stops listing it, and then the Roku and other apps cannot find Plex at all, at home too. That happened 2026-10-25: it went off during the 2026-10-21 power cut. Since 2026-10-25 the router sits behind carrier NAT (its WAN address is 100.82.x), so direct connections from outside fail and remote apps use the slow Plex relay; see [Open items](../08-open-items.md) |
 | Data | `/opt/appdata/plex` (about 40 GB copied from the snap on the old VM on 2026-10-21, old copy left in place for rollback), transcodes in `/opt/appdata/transcode/plex` |
 | Libraries | Movies (3,368), TV Shows (522), plus two smaller ones (XRated, Other Videos); 4 libraries total, all under `/mnt/nfs/Media`, mounted read-only |
 | Hardware transcoding | Quick Sync through VA-API, verified (`h264_vaapi`) on 2026-10-21 |
@@ -48,7 +49,7 @@ flowchart LR
 | Live TV | ErsatzTV added as an HDHomeRun tuner at `http://192.168.1.52:8409` |
 | Home rows | Curated rows from Kometa (daily 05:00), see [home rows](../../home-rows.md) |
 | Integrations | Tautulli (apps VM), Jellyseerr sign-in and availability, Radarr/Sonarr notifications, ErsatzTV media source |
-| Health | `GET /identity` every 60 s; critical Kuma monitor (instant email) |
+| Health | `GET /identity` every 60 s; critical Kuma monitor (instant email). Neither sees plex.tv: the sysadmin agent checks Remote Access, the plex.tv sign-in and whether plex.tv lists the server every 15 min, and switches Remote Access back on (`plex-remote-on`, see [sysadmin](../operations/sysadmin.md)) |
 | Why still Plex | Goobs prefers Emby but calls Plex "a necessary evil for now" (2026-10-21); both run side by side ([D09](../07-decisions.md#d09-plex-and-emby-side-by-side)) |
 
 ## Emby

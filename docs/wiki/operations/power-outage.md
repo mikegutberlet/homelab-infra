@@ -40,7 +40,8 @@ are entered in `ansible/inventory/hosts.yml` and `proxmox-heartbeat.yml` is run.
 4. Each of .51, .52, .53: `findmnt /mnt/nfs` is nfs4 and `ls /mnt/nfs` is not empty;
    `systemctl is-active wait-nas docker`; `docker ps` shows everything up.
 5. Plex library count unchanged (3,368 movies at last check); Radarr's "movie file missing" count
-   not suddenly in the thousands.
+   not suddenly in the thousands. Plex Settings > Remote Access is still on (it switched itself off
+   in the 2026-10-21 outage; the sysadmin now turns it back on within 15 minutes).
 6. Kuma: all monitors green; Scrutiny up (restart it if it crashed on a late InfluxDB).
 7. Tailscale admin: `lab-router` online and the names reachable.
 8. Any long-running job (Tdarr, relink, moves) that was interrupted: check its on-disk log and
