@@ -50,15 +50,20 @@ services:
       retries: 3
       start_period: 120s
 
+  # The -vaapi tag stopped at v25.2.0 and its health check now fails on purpose (deprecated);
+  # VAAPI/QSV ship in the base image. Pinned because upgrades migrate the database one way.
+  # /config and /transcode are the image defaults; same appdata folder as the old
+  # /root/.local/share/ersatztv mount, so the database and settings carry over.
   ersatztv:
     <<: *common
-    image: jasongdove/ersatztv:latest-vaapi
+    image: jasongdove/ersatztv:v26.3.0
     environment:
       TZ: ${TZ}
     ports: ["8409:8409"]
     devices: [/dev/dri:/dev/dri]
     volumes:
-      - /opt/appdata/ersatztv:/root/.local/share/ersatztv
+      - /opt/appdata/ersatztv:/config
+      - /opt/appdata/transcode/ersatztv:/transcode
       - /mnt/nfs/Media:/mnt/nfs/Media:ro
 
   # Immich: upstream layout. Its own Postgres because it needs a pinned vector extension.
