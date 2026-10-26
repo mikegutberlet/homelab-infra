@@ -32,7 +32,6 @@ flowchart LR
             A["apps 204<br/>.53"]
             I["ai 205<br/>.54"]
         end
-        OLD["old VMs 113 Servarr .14<br/>117 Plex .15<br/>(powered off, kept)"]
     end
     INET((Internet)) --- RTR
     TSN((Tailnet<br/>tail9af84.ts.net)) -. "WireGuard" .- E

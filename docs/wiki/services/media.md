@@ -9,7 +9,8 @@ whole NAS export read-write at `/mnt/nfs`, the same path the old Servarr VM used
 All of these apps were **migrated** from the old Servarr VM (192.168.1.14, bare-metal installs on
 Ubuntu 22.04 Desktop) on 2026-10-21 17:05 to 17:25 UTC using each app's own backup/restore or a
 config copy, following the Servarr migration plan (project file `homelab/servarr-migration-plan.md`). The old VM's configs were saved to `/root/migration-20261021` on that VM
-before it was shut down.
+before it was shut down; the VM was removed on 2026-10-26 and that folder now lives only in its vzdump
+backup (see [TrueNAS and hosts](truenas-and-hosts.md#the-old-vms-removed-2026-10-26)).
 
 ```mermaid
 flowchart LR

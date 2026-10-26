@@ -10,12 +10,12 @@ Everything that is pending, waiting on a decision, or known but not yet verified
 | Set **After Power Failure = Power On** in the BIOS of both NUCs | Without it the hosts stay off after a power cut until someone presses the button | Pending; needs a monitor and keyboard at each NUC (see [Power outage](operations/power-outage.md)) |
 | Buy a UPS (about 1500 VA, USB data port) and run NUT | Clean shutdown on a long outage instead of a hard power loss for the NAS | Decision open; NUT configuration is not in the repo yet |
 | Fix the warm-reboot hang (try `reboot=pci` / `reboot=efi` kernel parameters or a BIOS update) | Every host restart currently needs the power button | Not started; power-off restarts remain the rule |
-| Decide what to do with old VMs **113** (Servarr) and **117** (Plex) | They are powered off and keep host disk; their passwords were typed into chat once | Goobs decides around **2026-10-28**; delete nothing before then |
 
 ## Needs Goobs's input
 
 | Item | Why | Status |
 | --- | --- | --- |
+| Delete the vzdump backups of the removed old VMs 113 and 117 (183 GB on `DeepData_NFS`, `dump/`) | Kept 30 days as the undo for their removal on 2026-10-26 | Due about **2026-11-25** (Goobs chose 30 days) |
 | healthchecks.io ping URLs for both hosts | The host heartbeat (`playbooks/heartbeat.yml`, `heartbeat_url` in `inventory/hosts.yml`) is the only out-of-band "the house lost power" signal | URLs not created yet; the playbook has not been run |
 | wg-easy as a backup VPN next to Tailscale | Covers the case where Tailscale's coordination is unreachable | Deferred by Goobs; a port forward would be needed, which conflicts with the Tailscale-only rule |
 | Rotate the passwords in the shared "IP's and Creds" document (Proxmox root, TrueNAS, old VMs) | The build is done and the design called for a rotation | Not done |
