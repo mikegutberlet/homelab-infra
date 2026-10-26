@@ -4,8 +4,9 @@ const SETTINGS = {
   // Automatic fixes run (within FIX_PER_HOUR / FIX_PER_DAY) since the 2026-10-23 digest review;
   // false = report-only, fixes are decided and logged as "would run", nothing is executed.
   FIXES_ENABLED: true,
-  // arr-blocklist stays off until arr-retry has run clean for a week (Goobs, 2026-10-22).
-  BLOCKLIST_ENABLED: false,
+  // arr-blocklist: dead downloads (0 bytes after 48 h) and "not an upgrade" imports stuck 48 h.
+  // On since 2026-10-26 (Goobs: "blocklist"); false = those are only reported.
+  BLOCKLIST_ENABLED: true,
   // Plex Remote Access stays on (D05 exception): when it is off, or plex.tv stops listing the
   // server, plex-remote-on puts it back. false = Plex is meant to be LAN/Tailscale-only.
   PLEX_REMOTE: true,

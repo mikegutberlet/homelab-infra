@@ -184,7 +184,12 @@ for (const app of ['sonarr', 'radarr']) {
     if (g.kind === 'decision') { add(key, 'warning', `${app}: ${what} needs a decision (${age} h)`, g.msg || 'no message'); continue; }
     // One arr-retry per group and run, on its first item: a "no files found" import gets a fresh search.
     const retryable = /no files found|not found|missing|does not exist|was not found/i.test(g.msg);
-    add(key, 'warning', `${app}: ${what} ${q.tdstate || q.status} for ${age} h`, g.msg || 'no message', retryable ? { verb: 'arr-retry', target: `${app} ${q.id}`, app, id: q.id } : null);
+    // A release the library already has in better quality never imports: blocklist it (removes the
+    // download, so the same release is not grabbed again) once it has sat for STUCK_BLOCKLIST_H.
+    const noUpgrade = S.BLOCKLIST_ENABLED && age >= S.STUCK_BLOCKLIST_H && /not an upgrade|not a custom format upgrade/i.test(g.msg);
+    const fix = retryable ? { verb: 'arr-retry', target: `${app} ${q.id}`, app, id: q.id }
+      : noUpgrade ? { verb: 'arr-blocklist', target: `${app} ${q.id}`, app, id: q.id } : null;
+    add(key, 'warning', `${app}: ${what} ${q.tdstate || q.status} for ${age} h`, g.msg || 'no message', fix);
   }
 }
 // Issues keyed by a bare queue id (before 2026-10-24) are replaced by the groups above: drop them

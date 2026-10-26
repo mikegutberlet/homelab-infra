@@ -30,7 +30,7 @@ Per-VM side: Ansible role `ops` (`homelab-agent`, `homelab-ops`).
 | `restart <service>` | unhealthy in two reports (30 min); expected service missing in two reports in a row (the first one is a warning); gluetun with no VPN exit or no forwarded port (qbittorrent follows 60 s later) | `docker compose restart` if running, else `up -d --no-deps`; only services on `/etc/homelab-ops.allow` |
 | `stop <service>` | 10+ restarts in an hour, after two restart attempts in 24 h | `docker stop`; the email carries the undo line. The service is then **held**: nothing restarts it (the missing-service rule turns into a daily reminder) until you start it yourself and a report sees it running |
 | `arr-retry <app> <id>` | import blocked/pending or failed for 24 h with a "no files found / missing" message | removes the queue item (download kept on disk) and searches again |
-| `arr-blocklist <app> <id>` | 0 bytes after 48 h; **off** until retry has run clean for a week | blocklists the release and searches again |
+| `arr-blocklist <app> <id>` | 0 bytes after 48 h, or an import stuck 48 h as "not an upgrade" (on since 2026-10-26) | blocklists the release, removes the download and searches again |
 | `prowlarr-test <id>` | indexer disabled by backoff and the backoff has expired | re-tests, which re-enables it |
 | `docker-prune` | over 20 GB reclaimable | dangling images and build cache only |
 | `plex-remote-on` | Plex Remote Access off (critical at once), or plex.tv not listing the server in two reports in a row (`PLEX_REMOTE` in settings.js; false = Plex is meant to be LAN/Tailscale-only). Signed out of plex.tv is critical with no fix | switches Remote Access on, or off and on again so Plex re-publishes itself; answers with the new mapping state |
