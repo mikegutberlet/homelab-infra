@@ -46,6 +46,15 @@ if (sys.reboot_required) add('reboot-required', 'info', `${host}: a kernel or li
 if (sys.pending_updates > 0) add('updates', 'info', `${host}: ${sys.pending_updates} package update(s) pending`, 'unattended-upgrades installs security fixes; the rest wait for apt upgrade');
 if (sys.clock_synced === false) add('clock', 'warning', `${host}: clock not NTP-synced`, 'Certificates and Tailscale depend on correct time');
 
+// ---- kernel (2026-10-23: a kernel BUG in NFS writeback froze a Tdarr copy, and a day later the
+// Plex scanner that touched the same file; Plex looked up but its library and restarts hung) ----
+const kn = r.kernel || null;
+if (kn && kn.oopsed) add('kernel-oops', 'critical', `${host}: the kernel crashed since boot`, `${kn.last_oops || 'taint flag D is set'}. Processes it was serving can hang for good; restart the VM from Proxmox when you can (qm reboot, or qm stop + start if it hangs)`);
+// A D-state process seen in two reports in a row (15+ minutes) is stuck, not busy. what = ps lstart (5 words) + name.
+const prevStuck = new Set(((prev && prev.kernel && prev.kernel.stuck) || []).map((p) => `${p.pid} ${p.what}`));
+const stuckNow = ((kn && kn.stuck) || []).filter((p) => prevStuck.has(`${p.pid} ${p.what}`));
+if (stuckNow.length) add('stuck-io', 'critical', `${host}: ${stuckNow.length} process(es) stuck in uninterruptible I/O`, `${stuckNow.slice(0, 5).map((p) => { const w = p.what.split(' '); return `${w.slice(5).join(' ')} (pid ${p.pid}, since ${w.slice(1, 4).join(' ')})`; }).join('; ')}. Usually a hung NAS write; they cannot be killed, and a container that holds one cannot restart. If the NAS answers, only a VM restart clears it`);
+
 // ---- disks and mounts ----
 for (const d of r.disks || []) {
   if (d.missing) { add(`disk-missing:${d.mount}`, 'critical', `${host}: ${d.mount} is not mounted`, 'Its disk did not come back after a restart; whatever writes there now fills the system disk (/etc/fstab, lsblk)'); continue; }

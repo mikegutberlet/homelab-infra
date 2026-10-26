@@ -73,6 +73,23 @@ host_json() {
       reboot_required:$rr, pending_updates:$pu, clock_synced:($co==0)}'
 }
 
+# ---------- kernel: crashed since boot? processes stuck in uninterruptible I/O? ----------
+# 2026-10-23 08:38 the gpu kernel hit a BUG in NFS writeback ("list_del corruption"). A Tdarr copy
+# to the NAS and, a day later, a Plex scan that touched the same file froze in D state for good;
+# nothing can kill them and only a VM restart clears it. Taint bit 128 (D) = an oops since boot.
+# stuck: D-state processes (pid, start time, name); n8n flags the ones it saw in the last report too.
+kernel_json() {
+  local tainted oops stuck
+  tainted=$(cat /proc/sys/kernel/tainted 2>/dev/null || echo 0)
+  oops=$(journalctl -k -b --no-pager -o short-iso 2>/dev/null \
+    | grep -E 'kernel BUG|Oops|list_(add|del) corruption|general protection fault|blocked for more than [0-9]+ seconds' \
+    | grep -v 'traps:' | tail -1 | cut -c1-200)   # traps: = a user program's crash, not the kernel's
+  stuck=$(ps -eo pid=,stat=,lstart=,comm= 2>/dev/null | awk '$2 ~ /^D/ {pid=$1; $1=$2=""; sub(/^ +/,""); printf "%s\t%s\n", pid, $0}' \
+    | jq -R -s -c 'split("\n") | map(select(length>0) | split("\t") | {pid:(.[0]|tonumber), what:.[1]}) | .[0:20]')
+  j -n --argjson t "$(num "$tainted")" --arg o "$oops" --argjson s "${stuck:-[]}" \
+    '{tainted:$t, oopsed:(($t / 128 | floor) % 2 == 1), last_oops:(if $o=="" then null else $o end), stuck:$s}'
+}
+
 # ---------- disks and mounts ----------
 disks_json() {
   # An extra disk that is not mounted would show up as the disk under it: report it as missing.
@@ -441,15 +458,15 @@ why="no writable temp folder"
 if [ -n "$tmp" ]; then
   section system host_json; section disks disks_all; section mounts mounts_json; section backup backup_json
   section docker docker_json; section media media_json; section edge edge_json; section logins logins_json
-  section plex plex_json
+  section plex plex_json; section kernel kernel_json
   jq -n '$ARGS.positional' --args "${errors[@]}" >"$tmp/errors.json"
   jq -c -n --arg host "$(hostname)" --argjson ts "$now" --argjson v "$AGENT_VERSION" \
     --slurpfile system "$tmp/system.json" --slurpfile disks "$tmp/disks.json" --slurpfile mounts "$tmp/mounts.json" \
     --slurpfile backup "$tmp/backup.json" --slurpfile docker "$tmp/docker.json" --slurpfile media "$tmp/media.json" \
-    --slurpfile edge "$tmp/edge.json" --slurpfile logins "$tmp/logins.json" --slurpfile plex "$tmp/plex.json" \
+    --slurpfile edge "$tmp/edge.json" --slurpfile logins "$tmp/logins.json" --slurpfile plex "$tmp/plex.json" --slurpfile kernel "$tmp/kernel.json" \
     --slurpfile errors "$tmp/errors.json" \
     '{host:$host, ts:$ts, agent_version:$v, system:$system[0], disks:$disks[0], mounts:$mounts[0], backup:$backup[0],
-      docker:$docker[0], media:$media[0], logins:$logins[0], edge:$edge[0], plex:$plex[0], errors:$errors[0]}' >"$tmp/report.json" 2>"$tmp/report.err"
+      docker:$docker[0], media:$media[0], logins:$logins[0], edge:$edge[0], plex:$plex[0], kernel:$kernel[0], errors:$errors[0]}' >"$tmp/report.json" 2>"$tmp/report.err"
   why=$(tail -1 "$tmp/report.err" 2>/dev/null | cut -c1-200)
 fi
 if [ -n "$tmp" ] && jq -e 'type == "object"' "$tmp/report.json" >/dev/null 2>&1; then
