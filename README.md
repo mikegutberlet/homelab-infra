@@ -22,7 +22,7 @@ decision records, runbooks, open items) lives in [`docs/wiki/`](docs/wiki/README
 | apps (204) | RicksShip | 192.168.1.53 | Postgres, Nextcloud, Paperless, Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny, Diun, OliveTin (report-only), Dockge | |
 | ai (205) | RicksShip | 192.168.1.54 | Piper | Open WebUI (no LLM key), AnythingLLM + worker |
 
-Old VMs, stopped and kept for rollback: Servarr (113, RicksGarage), Plex (117, RicksShip).
+Old VMs Servarr (113, RicksGarage) and Plex (117, RicksShip) were removed on 2026-10-26; their vzdump backups stay on `DeepData_NFS` until about 2026-11-25.
 Deferred: Kasm, local Ollama models (until the eGPU), Frigate (no cameras).
 
 ```

@@ -50,8 +50,8 @@ flowchart TB
 | apps (204) | RicksShip | 192.168.1.53 | 4 / 10 GB / 96 GB | Postgres (pgvector), Redis, Nextcloud (+ nginx, cron), Paperless (+ Gotenberg, Tika), Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny (+ InfluxDB), Diun, OliveTin, Dockge, autoheal | yes (Nextcloud, Paperless, backups) |
 | ai (205) | RicksShip | 192.168.1.54 | 2 / 4 GB / 32 GB | Open WebUI, AnythingLLM, Piper TTS; LangChain/CrewAI worker defined but not started | no |
 
-Old VMs kept powered off for rollback: **113 Servarr** (192.168.1.14, RicksGarage) and **117 Plex**
-(192.168.1.15, RicksShip). Goobs decides around 2026-10-28 whether to delete them.
+The old VMs **113 Servarr** (192.168.1.14, RicksGarage) and **117 Plex** (192.168.1.15, RicksShip) were
+removed on 2026-10-26 after a verified vzdump backup of each (kept on `DeepData_NFS` until about 2026-11-25).
 
 ## Service directory
 

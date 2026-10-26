@@ -16,8 +16,8 @@ DNS. There are no VLANs, so isolation comes from per-VM firewall rules rather th
 | 192.168.1.52 | gpu VM | Plex 32400 (host network), Emby 8096 |
 | 192.168.1.53 | apps VM | Postgres 5432 (lab VMs only), Scrutiny 8087 (also the two hosts) |
 | 192.168.1.54 | ai VM | Open WebUI 3010 (edge VM only) |
-| 192.168.1.14 | old Servarr VM 113 | powered off |
-| 192.168.1.15 | old Plex VM 117 | powered off; its DNS was broken (IPv6-only resolver) |
+| 192.168.1.14 | old Servarr VM 113 | free (VM removed 2026-10-26) |
+| 192.168.1.15 | old Plex VM 117 | free (VM removed 2026-10-26) |
 | 192.168.1.237 | former cluster node PlanetC137 | removed from the cluster 2026-10-21 |
 
 Static IPs are set by cloud-init from `tofu/terraform.tfvars`. The addresses .50 to .54 were chosen

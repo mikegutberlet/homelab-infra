@@ -12,8 +12,8 @@ apps hold (agent v2, 2026-10-22). So when a login fails:
 1. Check your mail. A **"login changed"**, **"API key changed"** or **"holds a stale key"** email
    means the server side moved and names the fix. **"failed web login(s)"** with "the stored login
    has NOT changed" means the server is fine and the password being typed is wrong: check the
-   password-manager entry (the users are `sonarr`, `radarr`, `prowlarr`; the old VM 113 entries do
-   not work on the new VMs, see change #24 of 2026-10-21).
+   password-manager entry (the users are `sonarr`, `radarr`, `prowlarr`; the old VM 113 entries (that VM
+   was removed on 2026-10-26) do not work on the new VMs, see change #24 of 2026-10-21).
 2. No mail and no digest line: the reporter would have said so. Treat it as the wrong password.
 
 What a reboot does: it logs every browser out. A login that "stopped working after the restart" is
