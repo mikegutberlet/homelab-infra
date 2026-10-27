@@ -71,7 +71,7 @@ vms = {
   }
   # Second Tdarr node on RicksPortalGun's Iris Plus 655 (2026-10-27). The iGPU is attached by root
   # after the host binds it to vfio-pci, like the gpu VM's: `qm set 206 --hostpci0 0000:00:02.0,pcie=1`.
-  # local-lvm is the 525 GB system SSD; the 1 TB SSD is kept for apps and media.
+  # local-lvm is the 794 GB thin pool on the 1 TB system SSD (sdb); apps and media move there too.
   transcode = {
     vm_id     = 206
     node      = "RicksPortalGun"

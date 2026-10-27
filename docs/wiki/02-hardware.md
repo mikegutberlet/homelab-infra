@@ -45,7 +45,7 @@ hosts are up. If two hosts are down, the third is not quorate and will not start
 | CPU / RAM | i7-8559U, 4 cores / 8 threads, Coffee Lake; 62.7 GiB usable (64 GB installed) |
 | GPU | Iris Plus Graphics 655 (Quick Sync; stays with the host) |
 | Network | one 1 GbE port (Intel I219-V, `eno1`, MAC 1c:69:7a:01:d6:08, an ECS-assigned address), bridge `vmbr0`; Wi-Fi `wlp0s20f3` unused |
-| Disks | `sda` Crucial MX300 525 GB (Proxmox, `local` + `local-lvm`); `sdb` Crucial MX500 1 TB, unused |
+| Disks | `sdb` Crucial MX500 1 TB holds Proxmox (`pve` VG: 96 GB root, 8 GB swap, 794 GB `local-lvm` thin pool; seen 2026-10-27, the earlier note had the disks swapped); `sda` Crucial MX300 525 GB is the spare, contents not checked yet |
 | LAN address | 192.168.1.38 (static, set in the installer) |
 | Proxmox | 8.4.21 from `pve-no-subscription` (installed from the 8.4.0 ISO), kernel 6.8.12-43-pve |
 | Hardening | same settings as `proxmox-hardening.yml` (keys only, fail2ban, security updates), applied by hand on 2026-10-26 |
