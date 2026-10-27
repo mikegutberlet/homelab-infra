@@ -80,10 +80,11 @@ the UI; to change one, edit the file (or "Save as" a copy, export its JSON and c
 | cadvisor dashboard | grafana.com 19792 |
 | Proxmox via Prometheus | grafana.com 10347 (pick instance 192.168.1.37 for the whole cluster) |
 | Traefik Official Standalone | grafana.com 17346 |
+| TrueNAS | `docs/gen_dashboards.py`: CPU, memory, ARC, per-disk I/O, network, NFS |
 
-TrueNAS has no dashboard yet: the metric names depend on what the NAS sends. Once data arrives
-(`truenas_*` in Prometheus), add panels for the pool, ARC and disk temperatures to
-`docs/gen_dashboards.py`. SMART stays in Scrutiny.
+The TrueNAS dashboard (`docs/gen_dashboards.py`) reads `truenas_*` metrics: CPU, load, memory,
+ARC, per-disk I/O and busy time, network and NFS. Pool free space comes from the VMs' NFS mount, since
+the NAS reports no pool chart. Disk temperatures and SMART stay in Scrutiny.
 
 ## One-time setup
 

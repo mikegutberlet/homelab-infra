@@ -1,4 +1,4 @@
-"""Regenerate the two home-made Grafana dashboards (Home lab overview, Media stack) in
+"""Regenerate the home-made Grafana dashboards (Home lab overview, Media stack, TrueNAS) in
 stacks/apps/grafana/dashboards/Home lab/. The community ones next to them (node, containers,
 Proxmox, Traefik) are grafana.com downloads and are not touched here.
 
@@ -177,6 +177,43 @@ def media():
     b.save("media")
 
 
+def truenas():
+    nas = 'nas="nas"'
+    b = Board("homelab-truenas", "TrueNAS",
+              "The NAS's own reporting (netdata, pushed as Graphite to graphite-exporter on the apps VM). "
+              "Pool free space comes from the VMs' NFS mount; SMART is in Scrutiny.")
+    b.row("Right now")
+    b.panels([
+        (6, stat("DeepData free", "bytes", NAS_FREE, "free")),
+        (6, stat("ARC size", "bytes", f'truenas_arcstats_size{{{nas}}}', "ARC")),
+        (6, stat("Memory available", "bytes", f'truenas_meminfo_available{{{nas}}}', "available")),
+        (6, stat("Uptime", "s", f'truenas_system_uptime{{{nas}}}', "up")),
+    ], h=5)
+    b.row("System")
+    b.panels([
+        (8, ts("CPU per core", "percent",
+               (f'truenas_cpu_usage_cpu{{{nas}, dimension=~"cpu[0-9]+"}}', "{{dimension}}"), maxv=100)),
+        (8, ts("Load", "short", (f'truenas_system_load{{{nas}}}', "{{dimension}}"))),
+        (8, ts("Memory", "bytes", (f'truenas_meminfo_total{{{nas}}}', "total"),
+               (f'truenas_meminfo_available{{{nas}}}', "available"), (f'truenas_arcstats_size{{{nas}}}', "ARC"))),
+    ])
+    b.row("Disks (the five DAS drives and the boot disk)")
+    b.panels([
+        (8, ts("Read per disk", "KiBs", (f'truenas_disk{{{nas}, dimension="reads"}}', "{{device}}"))),
+        (8, ts("Write per disk", "KiBs", (f'abs(truenas_disk{{{nas}, dimension="writes"}})', "{{device}}"))),
+        (8, ts("Busy per disk", "ms", (f'truenas_disk_busy{{{nas}}}', "{{device}}"),
+               desc="Milliseconds per second the disk was busy; 1000 means saturated.")),
+    ])
+    b.row("Network and NFS")
+    b.panels([
+        (12, ts("Network (ens18)", "Kbits", (f'truenas_net_ens18{{{nas}, dimension="received"}}', "received"),
+                (f'abs(truenas_net_ens18{{{nas}, dimension="sent"}})', "sent"))),
+        (12, ts("NFS read and write", "KiBs", (f'abs(truenas_nfsd_io{{{nas}}})', "{{dimension}}"))),
+    ])
+    b.save("truenas")
+
+
 if __name__ == "__main__":
     overview()
     media()
+    truenas()
