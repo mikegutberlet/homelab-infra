@@ -79,6 +79,9 @@ the LAN. Exceptions:
 | 51820/udp | edge | whole LAN (and a router forward, later) | wg-easy fallback VPN, once it is set up |
 | 8087/tcp | apps | lab VMs plus 192.168.1.137 and .37 | Scrutiny collectors on the hosts post here |
 | 3010/tcp | ai | edge VM only | Open WebUI trusts the Authentik header |
+| 3005/tcp | apps | edge VM only | Grafana trusts the Authentik header |
+| 2003/tcp | apps | lab VMs plus 192.168.1.209 | TrueNAS pushes Graphite metrics |
+| 9100/tcp (host) | every VM | apps VM only (`LANFW-IN`) | node-exporter, host-networked; 9002 too on edge (Tailscale metrics) |
 | 5432/tcp | apps | lab VMs | Postgres, used by the ai VM's AnythingLLM and worker |
 
 Full port map (LAN address, all behind the default rule unless listed above):

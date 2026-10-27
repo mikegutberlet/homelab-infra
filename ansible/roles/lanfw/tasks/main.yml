@@ -1,5 +1,5 @@
-# LAN firewall for published container ports (DOCKER-USER). Host services (SSH, Plex on
-# host networking) aren't affected. Per host: lan_open_ports, edge_only_ports ("8096/tcp").
+# LAN firewall for published container ports (DOCKER-USER), plus the host-networked metrics ports
+# (LANFW-IN). Other host services (SSH, Plex on host networking) aren't affected. Per host: lan_open_ports, edge_only_ports ("8096/tcp").
 - name: Firewall script
   ansible.builtin.template:
     src: lanfw.sh.j2

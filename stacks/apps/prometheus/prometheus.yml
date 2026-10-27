@@ -1,0 +1,73 @@
+# Prometheus on the apps VM (stacks/apps/compose.yaml). After editing: deploy the apps stack, then
+#   curl -X POST http://192.168.1.53:9090/-/reload
+# Alerts are not defined here on purpose: Kuma and the n8n daily digest already email.
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]
+
+  # Role metrics on every VM: node-exporter on the host network (:9100, reachable only from
+  # this VM, lanfw INPUT rule) and cAdvisor for per-container CPU, memory and I/O (:9101).
+  - job_name: node
+    static_configs:
+      - {targets: ["192.168.1.50:9100"], labels: {vm: edge}}
+      - {targets: ["192.168.1.51:9100"], labels: {vm: media}}
+      - {targets: ["192.168.1.52:9100"], labels: {vm: gpu}}
+      - {targets: ["192.168.1.53:9100"], labels: {vm: apps}}
+      - {targets: ["192.168.1.54:9100"], labels: {vm: ai}}
+      - {targets: ["192.168.1.55:9100"], labels: {vm: transcode}}
+  - job_name: cadvisor
+    scrape_interval: 60s # the per-container series are the bulk of the TSDB
+    static_configs:
+      - {targets: ["192.168.1.50:9101"], labels: {vm: edge}}
+      - {targets: ["192.168.1.51:9101"], labels: {vm: media}}
+      - {targets: ["192.168.1.52:9101"], labels: {vm: gpu}}
+      - {targets: ["192.168.1.53:9101"], labels: {vm: apps}}
+      - {targets: ["192.168.1.54:9101"], labels: {vm: ai}}
+      - {targets: ["192.168.1.55:9101"], labels: {vm: transcode}}
+
+  # Proxmox through pve-exporter. RicksShip answers for the cluster (every guest and both nodes);
+  # each host also reports its own node data (version, replication, subscription).
+  - job_name: pve
+    metrics_path: /pve
+    params: {module: [default]}
+    static_configs:
+      - {targets: ["192.168.1.37"], labels: {host: RicksShip, cluster: "1", node: "1"}}
+      - {targets: ["192.168.1.137"], labels: {host: RicksGarage, cluster: "0", node: "1"}}
+      - {targets: ["192.168.1.38"], labels: {host: RicksPortalGun, cluster: "0", node: "1"}}
+    relabel_configs:
+      - {source_labels: [__address__], target_label: __param_target}
+      - {source_labels: [cluster], target_label: __param_cluster}
+      - {source_labels: [node], target_label: __param_node}
+      - {source_labels: [__address__], target_label: instance}
+      - {target_label: __address__, replacement: "pve-exporter:9221"}
+      - {regex: "cluster|node", action: labeldrop}
+
+  # Traefik on the edge VM: requests, status codes and latency per router (:8082, lab VMs only).
+  - job_name: traefik
+    static_configs:
+      - targets: ["192.168.1.50:8082"]
+
+  # Tailscale subnet router on the edge VM (TS_ENABLE_METRICS, :9002, this VM only).
+  - job_name: tailscale
+    static_configs:
+      - targets: ["192.168.1.50:9002"]
+
+  - job_name: exportarr
+    scrape_interval: 2m # library counts move slowly; keeps the API calls to Sonarr/Radarr down
+    scrape_timeout: 90s
+    static_configs:
+      - {targets: ["exportarr-sonarr:9707"], labels: {app: sonarr}}
+      - {targets: ["exportarr-radarr:9708"], labels: {app: radarr}}
+      - {targets: ["exportarr-prowlarr:9709"], labels: {app: prowlarr}}
+      - {targets: ["exportarr-sabnzbd:9710"], labels: {app: sabnzbd}}
+
+  # TrueNAS pushes Graphite to graphite-exporter, which this scrapes. The NAS sends every 10 s or so.
+  - job_name: truenas
+    static_configs:
+      - targets: ["graphite-exporter:9108"]
+        labels: {host: truenas}

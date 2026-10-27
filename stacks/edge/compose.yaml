@@ -34,11 +34,17 @@ services:
       # (SABnzbd's ?apikey=), and the lines that matter for a lockout are the 302/401/403s.
       - --accesslog=true
       - --accesslog.filters.statusCodes=300-599
+      # Prometheus on the apps VM scrapes :8082 (published; DOCKER-USER keeps it to the lab VMs).
+      - --entrypoints.metrics.address=:8082
+      - --metrics.prometheus=true
+      - --metrics.prometheus.entryPoint=metrics
+      - --metrics.prometheus.addRoutersLabels=true
     environment:
       TZ: ${TZ}
       TS_TAILNET: ${TS_TAILNET}
     ports:
       - "80:80"
+      - "8082:8082"
     volumes:
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
     networks: [proxy]
@@ -131,6 +137,9 @@ services:
       TS_ROUTES: 192.168.1.0/24
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "false"
+      # /metrics for Prometheus (host network: lanfw's LANFW-IN lets only the apps VM in).
+      TS_ENABLE_METRICS: "true"
+      TS_LOCAL_ADDR_PORT: 0.0.0.0:9002
     volumes:
       - /opt/appdata/tailscale:/var/lib/tailscale
 

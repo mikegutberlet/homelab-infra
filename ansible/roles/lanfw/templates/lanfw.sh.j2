@@ -21,3 +21,16 @@ iptables -A $C -i {{ lanfw_iface }} -p {{ p.split('/')[1] | default('tcp') }} -m
 {% endfor %}
 iptables -A $C -i {{ lanfw_iface }} -m conntrack --ctstate NEW -j DROP
 iptables -A $C -j RETURN
+
+# Host-networked metrics endpoints (role metrics: node-exporter; Tailscale on the edge VM) are
+# outside DOCKER-USER. LANFW-IN in INPUT lets only Prometheus on the apps VM (and this VM itself)
+# reach them; every other port on INPUT is untouched.
+I=LANFW-IN
+iptables -N $I 2>/dev/null || true
+iptables -F $I
+iptables -C INPUT -j $I 2>/dev/null || iptables -I INPUT 1 -j $I
+{% for p in host_metrics_ports | default([]) %}
+iptables -A $I -i {{ lanfw_iface }} -p {{ p.split('/')[1] | default('tcp') }} --dport {{ p.split('/')[0] }} -s {{ metrics_scraper }} -j RETURN
+iptables -A $I -i {{ lanfw_iface }} -p {{ p.split('/')[1] | default('tcp') }} --dport {{ p.split('/')[0] }} -j DROP
+{% endfor %}
+iptables -A $I -j RETURN

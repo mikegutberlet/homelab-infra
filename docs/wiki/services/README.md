@@ -10,6 +10,7 @@ talks to, how its health is checked, and its state on 2026-10-22.
 | [media](media.md) | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd, gluetun + qBittorrent, Recyclarr, Jellyseerr, MeTube, Storyteller, Audiobookshelf, RomM |
 | [gpu](gpu.md) | Plex, Emby, ErsatzTV, Immich, Tdarr, Unmanic |
 | [apps](apps.md) | Postgres, Redis, Nextcloud, Paperless-ngx, Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny, Diun, OliveTin, Dockge |
+| [monitoring](monitoring.md) | Prometheus, Grafana and the exporters (node-exporter and cAdvisor on every VM, Proxmox, arr apps, TrueNAS, Traefik, Tailscale) |
 | [ai](ai.md) | Open WebUI, AnythingLLM, Piper, the LangChain/CrewAI worker |
 | [TrueNAS and the hosts](truenas-and-hosts.md) | TrueNAS VM, the Proxmox hosts' own agents (Scrutiny collector, heartbeat, vfio), the old VMs |
 

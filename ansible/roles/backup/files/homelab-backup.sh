@@ -49,7 +49,7 @@ tar -C / --warning=no-file-changed --exclude-caches-all \
   --exclude='*.db' --exclude='*.db-wal' --exclude='*.db-shm' --exclude='*.db-20*' \
   --exclude='*.sqlite' --exclude='*.sqlite-wal' --exclude='*.sqlite-shm' --exclude='*.sqlite3' \
   --exclude='opt/appdata/postgres' --exclude='opt/appdata/*/db' --exclude='opt/appdata/romm/db' \
-  --exclude='opt/appdata/scrutiny/influxdb' \
+  --exclude='opt/appdata/scrutiny/influxdb' --exclude='opt/appdata/prometheus' \
   --exclude='opt/appdata/transcode' --exclude='*/[Cc]ache' --exclude='*/[Ll]ogs' --exclude='*/log' \
   --exclude='opt/appdata/plex/Library/Application Support/Plex Media Server/Metadata' \
   --exclude='opt/appdata/plex/Library/Application Support/Plex Media Server/Media' \
