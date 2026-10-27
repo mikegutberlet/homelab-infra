@@ -15,7 +15,7 @@ DNS. There are no VLANs, so isolation comes from per-VM firewall rules rather th
 | 192.168.1.50 | edge VM | Traefik :80 (only TSDProxy and the lab use it), Tailscale subnet router, wg-easy 51820/udp when enabled |
 | 192.168.1.51 | media VM | see port table |
 | 192.168.1.52 | gpu VM | Plex 32400 (host network), Emby 8096 |
-| 192.168.1.53 | apps VM | Postgres 5432 (lab VMs only), Scrutiny 8087 (also the two hosts) |
+| 192.168.1.53 | apps VM | Postgres 5432 (lab VMs only), Scrutiny 8087 (also the three hosts) |
 | 192.168.1.54 | ai VM | Open WebUI 3010 (edge VM only) |
 | 192.168.1.14 | old Servarr VM 113 | free (VM removed 2026-10-26) |
 | 192.168.1.15 | old Plex VM 117 | free (VM removed 2026-10-26) |
@@ -77,7 +77,7 @@ the LAN. Exceptions:
 | 8096/tcp | gpu | whole LAN | Emby for the TVs |
 | 5055/tcp | media | whole LAN | Requests, so family can request without Tailscale |
 | 51820/udp | edge | whole LAN (and a router forward, later) | wg-easy fallback VPN, once it is set up |
-| 8087/tcp | apps | lab VMs plus 192.168.1.137 and .37 | Scrutiny collectors on the hosts post here |
+| 8087/tcp | apps | lab VMs plus 192.168.1.137, .37 and .38 | Scrutiny collectors on the hosts post here |
 | 3010/tcp | ai | edge VM only | Open WebUI trusts the Authentik header |
 | 3005/tcp | apps | edge VM only | Grafana trusts the Authentik header |
 | 2003/tcp | apps | lab VMs plus 192.168.1.209 | TrueNAS pushes Graphite metrics |
