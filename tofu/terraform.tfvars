@@ -19,19 +19,21 @@ vms = {
   }
   media = {
     vm_id      = 202
-    node       = "RicksGarage"
+    node       = "RicksPortalGun"
     ip         = "192.168.1.51/24"
     cores      = 4
     # 8 GB fixed, no ballooning: at 6 GB with a 5 GB balloon floor it nearly ran out of memory on
     # 2026-10-22 (load >100, SSH frozen). Container peaks: SABnzbd 2.5 GB, Bazarr 1.6 GB,
-    # FlareSolverr 1.5 GB, Radarr/Sonarr ~1 GB each.
-    memory_mb  = 8192
+    # FlareSolverr 1.5 GB, Radarr/Sonarr ~1 GB each. 12 GB since the move to RicksPortalGun
+    # (2026-10-27), which has the room.
+    memory_mb  = 12288
     disk_gb    = 64
     datastore  = "local-lvm"
     # SABnzbd temp disk (2026-10-22): downloads used to fill the 64 GB system disk and pause at
-    # its 15 GB floor. xfstest is RicksGarage's second SSD, apart from the local-lvm pool.
+    # its 15 GB floor. Since 2026-10-27 it sits on PortalGunSpare, RicksPortalGun's second SSD
+    # (LVM-thin, so raw), apart from the system disks on local-lvm.
     scratch_gb        = 200
-    scratch_datastore = "xfstest"
+    scratch_datastore = "PortalGunSpare"
     startup    = 4
     tags       = ["media", "docker"]
   }

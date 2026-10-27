@@ -184,6 +184,7 @@ and recreate the cloud-init drive on the target.
 
 ```sh
 ssh root@192.168.1.137 'grep -A6 "dir: xfstest" /etc/pve/storage.cfg; qm config 202 | grep -E "^(scsi|ide)"'
+ssh root@192.168.1.137 'pvesm set xfstest --shared 0'   # was wrongly shared 1 too (2026-10-27)
 ssh root@192.168.1.137 'qm disk move 202 scsi1 xfstest --format raw --delete 1'   # live
 ssh root@192.168.1.137 'qm shutdown 202 --timeout 300 && qm set 202 --delete ide2 && qm migrate 202 RicksPortalGun --targetstorage local-lvm:local-lvm,xfstest:PortalGunSpare'
 ssh root@192.168.1.38  'qm set 202 --ide2 local-lvm:cloudinit --memory 12288 && qm start 202'
