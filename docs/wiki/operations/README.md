@@ -9,6 +9,7 @@ with the tools installed during the build (OpenTofu, the Ansible venv at
 | [Deploy a change](deploy-changes.md) | Editing a Compose file, a route, a secret, an Ansible role, or VM sizing |
 | [Add a service](add-a-service.md) | A new app in an existing stack |
 | [Reboot a host](reboot-a-host.md) | Any Proxmox host restart (the NUCs hang on warm reboot) |
+| [Fill RicksPortalGun](portalgun-moves.md) | The 2026-10-27 plan: transcode VM, moving apps and media to the third node |
 | [Power outage](power-outage.md) | Before, during and after a power cut; the UPS plan |
 | [Backups and restore](backups-and-restore.md) | Checking last night's backup, restoring an app, rebuilding a VM |
 | [Alerts and monitoring](alerts.md) | What an email means and what to do; adding monitors |

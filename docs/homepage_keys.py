@@ -80,7 +80,7 @@ if CREATE:
     out = subprocess.run(["ssh", PVE, "pveum user token add homepage@pve homepage --privsep 0 --output-format json"],
                          capture_output=True, text=True).stdout
     need("HOMEPAGE_PROXMOX_TOKEN_SECRET", json.loads(out).get("value", "") if out.strip() else "")
-    # TrueNAS API key (SCALE 23.10 keys are full access; the widget only reads). Undo: midclt call api_key.delete <id>
+    # TrueNAS API key (owned by root; the widget only reads). Undo: midclt call api_key.delete <id>
     # Also shown once, so an existing "homepage" key is deleted and made again.
     keys = subprocess.run(["ssh", NAS, "midclt call api_key.query"], capture_output=True, text=True).stdout
     for k in (json.loads(keys) if keys.strip() else []):

@@ -50,15 +50,21 @@ services:
       retries: 3
       start_period: 120s
 
+  # The -vaapi tag stopped at v25.2.0 and its health check now fails on purpose (deprecated);
+  # VAAPI/QSV ship in the base image. Pinned because upgrades migrate the database one way.
+  # Config stays on the legacy path: the image prefers it over its /config default whenever it
+  # exists, and the database stores absolute paths under it (sequential YAML schedules).
+  # /transcode is the image default and keeps transcode scratch on local disk.
   ersatztv:
     <<: *common
-    image: jasongdove/ersatztv:latest-vaapi
+    image: jasongdove/ersatztv:v26.3.0
     environment:
       TZ: ${TZ}
     ports: ["8409:8409"]
     devices: [/dev/dri:/dev/dri]
     volumes:
       - /opt/appdata/ersatztv:/root/.local/share/ersatztv
+      - /opt/appdata/transcode/ersatztv:/transcode
       - /mnt/nfs/Media:/mnt/nfs/Media:ro
 
   # Immich: upstream layout. Its own Postgres because it needs a pinned vector extension.
@@ -212,6 +218,25 @@ services:
       - ./home-rows:/app:ro
       - /opt/appdata/kometa/logs:/kometa/logs:ro # Kometa's last run, for /health
     depends_on: [emby, kometa]
+
+  # Reports new image versions to the n8n digest on the apps VM; updates nothing itself
+  # (ansible role ops auto-updates the hosts.yml auto_update list weekly).
+  diun:
+    <<: *common
+    image: crazymax/diun:4
+    command: serve
+    hostname: gpu # Diun names the host it watches by its own hostname (else the container id)
+    environment:
+      TZ: ${TZ}
+      DIUN_WATCH_SCHEDULE: "0 */6 * * *"
+      DIUN_PROVIDERS_DOCKER: "true"
+      DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT: "true"
+      DIUN_NOTIF_WEBHOOK_ENDPOINT: http://192.168.1.53:5678/webhook/homelab/diun # daily digest (n8n)
+      DIUN_NOTIF_WEBHOOK_METHOD: POST
+      DIUN_NOTIF_WEBHOOK_HEADERS_CONTENT-TYPE: application/json # Diun sets none; n8n then sees an empty body
+    volumes:
+      - /opt/appdata/diun:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   autoheal:
     image: willfarrell/autoheal:1.2.0

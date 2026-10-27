@@ -27,7 +27,8 @@ thread "Home lab wiki"). Regenerate it from these files with `python3 docs/wiki/
 
 - **Dates** are written as `2026-10-21`. Times in the thread history are UTC; the lab itself runs
   on Pacific time (`America/Los_Angeles`).
-- **Names.** The two Proxmox hosts are *RicksGarage* (storage NUC) and *RicksShip* (compute NUC).
+- **Names.** The Proxmox hosts are *RicksGarage* (storage NUC), *RicksShip* (compute NUC) and
+  *RicksPortalGun* (third NUC, no VMs yet).
   The five app VMs are *edge*, *media*, *gpu*, *apps* and *ai*. "The NAS" means the TrueNAS VM and
   its pool `DeepData`.
 - **Addresses.** `https://<app>.tail9af84.ts.net` is an app's Tailscale name. `192.168.1.x:port` is

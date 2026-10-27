@@ -40,9 +40,13 @@ machine arrives.
 
 ### D05: Remote access only through Tailscale
 
-**Decision (Goobs, 2026-10-21).** No open router ports; the Tailnet is the way in. **Exception
-(Goobs, 2026-10-21 18:31 UTC).** The existing Plex forward (6996 to 32400) was re-pointed to the new
-Plex so clients without Tailscale keep working. **Fallback.** wg-easy stays in the edge stack for a
+**Decision (Goobs, 2026-10-21).** No open router ports; the Tailnet is the way in. **Former
+exception (Goobs, 2026-10-21 18:31 UTC).** The existing Plex forward (6996 to 32400) was re-pointed
+to the new Plex so clients without Tailscale keep working. The internet is Starlink (carrier NAT),
+so it never could, and Goobs had it **removed on 2026-10-26**; remote Plex apps use the plex.tv
+relay. Plex's own Remote Access switch must still stay on, or plex.tv stops listing the server and
+even home devices lose it; the sysadmin turns it back on when it finds it off (2026-10-25, after it
+went off in a power cut). **Fallback.** wg-easy stays in the edge stack for a
 Tailscale outage, not started yet.
 
 ### D06: Authentik forward auth, with exceptions
@@ -118,6 +122,9 @@ free on the host; scrub 10x faster. Old config saved on the Mac.
 set `two_node: 1`. No Proxmox HA. **Why.** HA needs a third vote and could not move the storage VMs
 anyway because TrueNAS is tied to the DAS. **Consequence.** `wait_for_all` after a cold start of both
 hosts.
+
+**Update 2026-10-26.** A third NUC (RicksPortalGun, 192.168.1.38) joined and `two_node` was
+removed: 3 votes, quorum 2, no `wait_for_all`. Still no HA.
 
 ### D17: Debian 12 `generic` cloud image, serial console, guest agent via vendor data
 
@@ -216,3 +223,13 @@ are now").** The household uses them from TVs that do not run Tailscale.
 **Decision (Goobs, 2026-10-21 04:28 to 04:33 UTC).** Existing pool, folders and layout are kept;
 apps move one at a time with the old one stopped first; the old VMs stay off, not deleted, for at
 least a week. The sabnzb/complete leftovers are never deleted without an explicit OK.
+
+### D31: Media apps update themselves; database apps stay manual
+
+**Decision (Goobs, card 2026-10-26 19:46 UTC, "Alerts + auto-update safe apps"; then "Can the alerts
+and updates following the alert come directly from and to my Sys Admin").** Diun runs on every VM and
+reports to the sysadmin. Internet-facing media apps (Plex, Emby, Jellyseerr, the *arr apps, SABnzbd,
+qBittorrent, FlareSolverr) are updated by the sysadmin between 03:00 and 05:00 Pacific. **Cost.** A bad
+upstream release can break one of them overnight until it is rolled back. **Consequence.** Authentik,
+Nextcloud, Immich, Paperless, databases and pinned images (ErsatzTV, Kometa) stay manual; they show as
+"update available (by hand)".

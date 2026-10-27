@@ -309,6 +309,17 @@
           username: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_ID}}"
           password: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET}}"
           node: ricksship
+    - Proxmox RicksPortalGun:
+        href: "https://192.168.1.38:8006"
+        description: Third NUC (64 GB), no VMs yet
+        icon: proxmox.png
+        siteMonitor: "https://192.168.1.38:8006/"
+        widget:
+          type: proxmox
+          url: "https://192.168.1.38:8006"
+          username: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_ID}}"
+          password: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET}}"
+          node: ricksportalgun
     - TrueNAS:
         href: "https://192.168.1.209"
         description: DeepData pool (RAIDZ1, five 20 TB drives)

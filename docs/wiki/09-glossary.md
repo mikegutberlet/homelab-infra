@@ -30,14 +30,15 @@ Terms as they are used in this lab. Names of apps are in the [service pages](ser
 | **LAN-open** | A port deliberately reachable from every device on 192.168.1.0/24: Plex 32400, Emby 8096, Jellyseerr 5055. |
 | **lanfw** | The Ansible role and script that write the DOCKER-USER firewall rules. |
 | **media VM** | VM 202, 192.168.1.51: the download and library pipeline (Arr apps, SABnzbd, qBittorrent, Recyclarr, Jellyseerr, ...). |
-| **NUC** | Intel NUC6i7KY "Skull Canyon" mini PC; the lab has two: RicksGarage (storage host) and RicksShip (compute host). |
+| **NUC** | Intel mini PC. RicksGarage (storage host) and RicksShip (compute host) are NUC6i7KY "Skull Canyon"; RicksPortalGun is a NUC8i7BEH "Bean Canyon". |
 | **NUT** | Network UPS Tools: the planned software that shuts the hosts down cleanly when a UPS runs low. |
 | **PUID / PGID** | The user and group id a container runs as. Everything here is 3000:3000 (`storage`) unless the image cannot. |
-| **quorum / two_node / wait_for_all** | Proxmox cluster settings: with two nodes, VMs start only after both nodes have been seen once since boot. |
+| **quorum** | Proxmox cluster votes: three nodes, quorum two (since 2026-10-26; `two_node`/`wait_for_all` are gone). VMs start only on a host that is part of a quorate cluster. |
 | **Recyclarr** | Syncs TRaSH Guides quality settings and custom-format scores into Sonarr and Radarr. Runs on a timer. |
 | **Requests** | The household name for Jellyseerr (`requests.tail9af84.ts.net`), where anyone asks for a movie or show. |
 | **RicksGarage** | Proxmox host 192.168.1.137: holds the DAS, runs TrueNAS and the media VM. |
 | **RicksShip** | Proxmox host 192.168.1.37: runs edge, gpu, apps and ai. |
+| **RicksPortalGun** | Proxmox host 192.168.1.38, the third NUC (64 GB), joined 2026-10-26; no VMs yet. |
 | **SOPS / age** | How secrets are stored in git: `secrets.sops.env` is encrypted with an age key held on the Mac and on each VM. |
 | **storage (user)** | uid/gid 3000 on every VM and on the NAS; owns the media and all appdata. |
 | **subnet router** | The edge VM's Tailscale node advertising 192.168.1.0/24, so tailnet devices can reach LAN addresses. |

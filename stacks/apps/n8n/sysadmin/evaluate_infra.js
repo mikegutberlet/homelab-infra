@@ -7,6 +7,9 @@ const S = SETTINGS;
 const issues = [];
 const add = (...a) => issues.push(issue('infra', ...a));
 const grab = (name) => { try { return $(name).first().json; } catch (e) { return null; } };
+// n8n splits a JSON array answer into one item per element (TrueNAS pools and alerts), and with
+// alwaysOutputData an empty array arrives as one empty item.
+const grabAll = (name) => { try { return $(name).all().map((i) => i.json); } catch (e) { return null; } };
 const failed = (j) => !j || j.error;
 // n8n keeps the HTTP node's error on the item when "continue on error" is set.
 const errText = (j) => (j && j.error && (j.error.message || JSON.stringify(j.error).slice(0, 200))) || 'no answer';
@@ -16,8 +19,12 @@ for (const h of S.HOSTS) {
   const last = sd.last[h];
   const age = last && last.received ? (now - last.received) / 60e3 : null;
   if (age == null) add(`silent:${h}`, 'warning', `${h} has never reported`, 'The homelab-agent timer is not deployed there yet, or cannot reach n8n');
-  else if (age > S.SILENT_AFTER_MIN) add(`silent:${h}`, 'critical', `${h} has not reported for ${Math.round(age)} min`, 'VM down, Docker stuck, or the timer failed; check Proxmox and journalctl -u homelab-agent');
+  else if (age > S.SILENT_AFTER_MIN) add(`silent:${h}`, 'critical', `${h} has not reported since ${fmtT(last.received)}`, 'VM down, Docker stuck, or the timer failed; check Proxmox and journalctl -u homelab-agent');
 }
+// The NAS from the VMs' side: when two or more fresh reports say TrueNAS does not answer on 2049,
+// one critical here instead of one per VM.
+const nasDown = S.HOSTS.filter((h) => sd.last[h] && now - sd.last[h].received < 20 * 60e3 && sd.last[h].mounts && sd.last[h].mounts.nas_tcp_2049 === false);
+if (nasDown.length >= 2) add('nas-down', 'critical', `TrueNAS does not answer NFS from ${nasDown.join(', ')}`, 'Libraries, uploads and backups on every VM wait for it. Check VM 110 in Proxmox and the TrueNAS console; nothing to fix from here');
 
 // ---- Proxmox ----
 const res = grab('PVE resources');
@@ -27,7 +34,7 @@ else {
   for (const n of data.filter((x) => x.type === 'node')) {
     if (n.status !== 'online') add(`pve-node:${n.node}`, 'critical', `Proxmox host ${n.node} is ${n.status}`, 'Cluster is 2-node; VMs on it are down and the other host may lose quorum');
     const pct = n.maxmem ? Math.round(100 * n.mem / n.maxmem) : 0;
-    if (pct >= S.MEM_WARN) add(`pve-mem:${n.node}`, 'warning', `${n.node}: host RAM ${pct}% used`, `${gb(n.maxmem - n.mem)} free of ${gb(n.maxmem)}; balloon floors are the lever`);
+    if (n.maxmem && n.maxmem - n.mem < S.PVE_MEM_FREE_WARN_GB * GB) add(`pve-mem:${n.node}`, 'warning', `${n.node}: host RAM ${pct}% used, ${gb(n.maxmem - n.mem)} free`, 'VMs have fixed memory (no ballooning); around 90% is normal on RicksGarage. It matters once the host starts swapping: then shrink a VM in tofu/terraform.tfvars or move one');
   }
   for (const v of data.filter((x) => x.type === 'qemu')) {
     if (S.PVE_EXPECT_RUNNING.includes(v.vmid) && v.status !== 'running') add(`vm-down:${v.vmid}`, 'critical', `VM ${v.vmid} ${v.name} is ${v.status} on ${v.node}`, 'Start it from the Proxmox UI (TrueNAS first if it is 110); nothing here starts VMs');
@@ -52,15 +59,14 @@ try { nodeStatus = $('PVE node status').all().map((i) => i.json); nodeList = $('
 for (const [idx, st] of nodeStatus.entries()) {
   const d = st.data; if (!d || !d.swap) continue;
   const name = (nodeList[idx] && nodeList[idx].node) || '?';
-  if (d.swap.used > S.SWAP_WARN_BYTES) add(`pve-swap:${name}`, 'warning', `Proxmox host ${name} is using ${gb(d.swap.used)} of swap`, 'RicksGarage runs TrueNAS 16 GB + edge + media; lower a balloon floor or move a VM');
+  if (d.swap.used > S.SWAP_WARN_BYTES) add(`pve-swap:${name}`, 'warning', `Proxmox host ${name} is using ${gb(d.swap.used)} of swap`, 'Host RAM is short. VMs have fixed memory (no ballooning; RicksGarage runs TrueNAS 16 GB + edge + media): shrink a VM in tofu/terraform.tfvars, or move one to the other host');
 }
 
 // ---- TrueNAS ----
-const pools = grab('NAS pools');
-if (failed(pools)) add('nas-api', 'warning', 'TrueNAS API not answering', errText(pools));
+const pools = grabAll('NAS pools');
+if (!pools || !pools.length || failed(pools[0])) add('nas-api', 'warning', 'TrueNAS API not answering', errText(pools && pools[0]));
 else {
-  const list = Array.isArray(pools) ? pools : (pools.data || []);
-  for (const p of list) {
+  for (const p of pools.filter((x) => x && x.name)) {
     if (p.status !== 'ONLINE' || p.healthy === false) add(`pool-state:${p.name}`, 'critical', `Pool ${p.name} is ${p.status}${p.healthy === false ? ' (unhealthy)' : ''}`, 'A disk may have dropped; look at zpool status before touching anything (RAIDZ1, one disk of margin)');
     const sc = p.scan || {};
     if (sc.errors > 0) add(`scrub-errors:${p.name}`, 'critical', `Scrub on ${p.name} found ${sc.errors} error(s)`, `state ${sc.state}, function ${sc.function}`);
@@ -78,11 +84,11 @@ if (!failed(ds) && ds.available) {
   const tr = sd.trends.infra = (sd.trends.infra || []).filter((p) => now - p.t < 7 * 24 * H);
   if (!tr.length || now - tr[tr.length - 1].t >= H - 60e3) tr.push({ t: now, pool_free: free, pool_used: used });
 }
-const al = grab('NAS alerts');
-if (!failed(al) && Array.isArray(al)) {
-  for (const a of al.filter((x) => !x.dismissed)) {
+const al = grabAll('NAS alerts');
+if (al && al.length && !failed(al[0])) {
+  for (const a of al.filter((x) => x && x.level && !x.dismissed)) {
     const sev = a.level === 'CRITICAL' || a.level === 'ALERT' || a.level === 'EMERGENCY' ? 'critical' : a.level === 'WARNING' || a.level === 'ERROR' ? 'warning' : 'info';
-    add(`nas-alert:${a.id || a.klass || a.formatted.slice(0, 40)}`, sev, `TrueNAS ${a.level}: ${(a.formatted || '').split('\n')[0].slice(0, 120)}`, a.klass || '');
+    add(`nas-alert:${a.id || a.klass || (a.formatted || '').slice(0, 40)}`, sev, `TrueNAS ${a.level}: ${(a.formatted || '').split('\n')[0].slice(0, 120)}`, a.klass || '');
   }
 }
 

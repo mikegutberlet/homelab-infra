@@ -10,12 +10,12 @@ Everything that is pending, waiting on a decision, or known but not yet verified
 | Set **After Power Failure = Power On** in the BIOS of both NUCs | Without it the hosts stay off after a power cut until someone presses the button | Pending; needs a monitor and keyboard at each NUC (see [Power outage](operations/power-outage.md)) |
 | Buy a UPS (about 1500 VA, USB data port) and run NUT | Clean shutdown on a long outage instead of a hard power loss for the NAS | Decision open; NUT configuration is not in the repo yet |
 | Fix the warm-reboot hang (try `reboot=pci` / `reboot=efi` kernel parameters or a BIOS update) | Every host restart currently needs the power button | Not started; power-off restarts remain the rule |
-| Decide what to do with old VMs **113** (Servarr) and **117** (Plex) | They are powered off and keep host disk; their passwords were typed into chat once | Goobs decides around **2026-10-28**; delete nothing before then |
 
 ## Needs Goobs's input
 
 | Item | Why | Status |
 | --- | --- | --- |
+| Delete the vzdump backups of the removed old VMs 113 and 117 (183 GB on `DeepData_NFS`, `dump/`) | Kept 30 days as the undo for their removal on 2026-10-26 | Due about **2026-11-25** (Goobs chose 30 days) |
 | healthchecks.io ping URLs for both hosts | The host heartbeat (`playbooks/heartbeat.yml`, `heartbeat_url` in `inventory/hosts.yml`) is the only out-of-band "the house lost power" signal | URLs not created yet; the playbook has not been run |
 | wg-easy as a backup VPN next to Tailscale | Covers the case where Tailscale's coordination is unreachable | Deferred by Goobs; a port forward would be needed, which conflicts with the Tailscale-only rule |
 | Rotate the passwords in the shared "IP's and Creds" document (Proxmox root, TrueNAS, old VMs) | The build is done and the design called for a rotation | Not done |
@@ -25,6 +25,7 @@ Everything that is pending, waiting on a decision, or known but not yet verified
 | The 76 4K files and 231 unmatched movie folders | No-4K rule says they should go or be replaced by 1080p copies; unmatched folders may be mis-named or junk | Awaiting review |
 | 9 leftover folders (about 28 GB) in `sabnzb/complete` | Remains of the old failed-import backlog | Delete none without Goobs's OK |
 | 21 entries under `/mnt/backupsmb` on the old VM | Unknown purpose | Review before the old VMs are removed |
+| Plex from outside the house: the internet is Starlink, whose IPv4 is carrier NAT (router WAN 100.82.x, public 98.97.x; Goobs 2026-10-26: "it's always been starlink") | No port forward can work through carrier NAT (the useless 6996 one was removed on 2026-10-26), so remote Plex apps (friends, phones off Wi-Fi without Tailscale) use the bandwidth-limited Plex relay. Plex's "mapped" on 2026-10-21 did not mean the forward worked | Decision open, only if remote viewing matters: Tailscale on the remote devices, a public IPv4 from Starlink (business plans), or keep the relay |
 | Empty the holding folder `to-delete/2026-10-21` | 14-day review window for duplicate and junk removals | About **2026-11-04**, after Goobs confirms nothing is missing |
 
 ## In progress or scheduled
@@ -51,7 +52,6 @@ Everything that is pending, waiting on a decision, or known but not yet verified
 | Backups have a single copy (on the NAS) and no whole-VM images | A pool loss takes the backups with it | Proxmox Backup Server and an off-site copy, per the design's next steps |
 | NFS export is open to the whole `192.168.1.0/24` | Any LAN device can mount the share | Tighten to `192.168.1.50-54` and the hosts |
 | `Photos` has no second copy | Phone backups now land there via Immich | Part of the off-site decision |
-| TrueNAS SCALE 23.10.2 is past its support window | Security updates stop | Plan an upgrade; needs a NAS restart with Goobs's OK |
 | TrueNAS VM vCPU count | Not recorded in the repo (managed by hand) | Record it `(unverified)` |
 | Stale Tailscale nodes from the old VMs | Clutter and leftover keys | Remove in the Tailscale admin console |
 | Tailscale reusable key expiry (about **2027-01-19**) | TSDProxy can no longer register new names after that; existing ones keep working for a while | Rotation steps in [Access and credentials](operations/access-and-credentials.md) |
@@ -77,4 +77,3 @@ Marked `(unverified)` where they appear. The main ones:
 - Whether Authentik enforces any second factor.
 - Exact Tailscale key creation date (expiry derived from it).
 - TrueNAS VM vCPU allocation and the exact DAS enclosure model.
-- Whether the Plex router forward (6996 to 192.168.1.52:32400) is still in place after the move.

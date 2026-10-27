@@ -25,6 +25,30 @@
   ansible.builtin.set_fact:
     ops_allow: "{{ ops_expected | reject('search', '/(' ~ (ops_never | join('|')) ~ ')$') | list }}"
 
+# What remount-nas recreates: allow-listed services that bind /mnt/nfs, plus those that depend on
+# one of them (nextcloud-web's nginx resolves nextcloud only at start). Never the whole stack.
+- name: Services that bind the NAS mount
+  ansible.builtin.set_fact:
+    ops_nfs_services: >-
+      {%- set out = [] -%}
+      {%- for s in stacks | default([]) -%}
+        {%- set svcs = (lookup('file', playbook_dir ~ '/../../stacks/' ~ s ~ '/compose.yaml') | from_yaml).services -%}
+        {%- set nfs = [] -%}
+        {%- for v, cfg in svcs.items() -%}
+          {%- for vol in cfg.volumes | default([]) -%}
+            {%- set src = vol if vol is string else (vol.source | default('')) -%}
+            {%- if src.startswith('/mnt/nfs') and v not in nfs -%}{%- set _ = nfs.append(v) -%}{%- endif -%}
+          {%- endfor -%}
+        {%- endfor -%}
+        {%- for v, cfg in svcs.items() -%}
+          {%- set deps = cfg.depends_on | default([]) -%}
+          {%- set deps = deps.keys() | list if deps is mapping else deps -%}
+          {%- if v not in nfs and deps | select('in', nfs) | list | length > 0 -%}{%- set _ = nfs.append(v) -%}{%- endif -%}
+        {%- endfor -%}
+        {%- for v in nfs -%}{%- if (s ~ '/' ~ v) in ops_allow -%}{%- set _ = out.append(s ~ '/' ~ v) -%}{%- endif -%}{%- endfor -%}
+      {%- endfor -%}
+      {{ out | sort }}
+
 - name: Agent configuration
   ansible.builtin.copy:
     dest: /etc/homelab-agent.conf
@@ -37,6 +61,9 @@
       NAS_IP=192.168.1.209
       # Only VMs with nfs_mounts in hosts.yml have /mnt/nfs; the rest skip that check.
       NFS_EXPECTED={{ (nfs_mounts | default([]) | length > 0) | lower }}
+      NFS_SERVICES="{{ ops_nfs_services | join(' ') }}"
+      # ts.net names the edge agent does not probe: their service is off on purpose (hosts.yml).
+      CERT_SKIP="{{ ops_cert_skip | default([]) | join(' ') }}"
       EXTRA_DISKS="{{ ops_extra_disks | default([]) | join(' ') }}"
 
 - name: Scripts
@@ -63,10 +90,14 @@
       [Service]
       Type=oneshot
       ExecStart=/usr/local/sbin/homelab-agent
-      TimeoutStartSec=240
+      # Every NAS access in the agent is time-boxed; a hung NAS still costs up to about 3 minutes.
+      TimeoutStartSec=360
       Nice=10
 
-- name: Agent timer (every 15 minutes, offset per VM so the reports do not all land at once)
+# Fixed minutes per VM (edge :01, media :04, gpu :07, apps :10, ai :12, then every 15 minutes),
+# so two reports never land at once: n8n saves the whole static data at the end of each run, and
+# of two overlapping runs the later one wins. The infra check runs at :14 and the digest at 08:00.
+- name: Agent timer (every 15 minutes, a fixed minute per VM)
   ansible.builtin.copy:
     dest: /etc/systemd/system/homelab-agent.timer
     mode: "0644"
@@ -75,18 +106,20 @@
       Description=Homelab sysadmin reporter
 
       [Timer]
-      OnCalendar=*:0/15
-      RandomizedDelaySec=90
+      OnCalendar=*:{{ '%02d' | format(ops_report_minute | default({'edge': 1, 'media': 4, 'gpu': 7, 'apps': 10, 'ai': 12}.get(inventory_hostname, 0)) | int) }}/15
+      AccuracySec=1s
+      RandomizedDelaySec=15
       Persistent=false
 
       [Install]
       WantedBy=timers.target
+  register: ops_timer
 
-- name: Agent timer enabled
+- name: Agent timer enabled (restarted when its schedule changed)
   ansible.builtin.systemd:
     name: homelab-agent.timer
     enabled: true
-    state: started
+    state: "{{ 'restarted' if ops_timer.changed else 'started' }}"
     daemon_reload: true
 
 # The ops door: only when the public key is set (ansible/inventory/group_vars/docker_vms.yml).
@@ -132,4 +165,18 @@
       # databases and autoheal are left out on purpose.
       {% for s in ops_allow %}
       {{ s }}
+      {% endfor %}
+
+# Services the sysadmin may update (ops verb "update"): hosts.yml auto_update, {stack: [service, ...]}.
+# Internet-facing media apps only; apps with a database migration risk (Authentik, Nextcloud,
+# Immich, Paperless) stay manual and only show up as "update available".
+- name: Auto-update list
+  ansible.builtin.copy:
+    dest: /etc/homelab-autoupdate.conf
+    mode: "0644"
+    content: |
+      # Written by Ansible (role ops, hosts.yml auto_update): "stack service ..." per line.
+      # Read by homelab-ops (verb update) and homelab-agent (reported to n8n).
+      {% for stack, svcs in (auto_update | default({})).items() %}
+      {{ stack }} {{ svcs | join(' ') }}
       {% endfor %}

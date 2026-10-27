@@ -1,7 +1,8 @@
 # homelab-infra
 
-Infrastructure as code for Goobs's home lab: two Intel NUC6i7KY Proxmox 8.4 hosts
-(RicksGarage, RicksShip, 31 GiB RAM each, 2-node cluster with `two_node`) and a TrueNAS VM
+Infrastructure as code for Goobs's home lab: three Proxmox 8.4 hosts in one cluster (quorum 2):
+two Intel NUC6i7KY (RicksGarage, RicksShip, 31 GiB RAM each) and RicksPortalGun (192.168.1.38,
+62 GiB, no VMs yet, joined 2026-10-26), plus a TrueNAS VM
 serving a five-disk USB DAS (RAIDZ1, 5 x 20 TB).
 
 Design and decisions: see the "Home lab app stack: infrastructure design" doc in the
@@ -22,7 +23,7 @@ decision records, runbooks, open items) lives in [`docs/wiki/`](docs/wiki/README
 | apps (204) | RicksShip | 192.168.1.53 | Postgres, Nextcloud, Paperless, Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny, Diun, OliveTin (report-only), Dockge, Prometheus + Grafana (`docs/wiki/services/monitoring.md`) | |
 | ai (205) | RicksShip | 192.168.1.54 | Piper | Open WebUI (no LLM key), AnythingLLM + worker |
 
-Old VMs, stopped and kept for rollback: Servarr (113, RicksGarage), Plex (117, RicksShip).
+Old VMs Servarr (113, RicksGarage) and Plex (117, RicksShip) were removed on 2026-10-26; their vzdump backups stay on `DeepData_NFS` until about 2026-11-25.
 Deferred: Kasm, local Ollama models (until the eGPU), Frigate (no cameras).
 
 ```

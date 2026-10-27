@@ -27,5 +27,6 @@ talks to, how its health is checked, and its state on 2026-10-22.
   `docker compose up -d --wait` for the services listed under `stack_services` in the inventory (or
   the whole stack with `--remove-orphans` when no list is given).
 - Image tags: mostly major-version pins (`traefik:v3.3`, `postgres:16-alpine`, `uptime-kuma:2`) or
-  `latest` for the LinuxServer media images. Nothing auto-updates; Diun reports new versions to the
-  digest.
+  `latest` for the LinuxServer media images. Diun on every VM reports new versions to the sysadmin;
+  it updates the services in hosts.yml `auto_update` itself between 03:00 and 05:00 Pacific (ops verb
+  `update`, see [sysadmin](../operations/sysadmin.md)); everything else is updated by hand.

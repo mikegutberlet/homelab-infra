@@ -9,7 +9,8 @@ whole NAS export read-write at `/mnt/nfs`, the same path the old Servarr VM used
 All of these apps were **migrated** from the old Servarr VM (192.168.1.14, bare-metal installs on
 Ubuntu 22.04 Desktop) on 2026-10-21 17:05 to 17:25 UTC using each app's own backup/restore or a
 config copy, following the Servarr migration plan (project file `homelab/servarr-migration-plan.md`). The old VM's configs were saved to `/root/migration-20261021` on that VM
-before it was shut down.
+before it was shut down; the VM was removed on 2026-10-26 and that folder now lives only in its vzdump
+backup (see [TrueNAS and hosts](truenas-and-hosts.md#the-old-vms-removed-2026-10-26)).
 
 ```mermaid
 flowchart LR
@@ -115,7 +116,8 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Images | `qmcgaw/gluetun:v3.40` (OpenVPN to PIA, `NET_ADMIN`, `/dev/net/tun`) and `lscr.io/linuxserver/qbittorrent:latest` with `network_mode: service:gluetun` |
 | Port | qBittorrent WebUI 8085, published by gluetun; https://qbittorrent.tail9af84.ts.net (SSO), user `admin`, password on the Mac (`~/.config/homelab/qbittorrent-webui`) |
 | VPN | `PIA_USER`, `PIA_PASSWORD`, `PIA_REGION` in the media secrets (origin: `~/.config/homelab/pia.env` on the Mac). `PORT_FORWARD_ONLY=on` because PIA has no port forwarding in US regions; Vancouver was chosen at build time. `VPN_PORT_FORWARDING_UP_COMMAND` posts the forwarded port into qBittorrent's preferences over localhost |
-| Kill switch | If the tunnel drops, qBittorrent has no network at all (shared namespace). Gluetun's own healthcheck gates qBittorrent's start |
+| Kill switch | If the tunnel drops, qBittorrent has no network at all (shared namespace). Gluetun's own healthcheck gates qBittorrent's start. Checked 2026-10-26: OUTPUT policy DROP except tun0 and the PIA endpoint, IPv6 blocked, DNS over TLS to Cloudflare with `BLOCK_MALICIOUS` |
+| Safety (2026-10-26) | qBittorrent skips executable file types (`*.exe`, `*.lnk`, `*.scr`, ... see [docs/torrent-fallback.md](../../torrent-fallback.md)), is bound to `tun0`, anonymous mode on, LSD off. gluetun's HTTP proxy (`gluetun:8888`, compose network only) carries Prowlarr's torrent indexers (tag `vpn`) and FlareSolverr runs in gluetun's namespace (`http://gluetun:8191`), so tracker searches leave through PIA too. Applied by `playbooks/torrent-hardening.yml` |
 | Data | `/opt/appdata/gluetun`, `/opt/appdata/qbittorrent`; downloads under `/mnt/nfs` |
 | Monitor | Kuma accepts any HTTP answer from 8085, even 403, as "both up" |
 
@@ -130,6 +132,7 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Rule | Never let it overwrite a profile Goobs has not assigned to it; "HD and Ultra" and "HD-1080p" in Sonarr are left alone |
 | English dubs | Goobs prefers an English dub over subtitles (2026-10-22). The TRaSH profiles want the original language only (Radarr profile language **Original**, Sonarr "Language: Not Original" −10000), which rejects English-only dubs, so foreign-language titles get their own user-defined profile **Foreign - Prefer English Dub** in both apps: same qualities, language Any (Radarr), Bluray-1080p and WEB 1080p merged in Radarr so a dubbed WEB-DL is not replaced by a subtitles-only Bluray, and three home-lab formats: Dubbed or Dual Audio +2000 (DUBBED, Dual Audio, KOR+ENG style pairs; not MULTi, which on Usenet usually means French plus original), English Tag +1000 (ENG/English in the name but not as a subtitle tag; CHS ENG counts as subtitles), Not Original or English −10000. The two positive formats go by the release name only: the Usenet indexers tag nearly every release "English" and Radarr/Sonarr trust that over the name, so a Language condition scored untagged originals as dubs (found in the 2026-10-22 spot check) |
 | Smaller files | Goobs, 2026-10-23: the guide sizes set *preferred* at the maximum, so the biggest 1080p release always won, and the Radarr cutoff (Bluray-1080p) kept replacing WEB-DLs with 10-15 GB Bluray encodes. Now 1080p WEB and Bluray are one tier in all four profiles; sizes per minute are capped (movies 1080p 8-70 MB/min, about 8.4 GB for 2 hours, aiming at 25; TV 1080p 4-65, aiming at 20; 720p lower); x265 (HD) +500; TRaSH **10bit** −10000 (new grabs only); HD Bluray tiers 1500/1450/1400, 200 below the matching WEB tier. Main profiles upgrade until 1080p with score −10000, so any 1080p file on disk is final (the 1,199 10-bit HEVC files included); foreign profiles stop at score 2000 (a dub). Below 1080p still upgrades |
+| Fakes | 2026-10-26: "Resident Evil (2026)" arrived as a 1080p WEB-DL from rothebehap a month before its digital release; it was a telesync with a SapphireBet watermark burned in. Its name had no CAM/TS words, so **No CAM/TS/Screener** missed it and it scored 0. Home-lab format **Homelab: Fake or Watermarked** (−10000, all four profiles) rejects known fake groups (release group or title) and betting-site watermark names in the title. Add a group to its regex when another fake gets through |
 | Home-lab formats | JSON in `stacks/media/recyclarr-extra/custom-formats/`, loaded through `recyclarr-extra/settings.yml` (mounted at `/config/extra`; `/opt/appdata/recyclarr/settings.yml` is a symlink to `/config/extra/settings.yml`, because Recyclarr reads settings only from the root of its writable config dir) |
 
 ## profile-sorter

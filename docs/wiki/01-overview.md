@@ -43,15 +43,15 @@ flowchart TB
 
 | VM | Host | IP | vCPU / RAM / disk | Stack contents | Needs the NAS |
 | --- | --- | --- | --- | --- | --- |
-| truenas (110) | RicksGarage | 192.168.1.209 | 6 (unverified) / 16 GB fixed / unchanged | TrueNAS SCALE 23.10.2, pool DeepData, NFS | is the NAS |
+| truenas (110) | RicksGarage | 192.168.1.209 | 6 (unverified) / 16 GB fixed / unchanged | TrueNAS 25.10.7, pool DeepData, NFS | is the NAS |
 | edge (201) | RicksGarage | 192.168.1.50 | 2 / 3 GB / 32 GB | Traefik, Authentik (server, worker, Postgres, Redis), TSDProxy, Tailscale subnet router, Docker socket proxy, autoheal. wg-easy defined but not started | no |
 | media (202) | RicksGarage | 192.168.1.51 | 4 / 6 GB (balloon floor 5 GB) / 64 GB | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd, gluetun + qBittorrent, Recyclarr, Jellyseerr, MeTube, Storyteller, Audiobookshelf, RomM + MariaDB, autoheal | yes |
 | gpu (203) | RicksShip | 192.168.1.52 | 6 / 10 GB / 96 GB + iGPU passthrough | Plex, Emby, ErsatzTV, Immich (server, ML, Postgres, Valkey), Tdarr, Unmanic, autoheal | yes |
 | apps (204) | RicksShip | 192.168.1.53 | 4 / 10 GB / 96 GB | Postgres (pgvector), Redis, Nextcloud (+ nginx, cron), Paperless (+ Gotenberg, Tika), Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny (+ InfluxDB), Diun, OliveTin, Dockge, autoheal | yes (Nextcloud, Paperless, backups) |
 | ai (205) | RicksShip | 192.168.1.54 | 2 / 4 GB / 32 GB | Open WebUI, AnythingLLM, Piper TTS; LangChain/CrewAI worker defined but not started | no |
 
-Old VMs kept powered off for rollback: **113 Servarr** (192.168.1.14, RicksGarage) and **117 Plex**
-(192.168.1.15, RicksShip). Goobs decides around 2026-10-28 whether to delete them.
+The old VMs **113 Servarr** (192.168.1.14, RicksGarage) and **117 Plex** (192.168.1.15, RicksShip) were
+removed on 2026-10-26 after a verified vzdump backup of each (kept on `DeepData_NFS` until about 2026-11-25).
 
 ## Service directory
 
@@ -62,7 +62,7 @@ All Tailscale names end in `.tail9af84.ts.net`. "SSO" means the Authentik login 
 | --- | --- | --- | --- | --- |
 | Homepage | home | SSO | apps | Dashboard listing every app with a live up/down dot |
 | Authentik | auth | own (admin `akadmin`) | edge | Single sign-on in front of the admin apps |
-| Plex | plex, LAN :32400 | own (plex.tv) | gpu | Media server, hardware transcoding, remote access on router port 6996 |
+| Plex | plex, LAN :32400 | own (plex.tv) | gpu | Media server, hardware transcoding, remote viewers through the Plex relay (no router forward) |
 | Emby | emby, LAN :8096 | own (Premiere) | gpu | Second media server, Goobs's preferred one |
 | Requests (Jellyseerr) | requests, LAN :5055 | own (Plex sign-in) | media | Family media requests, feeds Radarr and Sonarr |
 | Sonarr / Radarr / Prowlarr / Bazarr | sonarr, radarr, prowlarr, bazarr | SSO + app login | media | TV, movies, indexers, subtitles |
@@ -86,7 +86,7 @@ All Tailscale names end in `.tail9af84.ts.net`. "SSO" means the Authentik login 
 | OliveTin | olivetin | SSO | apps | Buttons for fixed maintenance commands (not wired up yet) |
 | Open WebUI | chat | SSO (auto login) | ai | Chat on Google Gemini |
 | AnythingLLM | anythingllm | SSO + own | ai | Chat with your documents, Gemini + pgvector |
-| Proxmox | https://192.168.1.137:8006, https://192.168.1.37:8006 | own | hosts | Hypervisor UIs (LAN or Tailscale subnet route) |
+| Proxmox | https://192.168.1.137:8006, https://192.168.1.37:8006, https://192.168.1.38:8006 | own | hosts | Hypervisor UIs (LAN or Tailscale subnet route) |
 | TrueNAS | https://192.168.1.209 | own | truenas | NAS UI |
 
 ## Numbers worth knowing

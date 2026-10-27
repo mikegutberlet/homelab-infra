@@ -10,7 +10,7 @@ Power cuts happen "from time to time" (Goobs). The first one during the lab's li
    damage (Scrutiny crashed once at boot and recovered).
 2. When power returns the NUCs **stay off** until the BIOS setting below is made or someone presses
    both buttons.
-3. Both hosts boot; after `wait_for_all` both must be seen once; RicksGarage starts TrueNAS (120 s),
+3. The hosts boot; once two of the three are up the cluster is quorate; RicksGarage starts TrueNAS (120 s),
    then edge and media; RicksShip starts gpu, apps and ai.
 4. On media, gpu and apps, `wait-nas.service` holds Docker until `/mnt/nfs` is a real, non-empty
    mount, so no app ever sees an empty library (the hazard found after the first outage).
@@ -40,7 +40,8 @@ are entered in `ansible/inventory/hosts.yml` and `proxmox-heartbeat.yml` is run.
 4. Each of .51, .52, .53: `findmnt /mnt/nfs` is nfs4 and `ls /mnt/nfs` is not empty;
    `systemctl is-active wait-nas docker`; `docker ps` shows everything up.
 5. Plex library count unchanged (3,368 movies at last check); Radarr's "movie file missing" count
-   not suddenly in the thousands.
+   not suddenly in the thousands. Plex Settings > Remote Access is still on (it switched itself off
+   in the 2026-10-21 outage; the sysadmin now turns it back on within 15 minutes).
 6. Kuma: all monitors green; Scrutiny up (restart it if it crashed on a late InfluxDB).
 7. Tailscale admin: `lab-router` online and the names reachable.
 8. Any long-running job (Tdarr, relink, moves) that was interrupted: check its on-disk log and

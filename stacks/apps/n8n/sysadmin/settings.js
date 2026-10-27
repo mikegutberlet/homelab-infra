@@ -1,10 +1,20 @@
 // Shared constants for the "Homelab sysadmin" workflow. docs/build_sysadmin_workflow.py pastes
 // this file at the top of every Code node, so change it here and rebuild, not inside n8n.
 const SETTINGS = {
-  // Round one runs report-only: fixes are decided and logged as "would run", nothing is executed.
-  FIXES_ENABLED: false,
-  // arr-blocklist stays off until arr-retry has run clean for a week (Goobs, 2026-10-22).
-  BLOCKLIST_ENABLED: false,
+  // Automatic fixes run (within FIX_PER_HOUR / FIX_PER_DAY) since the 2026-10-23 digest review;
+  // false = report-only, fixes are decided and logged as "would run", nothing is executed.
+  FIXES_ENABLED: true,
+  // arr-blocklist: dead downloads (0 bytes after 48 h) and "not an upgrade" imports stuck 48 h.
+  // On since 2026-10-26 (Goobs: "blocklist"); false = those are only reported.
+  BLOCKLIST_ENABLED: true,
+  // Image updates (Goobs, 2026-10-26): Diun reports new images; services on a VM's auto-update
+  // list (hosts.yml auto_update) get the "update" fix between UPDATE_HOURS (Pacific), the rest are
+  // listed for a manual update. false = all of them are only listed.
+  AUTO_UPDATE: true,
+  UPDATE_HOURS: [3, 5],
+  // Plex Remote Access stays on (see D05): when it is off, or plex.tv stops listing the
+  // server, plex-remote-on puts it back. false = Plex is meant to be LAN/Tailscale-only.
+  PLEX_REMOTE: true,
   // VMs that must report; a silent one is itself a critical issue.
   HOSTS: ['edge', 'media', 'gpu', 'apps', 'ai'],
   HOST_IP: { edge: '192.168.1.50', media: '192.168.1.51', gpu: '192.168.1.52', apps: '192.168.1.53', ai: '192.168.1.54' },
@@ -16,11 +26,25 @@ const SETTINGS = {
   NEVER_RESTART: ['n8n', 'postgres', 'redis', 'autoheal', 'tailscale', 'immich-db', 'immich-redis', 'romm-db', 'authentik-db', 'authentik-redis', 'scrutiny-influx'],
   // Critical issues are emailed at once, then again only every 6 hours while they persist.
   EMAIL_REPEAT_H: 6,
+  // An issue resolves only after this many checks of its scope (15 min apart) without it, so a value
+  // hovering at a threshold or one failed API read does not open and close it all day. One that
+  // comes back within FLAP_WINDOW_H keeps its first-seen time and counts as "came and went".
+  CLEAR_AFTER_RUNS: 3,
+  FLAP_WINDOW_H: 6,
   // Thresholds
   POOL_WARN_TB: 4, POOL_CRIT_TB: 3,          // DeepData free; Tdarr pauses below 3 TB
   DISK_WARN: 80, DISK_CRIT: 90,              // percent used, VM disks and Proxmox storage
+  // A VM disk also needs to be this low before it counts: on big disks (gpu's 96 GB, where the
+  // transcode caches swing by 15 GB) 80% still leaves plenty. Small disks hit both at once.
+  DISK_WARN_FREE_GB: 15, DISK_CRIT_FREE_GB: 8,
+  DISK_SKIP: ['/srv/usenet-incomplete'],     // SABnzbd's scratch disk has its own rule (sab-disk)
   MEM_WARN: 90, MEM_CRIT: 95,                // percent used
-  SWAP_WARN_BYTES: 256 * 1024 * 1024,
+  // Proxmox hosts: VMs have fixed memory (no ballooning), so RicksGarage sits near 90% by design.
+  // Warn on headroom instead; host swap (SWAP_WARN_BYTES) is the real pressure signal.
+  PVE_MEM_FREE_WARN_GB: 1.5,
+  SWAP_WARN_BYTES: 256 * 1024 * 1024,        // Proxmox hosts
+  // VMs: swap left over from a spike is harmless; pages read back in from swap mean RAM is short now.
+  SWAP_IN_WARN_MB: 100,                      // per 15 minutes
   LOAD_FACTOR: 2,                            // 15-min load over this x cores = warning
   BACKUP_WARN_H: 26, BACKUP_CRIT_H: 50,
   RESTARTS_WARN: 3, RESTARTS_CRIT: 10,       // per container per hour
@@ -29,7 +53,8 @@ const SETTINGS = {
   STUCK_RETRY_H: 24, STUCK_BLOCKLIST_H: 48,
   // SABnzbd's temp disk is 200 GB (scratch disk, 2026-10-22); SABnzbd itself pauses at 20 GB free.
   SAB_DISK_WARN_GB: 30, SAB_DISK_CRIT_GB: 22,
-  TDARR_IDLE_H: 6,
+  TDARR_IDLE_H: 6,                           // hours of scheduled time; the library schedule pauses 17:00-23:00 PT
+  TDARR_PAUSE_HOURS: [17, 23],
   LOGIN_FAILS_CRIT: 3,                       // failed arr web logins per 15 min that email at once
   KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,
   SCRUB_WARN_DAYS: 45,
@@ -43,12 +68,19 @@ const SETTINGS = {
   CHAT_FIX_PER_HOUR: 2,                      // per target, counting automatic fixes too
   CHAT_FIX_PER_DAY: 10,                      // all chat fixes together
   CHAT_CONFIRM_MIN: 15,                      // a proposal expires after this
+  // Telegram bot (stacks/apps/sysadmin-telegram). Pushes go to POST sysadmin-telegram:3004/notify;
+  // a Telegram failure never holds up the email.
+  TELEGRAM_ALERTS: true,                     // every critical email is also pushed to Telegram
+  TELEGRAM_DIGEST: false,                    // the 08:00 digest is also sent to Telegram (email only when false)
 };
 const TB = 1e12, GB = 1e9, H = 3600e3;
 const now = Date.now();
 const fmtT = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: SETTINGS.TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const gb = (b) => `${(b / GB).toFixed(1)} GB`;
 const tb = (b) => `${(b / TB).toFixed(2)} TB`;
-const ago = (ms) => { const h = (now - ms) / H; return h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };
+const dur = (ms) => { const h = ms / H; return h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`; };
+const ago = (ms) => dur(now - ms);
+const size = (b) => (b >= GB ? gb(b) : `${Math.round(b / 1e6)} MB`);
+const ptHour = (ms) => Number(new Date(ms).toLocaleString('en-US', { timeZone: SETTINGS.TZ, hour: 'numeric', hourCycle: 'h23' }));
 // One issue: key is stable across runs so the store can track first/last seen and emails.
 const issue = (host, key, sev, title, detail, fix) => ({ host, key: `${host}:${key}`, sev, title, detail: detail || '', fix: fix || null });

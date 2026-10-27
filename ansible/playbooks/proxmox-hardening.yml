@@ -1,0 +1,113 @@
+# Proxmox host hardening (2026-10-23, security plan step 3). Both NUCs accepted root password
+# logins over SSH, ran no fail2ban and installed no updates by themselves.
+# - SSH: keys only. Root keeps key login, which the cluster needs between the two nodes and
+#   Ansible uses from the Mac. The web UI shell (Node > Shell) stays as a way in.
+# - fail2ban: SSH and web UI login failures, read from the journal; the cluster nodes and the apps
+#   VM are never banned.
+# - unattended-upgrades: Debian security updates only. Proxmox packages and kernels stay manual,
+#   and nothing reboots by itself (warm reboots hang on these NUCs).
+# - root@PlanetC137 (offline since early 2025) is no longer trusted. authorized_keys is the
+#   cluster-wide /etc/pve/priv/authorized_keys, so this runs once and is rewritten in place
+#   (a rename would replace the file pmxcfs serves).
+# Undo: delete /etc/ssh/sshd_config.d/10-hardening.conf and restart ssh; remove the
+# fail2ban and unattended-upgrades packages; the old key list is saved next to the file.
+- name: Proxmox host hardening
+  hosts: proxmox
+  handlers:
+    - name: Restart ssh
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+    - name: Restart fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: restarted
+  tasks:
+    - name: Packages
+      ansible.builtin.apt:
+        name: [fail2ban, python3-systemd, unattended-upgrades]
+        update_cache: true
+
+    - name: SSH keys only
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/10-hardening.conf
+        content: |
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PermitRootLogin prohibit-password
+          X11Forwarding no
+          MaxAuthTries 3
+        mode: "0644"
+      notify: Restart ssh
+
+    - name: Web UI login filter for fail2ban
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/filter.d/proxmox.conf
+        content: |
+          [Definition]
+          failregex = pvedaemon\[.*authentication (verification )?failure; rhost=<HOST> user=\S+ msg=.*
+          ignoreregex =
+          journalmatch = _SYSTEMD_UNIT=pvedaemon.service
+        mode: "0644"
+      notify: Restart fail2ban
+
+    - name: fail2ban jails
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.d/10-homelab.local
+        content: |
+          [DEFAULT]
+          backend = systemd
+          ignoreip = 127.0.0.1/8 ::1 192.168.1.37 192.168.1.38 192.168.1.137 192.168.1.53
+          bantime = 1h
+          findtime = 10m
+          maxretry = 5
+
+          [sshd]
+          enabled = true
+
+          [proxmox]
+          enabled = true
+          port = https,http,8006
+          filter = proxmox
+        mode: "0644"
+      notify: Restart fail2ban
+
+    - name: fail2ban running
+      ansible.builtin.service:
+        name: fail2ban
+        state: started
+        enabled: true
+
+    - name: Security updates only, never a reboot
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/52unattended-upgrades-homelab
+        content: |
+          #clear Unattended-Upgrade::Origins-Pattern;
+          Unattended-Upgrade::Origins-Pattern {
+            "origin=Debian,codename=${distro_codename},label=Debian-Security";
+            "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+          };
+          Unattended-Upgrade::Automatic-Reboot "false";
+        mode: "0644"
+
+    - name: Security updates install themselves
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+        mode: "0644"
+
+    - name: Drop the old PlanetC137 key (cluster-wide file, once)
+      ansible.builtin.shell: |
+        set -e
+        f=/etc/pve/priv/authorized_keys
+        grep -q 'root@PlanetC137$' "$f" || { echo unchanged; exit 0; }
+        cp "$f" /root/authorized_keys.bak-$(date +%Y%m%d)
+        grep -v 'root@PlanetC137$' "$f" > /root/authorized_keys.new
+        cat /root/authorized_keys.new > "$f"
+        rm /root/authorized_keys.new
+        echo removed
+      register: planet_key
+      changed_when: "'removed' in planet_key.stdout"
+      run_once: true

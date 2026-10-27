@@ -1,0 +1,28 @@
+# Torrent-path safety settings that live in the apps, not in compose (2026-10-26,
+# docs/torrent-fallback.md "Safety"). Run from the Mac after the media stack is deployed
+# (gluetun's HTTP proxy and FlareSolverr-behind-gluetun come from compose):
+#
+#   ansible-playbook playbooks/site.yml --limit media --tags stacks
+#   ansible-playbook playbooks/torrent-hardening.yml                # apply and test
+#   ansible-playbook playbooks/torrent-hardening.yml --check        # report only
+#
+# qBittorrent skips executable file types, binds to tun0, anonymous mode on, LSD off; SABnzbd
+# aborts jobs that carry executables; Prowlarr sends every torrent indexer through gluetun's
+# proxy (tag `vpn`), points FlareSolverr at gluetun:8191 and demotes TorrentDownload. Each
+# torrent indexer is tested afterwards. Nothing restarts; the undo values are in the doc.
+- name: Torrent path hardening
+  hosts: media
+  become: true
+  tasks:
+    - name: Apply the settings (python3 on the VM; API keys read from the apps' config files)
+      ansible.builtin.script:
+        cmd: "files/torrent_hardening.py {{ '--dry-run' if ansible_check_mode else '' }}"
+        executable: /usr/bin/python3
+      register: hardening
+      check_mode: false
+      changed_when: "'changed: 0' not in hardening.stdout and 'would change: 0' not in hardening.stdout"
+      failed_when: hardening.rc != 0
+
+    - name: Result
+      ansible.builtin.debug:
+        msg: "{{ hardening.stdout_lines }}"

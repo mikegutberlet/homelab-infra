@@ -47,6 +47,26 @@ Sonarr/Radarr. Listenarr has no delay profiles and no RSS worker; it ranks index
 priority (Usenet 1, torrents 50) and searches when a monitored book is added or a "search all" is
 run, so for audiobooks the torrent fallback is "lower priority", not "24 hours later".
 
+Allowed file types (Listenarr → Settings, `AllowedFileExtensions`): `.mp3 .flac .m4a .m4b .ogg .mp4`.
+`.mp4` was added 2026-10-26: some Usenet audiobook releases are AAC in an `.mp4` container (one
+even named "(m4b)"), and without it Listenarr logs `reported no source files and no content path`,
+never imports, keeps the book missing and grabs the same release again on every automatic search
+(about every 6 hours; The Martian and Match Game were each downloaded 15 times). SABnzbd's duplicate
+check is off, so it does not stop this. If a book shows the same grab repeatedly, look for that
+warning in `/opt/appdata/listenarr/logs` (the container's `docker logs` is empty).
+
+Allowing `.mp4` is not enough on its own: Listenarr (canary 1.3.11) also has a built-in rule that skips
+`.mp4` when it registers files ("Skipping non-audio audiobook file registration"), so a manual import
+places the files but the book stays "no-file". The fix used for The Martian and Match Game: manual
+import (hardlink/copy), rename the library files `.mp4` → `.m4b` (same MP4/AAC container, only the
+name changes), then rescan the book. The download copies keep their old names until cleaned up.
+
+Upgrades are off: the "Audiobook" profile's cutoff was lowered from M4B to **MP3 64kbps** (the lowest
+allowed format) on 2026-10-26, so any accepted file is final. Before that, every MP3 book (e.g.
+Trouble on Paradise) stayed "quality-mismatch" and was re-searched for an M4B every 6 hours. New
+grabs still rank M4B first. Listenarr's profile has no separate "upgrades allowed" switch; to turn
+upgrades back on, set the cutoff to M4B again.
+
 Quality: Listenarr profile prefers M4B (AAC), then MP3; Chaptarr keeps Readarr's ebook profile
 (EPUB preferred, MOBI/AZW3/PDF allowed). The cam/480p rules of the video stack do not apply.
 

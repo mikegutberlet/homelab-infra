@@ -19,7 +19,7 @@ The lab is built in layers, and each layer has one job:
 ```mermaid
 flowchart LR
     subgraph LAN["Home LAN 192.168.1.0/24 (flat, no VLANs)"]
-        RTR["Router 192.168.1.1<br/>DHCP, DNS, one port forward 6996"]
+        RTR["Router 192.168.1.1<br/>DHCP, DNS, no port forwards"]
         subgraph RG["RicksGarage 192.168.1.137"]
             direction TB
             DAS[("DAS 5 x 20 TB")] --> TN["truenas 110<br/>.209"]
@@ -32,12 +32,10 @@ flowchart LR
             A["apps 204<br/>.53"]
             I["ai 205<br/>.54"]
         end
-        OLD["old VMs 113 Servarr .14<br/>117 Plex .15<br/>(powered off, kept)"]
     end
     INET((Internet)) --- RTR
     TSN((Tailnet<br/>tail9af84.ts.net)) -. "WireGuard" .- E
     PIA((PIA VPN)) -. "OpenVPN from gluetun" .- M
-    RTR -- "6996 -> .52:32400" --> G
 ```
 
 ## How a request reaches an app
@@ -94,7 +92,7 @@ flowchart TB
     end
     PH -- "any app name via SSO" --> EDGE["edge VM<br/>TSDProxy + Traefik + Authentik"]
     PH -- "subnet route 192.168.1.0/24" --> LANIP["Proxmox UIs, TrueNAS UI,<br/>LAN-open ports"]
-    PLX -- "router 6996 -> 32400" --> PLEX["Plex (gpu)"]
+    PLX -- "plex.tv relay" --> PLEX["Plex (gpu)"]
     TV -- "LAN" --> PLEX
     TV -- "LAN :8096" --> EMBY["Emby (gpu)"]
     TV -- "LAN :5055" --> REQ["Requests (media)"]
@@ -244,7 +242,7 @@ flowchart TB
     BIOS -- "not set yet" --> BTN["Goobs presses both power buttons"]
     BIOS -- set --> BOOT
     BTN --> BOOT["Both hosts boot Proxmox"]
-    BOOT --> Q{"Both nodes seen?<br/>(wait_for_all)"}
+    BOOT --> Q{"Two of three nodes up?<br/>(quorum 2)"}
     Q -- no --> HOLD["Neither host starts VMs"]
     Q -- yes --> RG["RicksGarage: truenas 110 (order 1, 120 s)<br/>then edge 201 (order 3), media 202 (order 4)"]
     Q -- yes --> RS["RicksShip: gpu 203, apps 204, ai 205<br/>(order 10, 30 s apart; no dependency on TrueNAS)"]

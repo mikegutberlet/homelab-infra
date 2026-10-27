@@ -20,7 +20,7 @@ This page says **where** each credential lives and how it is used. It never cont
 | age private key | Mac `~/.config/sops/age/keys.txt` (backed up next to the change log) and `/root/.config/sops/age/keys.txt` on each VM (copied by role `stacks`) | sops decrypts `secrets.sops.env` at deploy time |
 | Stack secrets (DB passwords, app secret keys, API keys, PIA, Tailscale key, LLM key) | `stacks/<vm>/secrets.sops.env` (encrypted), decrypted to `/opt/stacks/<vm>/.env` (600) | Compose |
 | Proxmox API token `tofu@pve!homelab` | Mac `~/.config/homelab/proxmox-tofu.env` | OpenTofu |
-| SSH key `homelab_inventory_ed25519` | Mac `~/.ssh/`; public key authorized for root on both hosts, the TrueNAS user, `ubuntu` on VM 113, `ubutnu` on VM 117, and `goobs` on VMs 201 to 205 (via cloud-init) | Ansible, Remote Control sessions |
+| SSH key `homelab_inventory_ed25519` | Mac `~/.ssh/`; public key authorized for root on both hosts, the TrueNAS user and `goobs` on VMs 201 to 205 (via cloud-init) | Ansible, Remote Control sessions |
 | Tailscale reusable auth key | Mac `~/.config/homelab/ts-authkey`; in edge secrets as `TS_AUTHKEY` | TSDProxy (names) and the subnet router |
 | PIA login | Mac `~/.config/homelab/pia.env`; in media secrets | gluetun |
 | Sonarr / Radarr API keys | Inside each app; in media secrets for Recyclarr | Recyclarr, Prowlarr sync, Jellyseerr, Bazarr |
@@ -55,6 +55,7 @@ This page says **where** each credential lives and how it is used. It never cont
   the hidden prompt to `~/.config/homelab/ts-authkey`, update edge secrets, redeploy edge, restart
   tsdproxy.
 - Gemini key: update `~/.config/homelab/ai-apikey` and the ai secrets, redeploy ai.
+- Anthropic key (sysadmin chat agent): replace `~/.config/homelab/anthropic_api_key`, run `python3 docs/sysadmin_deploy.py`.
 - Gmail app password: revoke in the Google account, re-enter in n8n and Kuma.
 - age key: if it is ever rotated, every `secrets.sops.env` must be re-encrypted (`sops updatekeys`)
   and the new private key copied to each VM by the `stacks` role.

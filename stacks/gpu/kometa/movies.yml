@@ -1,8 +1,10 @@
 # Movie rows for Plex. In smart_filter, a list under `all:` means every value must match, so
 # rows that accept several studios or ratings use `any:`.
-# "HomeRow" rows are pinned to Home for Goobs and shared users, in this order (New Releases
-# first; Plex's own Continue Watching and Recently Added rows always sit above them); "Row" rows
-# show on the Movies library's Recommended tab and under Collections. Every row only ever lists
+# Only New Releases is a "HomeRow" (pinned to Home for Goobs and shared users). Goobs's Home
+# order (2026-10-26) is Continue Watching, New Releases, Recently Added Movies, then the TV
+# Shows block. Plex keeps each library's Home rows together, so any other movie row on Home
+# would push the TV rows down; the rest are "Row" rows, on the Movies library's Recommended tab
+# and under Collections. Every row only ever lists
 # movies already in the library. home-rows/home_rows.py copies the list-based ones to Emby by
 # these exact names, so rename them in both places.
 
@@ -17,15 +19,15 @@ templates:
     visible_library: true
 
 collections:
-  # ---- Home ----
+  # ---- Recommended tab (New Releases is also on Home) ----
   Trending This Week:
-    template: {name: HomeRow}
+    template: {name: Row}
     tmdb_trending_weekly: 200
     collection_order: custom
     summary: Movies trending on TMDb this week that are in the library.
 
   Popular Right Now:
-    template: {name: HomeRow}
+    template: {name: Row}
     tmdb_popular: 300
     collection_order: custom
     summary: Movies popular on TMDb right now that are in the library.
@@ -42,7 +44,7 @@ collections:
 
   # Seasonal rows (lists from Kometa's own seasonal defaults); each exists only in its dates.
   Halloween Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     schedule: range(10/01-10/31)
     # IMDb list searches got "403 Forbidden" on 2026-10-22, so this uses TMDb's keyword plus
     # the usual Halloween franchises instead of Kometa's IMDb lists.
@@ -61,19 +63,19 @@ collections:
       - 751156 # Hocus Pocus
     smart_label: random
   Thanksgiving Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     schedule: range(11/01-11/30)
     imdb_search:
       keyword.any: thanksgiving
       limit: 500
     smart_label: random
   Christmas Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     schedule: range(12/01-12/31)
     mdblist_list: https://mdblist.com/lists/k0meta/christmas-extravaganza
     smart_label: random
   Valentine's Day Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     schedule: range(02/01-02/14)
     imdb_search:
       list.any: ls032692441, ls000094398, ls057783436, ls064427905
@@ -81,7 +83,7 @@ collections:
     smart_label: random
 
   Family Night:
-    template: {name: HomeRow}
+    template: {name: Row}
     smart_filter:
       sort_by: random
       any:
@@ -89,13 +91,13 @@ collections:
     summary: Rated G and PG.
 
   Top Rated of All Time:
-    template: {name: HomeRow}
+    template: {name: Row}
     imdb_chart: top_movies
     collection_order: custom
     summary: IMDb's Top 250 movies that are in the library.
 
   Highly Rated, Not Yet Watched:
-    template: {name: HomeRow}
+    template: {name: Row}
     smart_filter:
       sort_by: random
       all:
@@ -104,22 +106,21 @@ collections:
     summary: Well-reviewed movies nobody here has watched yet.
 
   Superhero Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     plex_all: true
     filters:
       tmdb_keyword: superhero
     smart_label: random
 
   Based on a True Story:
-    template: {name: HomeRow}
+    template: {name: Row}
     plex_all: true
     filters:
       tmdb_keyword: based on true story
     smart_label: random
 
-  # ---- Recommended tab ----
   Hidden Gems:
-    template: {name: HomeRow}
+    template: {name: Row}
     plex_all: true
     filters:
       tmdb_vote_average.gte: 7.2
@@ -139,7 +140,7 @@ collections:
     summary: Foreign-language films that have an English audio track.
 
   Oscar Winners:
-    template: {name: HomeRow}
+    template: {name: Row}
     imdb_award:
       event_id: ev0000003
       event_year: all
@@ -162,16 +163,16 @@ collections:
     summary: Feature films of 95 minutes or less.
 
   Action Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     smart_filter: {sort_by: random, all: {genre: Action}}
   Comedy Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     smart_filter: {sort_by: random, all: {genre: Comedy}}
   Horror Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     smart_filter: {sort_by: random, all: {genre: Horror}}
   Sci-Fi Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     smart_filter: {sort_by: random, all: {genre: Science Fiction}}
   Thrillers:
     template: {name: Row}
@@ -180,7 +181,7 @@ collections:
     template: {name: Row}
     smart_filter: {sort_by: random, all: {genre: Romance}}
   Animated Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     smart_filter: {sort_by: random, all: {genre: Animation}}
   Documentaries:
     template: {name: Row}
@@ -234,7 +235,7 @@ collections:
     template: {name: Row}
     smart_filter: {sort_by: random, all: {decade: 1980}}
   90s Movies:
-    template: {name: HomeRow}
+    template: {name: Row}
     smart_filter: {sort_by: random, all: {decade: 1990}}
   2000s Movies:
     template: {name: Row}

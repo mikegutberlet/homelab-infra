@@ -143,8 +143,9 @@ backups.
 
 `crazymax/diun:4`, `serve` mode, watches every container on this VM's Docker socket (read-only) every
 6 hours (`0 */6 * * *`), `WATCHBYDEFAULT=true`, and posts new image versions to
-`http://n8n:5678/webhook/homelab/diun`. Nothing updates itself. Note it only watches the **apps VM's**
-images; the other four VMs have no Diun yet.
+`http://n8n:5678/webhook/homelab/diun`. Since 2026-10-26 the other four VMs run the same Diun (posting to
+`http://192.168.1.53:5678/webhook/homelab/diun`), and the sysadmin updates the hosts.yml `auto_update`
+services itself; see [sysadmin](../operations/sysadmin.md).
 
 ## OliveTin
 

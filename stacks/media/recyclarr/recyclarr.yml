@@ -137,6 +137,13 @@ sonarr:
           - 7572bfe6bb8e657b4918d81a60f1103c # Homelab: Not Original or English (-10000)
         assign_scores_to:
           - name: *sonarr_foreign
+      # Fakes (2026-10-26): cams renamed as WEB-DLs and betting-site watermarks. The cam format
+      # above only reads CAM/TS words, so a telesync titled "1080p WEB-DL" passed with score 0.
+      - trash_ids:
+          - 8b7b53300d54a0a93756a47e55d8874e # Homelab: Fake or Watermarked (-10000)
+        assign_scores_to:
+          - name: *sonarr_main
+          - name: *sonarr_foreign
       # Smaller files (2026-10-23): x265 is welcome (the Golden Rule group below scores it -10000),
       # 10-bit is not (the target is 8-bit HEVC; the iGPU can't decode 10-bit when a client transcodes).
       - trash_ids:
@@ -317,6 +324,13 @@ radarr:
           - f88d7ef98af0031394cdedfe46f92766 # Homelab: Dubbed or Dual Audio (+2000)
           - cf978d4b72de03a4773bee970890c94b # Homelab: Not Original or English (-10000)
         assign_scores_to:
+          - name: *radarr_foreign
+      # Fakes (2026-10-26): cams renamed as WEB-DLs and betting-site watermarks. The cam format
+      # above only reads CAM/TS words, so a telesync titled "1080p WEB-DL" passed with score 0.
+      - trash_ids:
+          - 2aae72e20159f2c4a1d28c853ab74a45 # Homelab: Fake or Watermarked (-10000)
+        assign_scores_to:
+          - name: *radarr_main
           - name: *radarr_foreign
       # Tdarr re-encodes H.264 movies to HEVC (2026-10-21), so the TRaSH "x265 (HD)" penalty
       # (-10000) would make Radarr try to replace those files. Since 2026-10-23 it is a bonus:
