@@ -355,6 +355,11 @@ The ops key pair is generated on the Mac (`~/.config/homelab/ops_ed25519`); the 
 - Install or update everything in one go from the Mac: `python3 docs/sysadmin_deploy.py` (imports the
   credentials from the apps VM's `.env` and `~/.config/homelab/ops_ed25519`, imports the workflow with
   those credential ids, deactivates the old "Homelab digest", activates, restarts n8n).
+- First install of the investigator (or after changing `stacks/apps/sysadmin-*` files): make the
+  inspect key if it is missing, run the ops play for `docker_vms` and the stacks play for `apps` (they
+  install the inspect user, copy the new files and build the investigator image), then
+  `python3 docs/sysadmin_deploy.py` (it recreates the chat page, the bot and the investigator so they
+  read the new files and settings).
 - By hand instead: n8n > Workflows > Import from file > `homelab-sysadmin.workflow.json`, map the
   credentials, activate. Deactivate the old "Homelab digest" (same webhook paths would clash).
 - Test a report by hand: `sudo homelab-agent --print` on a VM shows what it sends;
