@@ -2,7 +2,7 @@
 # logins over SSH, ran no fail2ban and installed no updates by themselves.
 # - SSH: keys only. Root keeps key login, which the cluster needs between the two nodes and
 #   Ansible uses from the Mac. The web UI shell (Node > Shell) stays as a way in.
-# - fail2ban: SSH and web UI login failures, read from the journal; the two nodes and the apps
+# - fail2ban: SSH and web UI login failures, read from the journal; the cluster nodes and the apps
 #   VM are never banned.
 # - unattended-upgrades: Debian security updates only. Proxmox packages and kernels stay manual,
 #   and nothing reboots by itself (warm reboots hang on these NUCs).
@@ -57,7 +57,7 @@
         content: |
           [DEFAULT]
           backend = systemd
-          ignoreip = 127.0.0.1/8 ::1 192.168.1.37 192.168.1.137 192.168.1.53
+          ignoreip = 127.0.0.1/8 ::1 192.168.1.37 192.168.1.38 192.168.1.137 192.168.1.53
           bantime = 1h
           findtime = 10m
           maxretry = 5

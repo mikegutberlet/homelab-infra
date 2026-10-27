@@ -36,8 +36,8 @@ NAS-backed containers on RicksShip start as soon as wait-nas sees the share.
 - Hold the power button 5 seconds, wait, press again.
 - With a monitor attached: RicksShip's screen goes dark partway through boot because the iGPU
   belongs to the gpu VM. That is normal; judge by ping, not the screen.
-- If RicksShip is down and RicksGarage was also restarted, remember `wait_for_all`: neither starts
-  VMs until both have been seen once.
+- Quorum needs two of the three hosts (since 2026-10-26). Restart one host at a time; if two are
+  down, the third will not start VMs until a second one is back.
 
 ## Things not to do
 

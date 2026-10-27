@@ -10,7 +10,7 @@ Power cuts happen "from time to time" (Goobs). The first one during the lab's li
    damage (Scrutiny crashed once at boot and recovered).
 2. When power returns the NUCs **stay off** until the BIOS setting below is made or someone presses
    both buttons.
-3. Both hosts boot; after `wait_for_all` both must be seen once; RicksGarage starts TrueNAS (120 s),
+3. The hosts boot; once two of the three are up the cluster is quorate; RicksGarage starts TrueNAS (120 s),
    then edge and media; RicksShip starts gpu, apps and ai.
 4. On media, gpu and apps, `wait-nas.service` holds Docker until `/mnt/nfs` is a real, non-empty
    mount, so no app ever sees an empty library (the hazard found after the first outage).

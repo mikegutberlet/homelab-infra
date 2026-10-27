@@ -123,6 +123,9 @@ set `two_node: 1`. No Proxmox HA. **Why.** HA needs a third vote and could not m
 anyway because TrueNAS is tied to the DAS. **Consequence.** `wait_for_all` after a cold start of both
 hosts.
 
+**Update 2026-10-26.** A third NUC (RicksPortalGun, 192.168.1.38) joined and `two_node` was
+removed: 3 votes, quorum 2, no `wait_for_all`. Still no HA.
+
 ### D17: Debian 12 `generic` cloud image, serial console, guest agent via vendor data
 
 **Decision (learned overnight 2026-10-21).** The `genericcloud` image's kernel has no AHCI driver

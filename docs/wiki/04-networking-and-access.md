@@ -9,6 +9,7 @@ DNS. There are no VLANs, so isolation comes from per-VM firewall rules rather th
 | --- | --- | --- |
 | 192.168.1.1 | Router | DHCP, DNS; no port forwards |
 | 192.168.1.37 | RicksShip (Proxmox) | UI https://192.168.1.37:8006 |
+| 192.168.1.38 | RicksPortalGun (Proxmox) | UI https://192.168.1.38:8006 (third NUC, 2026-10-26) |
 | 192.168.1.137 | RicksGarage (Proxmox) | UI https://192.168.1.137:8006 |
 | 192.168.1.209 | TrueNAS VM | UI https://192.168.1.209, NFS, SMB |
 | 192.168.1.50 | edge VM | Traefik :80 (only TSDProxy and the lab use it), Tailscale subnet router, wg-easy 51820/udp when enabled |
