@@ -44,11 +44,12 @@ flowchart TB
 | VM | Host | IP | vCPU / RAM / disk | Stack contents | Needs the NAS |
 | --- | --- | --- | --- | --- | --- |
 | truenas (110) | RicksGarage | 192.168.1.209 | 6 (unverified) / 16 GB fixed / unchanged | TrueNAS 25.10.7, pool DeepData, NFS | is the NAS |
-| edge (201) | RicksGarage | 192.168.1.50 | 2 / 3 GB / 32 GB | Traefik, Authentik (server, worker, Postgres, Redis), TSDProxy, Tailscale subnet router, Docker socket proxy, autoheal. wg-easy defined but not started | no |
-| media (202) | RicksGarage | 192.168.1.51 | 4 / 6 GB (balloon floor 5 GB) / 64 GB | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd, gluetun + qBittorrent, Recyclarr, Jellyseerr, MeTube, Storyteller, Audiobookshelf, RomM + MariaDB, autoheal | yes |
-| gpu (203) | RicksShip | 192.168.1.52 | 6 / 10 GB / 96 GB + iGPU passthrough | Plex, Emby, ErsatzTV, Immich (server, ML, Postgres, Valkey), Tdarr, Unmanic, autoheal | yes |
-| apps (204) | RicksShip | 192.168.1.53 | 4 / 10 GB / 96 GB | Postgres (pgvector), Redis, Nextcloud (+ nginx, cron), Paperless (+ Gotenberg, Tika), Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny (+ InfluxDB), Diun, OliveTin, Dockge, autoheal | yes (Nextcloud, Paperless, backups) |
-| ai (205) | RicksShip | 192.168.1.54 | 2 / 4 GB / 32 GB | Open WebUI, AnythingLLM, Piper TTS; LangChain/CrewAI worker defined but not started | no |
+| edge (201) | RicksGarage | 192.168.1.50 | 2 / 4 GB / 32 GB | Traefik, Authentik (server, worker, Postgres, Redis), TSDProxy, Tailscale subnet router, Docker socket proxy, autoheal. wg-easy defined but not started | no |
+| media (202) | RicksPortalGun | 192.168.1.51 | 4 / 12 GB fixed / 64 GB + 200 GB SABnzbd temp disk | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd, gluetun + qBittorrent, Recyclarr, Jellyseerr, MeTube, Storyteller, Audiobookshelf, RomM + MariaDB, autoheal | yes |
+| gpu (203) | RicksShip | 192.168.1.52 | 6 / 16 GB / 96 GB + iGPU passthrough | Plex, Emby, ErsatzTV, Immich (server, ML, Postgres, Valkey), Tdarr, Unmanic, autoheal | yes |
+| apps (204) | RicksPortalGun | 192.168.1.53 | 4 / 16 GB / 96 GB | Postgres (pgvector), Redis, Nextcloud (+ nginx, cron), Paperless (+ Gotenberg, Tika), Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny (+ InfluxDB), Diun, OliveTin, Dockge, autoheal | yes (Nextcloud, Paperless, backups) |
+| ai (205) | RicksShip | 192.168.1.54 | 2 / 6 GB / 32 GB | Open WebUI, AnythingLLM, Piper TTS; LangChain/CrewAI worker defined but not started | no |
+| transcode (206) | RicksPortalGun | 192.168.1.55 | 4 / 4 GB / 48 GB + iGPU passthrough | Tdarr node (second worker for the gpu VM's Tdarr server), autoheal, Diun | yes |
 
 The old VMs **113 Servarr** (192.168.1.14, RicksGarage) and **117 Plex** (192.168.1.15, RicksShip) were
 removed on 2026-10-26 after a verified vzdump backup of each (kept on `DeepData_NFS` until about 2026-11-25).
