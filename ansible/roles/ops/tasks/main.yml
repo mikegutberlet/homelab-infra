@@ -76,6 +76,9 @@
   loop:
     - { src: homelab-agent.sh, dest: homelab-agent }
     - { src: homelab-ops.sh, dest: homelab-ops }
+    # Read-only shell for the investigator (below) and the never-list of the run-approved fix.
+    - { src: homelab-inspect.py, dest: homelab-inspect }
+    - { src: homelab-script-check.py, dest: homelab-script-check }
 
 - name: Agent service
   ansible.builtin.copy:
@@ -94,7 +97,7 @@
       TimeoutStartSec=360
       Nice=10
 
-# Fixed minutes per VM (edge :01, media :04, gpu :07, apps :10, ai :12, then every 15 minutes),
+# Fixed minutes per VM (edge :01, media :04, gpu :07, transcode :09, apps :10, ai :12, then every 15 minutes),
 # so two reports never land at once: n8n saves the whole static data at the end of each run, and
 # of two overlapping runs the later one wins. The infra check runs at :14 and the digest at 08:00.
 - name: Agent timer (every 15 minutes, a fixed minute per VM)
@@ -106,7 +109,7 @@
       Description=Homelab sysadmin reporter
 
       [Timer]
-      OnCalendar=*:{{ '%02d' | format(ops_report_minute | default({'edge': 1, 'media': 4, 'gpu': 7, 'apps': 10, 'ai': 12}.get(inventory_hostname, 0)) | int) }}/15
+      OnCalendar=*:{{ '%02d' | format(ops_report_minute | default({'edge': 1, 'media': 4, 'gpu': 7, 'transcode': 9, 'apps': 10, 'ai': 12}.get(inventory_hostname, 0)) | int) }}/15
       AccuracySec=1s
       RandomizedDelaySec=15
       Persistent=false
@@ -180,3 +183,41 @@
       {% for stack, svcs in (auto_update | default({})).items() %}
       {{ stack }} {{ svcs | join(' ') }}
       {% endfor %}
+
+# The investigator (stacks/apps/sysadmin-investigator, on the apps VM) looks around with this key:
+# only from the apps VM's address, pinned to homelab-inspect-door, which hands the requested line to
+# homelab-inspect (read-only programs, flags and paths; secrets masked before they leave the VM).
+# inspect_pubkey comes from the Mac (~/.config/homelab/inspect_ed25519.pub, made by
+# docs/sysadmin_deploy.py); without it these steps are skipped.
+- name: inspect user (password locked; every login runs the read-only door)
+  ansible.builtin.user:
+    name: inspect
+    shell: /bin/bash
+    create_home: true
+    password_lock: true
+  when: inspect_pubkey | default('') | length > 0
+
+- name: Read-only door for the inspect key
+  ansible.builtin.copy:
+    src: homelab-inspect-door.sh
+    dest: /usr/local/sbin/homelab-inspect-door
+    mode: "0755"
+  when: inspect_pubkey | default('') | length > 0
+
+- name: inspect key pinned to the door and to the apps VM
+  ansible.posix.authorized_key:
+    user: inspect
+    key: "{{ inspect_pubkey }}"
+    key_options: 'from="{{ inspect_from }}",command="/usr/local/sbin/homelab-inspect-door",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc'
+    exclusive: true
+  when: inspect_pubkey | default('') | length > 0
+
+- name: inspect may run only homelab-inspect as root
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/homelab-inspect
+    mode: "0440"
+    content: |
+      inspect ALL=(root) NOPASSWD: /usr/local/sbin/homelab-inspect
+      inspect ALL=(root) NOPASSWD: /usr/local/sbin/homelab-inspect *
+    validate: visudo -cf %s
+  when: inspect_pubkey | default('') | length > 0

@@ -77,7 +77,7 @@ STATE_DIR = os.environ.get("STATE_DIR", "/data")
 HEALTH_PORT = int(os.environ.get("HEALTH_PORT", "3004"))
 
 POLL_TIMEOUT = 50          # seconds Telegram holds a getUpdates call open
-AGENT_TIMEOUT = 310        # the agent can take ~300 s (Gemini plus its fallback model)
+AGENT_TIMEOUT = 490        # the agent can take minutes (Gemini plus its fallback, or an investigation of up to 4 min)
 TYPING_EVERY = 4           # Telegram shows "typing..." for about 5 s per sendChatAction
 CHUNK = 3500               # characters per message (Telegram's limit is 4096)
 NOTIFY_MAX_BODY = 64 * 1024

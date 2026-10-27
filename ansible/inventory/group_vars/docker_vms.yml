@@ -37,3 +37,9 @@ ops_never: [n8n, postgres, redis, autoheal, tailscale, immich-db, immich-redis, 
 # Public half of the key n8n uses for the ops door (private key only in n8n's credential store).
 # Generate on the Mac: ssh-keygen -t ed25519 -N '' -C n8n-ops -f ~/.config/homelab/ops_ed25519
 ops_pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFvwWu+OpdSLNembAGzQTtZI24dBIUjrhZ79ImzoXJky n8n-ops"
+
+# The sysadmin's investigator (stacks/apps/sysadmin-investigator) reads each VM through the inspect
+# user (role ops). Its key pair is made on the Mac by docs/sysadmin_deploy.py; the public half is
+# read from there at play time, so nothing to commit. Only the apps VM may use it.
+inspect_pubkey: "{{ lookup('file', lookup('env', 'HOME') ~ '/.config/homelab/inspect_ed25519.pub', errors='ignore') | default('', true) }}"
+inspect_from: 192.168.1.53

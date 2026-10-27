@@ -13,7 +13,7 @@ Per-VM side: Ansible role `ops` (`homelab-agent`, `homelab-ops`).
 
 | Part | Where | Does |
 | --- | --- | --- |
-| `homelab-agent` | every VM, every 15 min at a fixed minute (edge :01, media :04, gpu :07, apps :10, ai :12; `ops_report_minute`) | POSTs the VM's state to `/webhook/homelab/report`: system (with swap-in pages), disks (a missing extra disk too), NFS and backup mounts (listed with a 45 s limit, so a hung NAS shows as "hangs" instead of stalling the agent), last backup, containers (state, health, restart count, id), expected services missing, reclaimable Docker space, Sonarr/Radarr health and stuck queue, Prowlarr backoffs, SABnzbd, qBittorrent via gluetun (VPN exit, forwarded port, qB's listen port), Tdarr (with its API key), login and API-key fingerprints for Sonarr/Radarr/Prowlarr/SABnzbd and every stored copy of their keys (no secret leaves the VM), on edge Tailscale plus a TLS check of every ts.net name (`ops_cert_skip` leaves names out), whether the kernel has crashed since boot (taint flag D, last BUG line) and which processes sit in uninterruptible I/O (two reports in a row = stuck, critical: on 2026-10-23 a kernel BUG in NFS writeback froze a Tdarr copy and then a Plex scan, and only a VM restart cleared it), and on gpu Plex's view of plex.tv: Remote Access on or off, sign-in and mapping state, whether plex.tv lists the server, and which devices Plex refused (401) in the last 15 minutes (a device refused three or more times in two reports in a row is a warning: it holds a sign-in plex.tv no longer issues, and it needs signing out and in) (Plex's token goes only to Plex and plex.tv). Agent v3 (2026-10-24) checks each section's JSON on its own: a broken section arrives as null and is named in `errors`, and a report that cannot be built at all still arrives as `{agent_error}` |
+| `homelab-agent` | every VM, every 15 min at a fixed minute (edge :01, media :04, gpu :07, transcode :09, apps :10, ai :12; `ops_report_minute`) | POSTs the VM's state to `/webhook/homelab/report`: system (with swap-in pages), disks (a missing extra disk too), NFS and backup mounts (listed with a 45 s limit, so a hung NAS shows as "hangs" instead of stalling the agent), last backup, containers (state, health, restart count, id), expected services missing, reclaimable Docker space, Sonarr/Radarr health and stuck queue, Prowlarr backoffs, SABnzbd, qBittorrent via gluetun (VPN exit, forwarded port, qB's listen port), Tdarr (with its API key), login and API-key fingerprints for Sonarr/Radarr/Prowlarr/SABnzbd and every stored copy of their keys (no secret leaves the VM), on edge Tailscale plus a TLS check of every ts.net name (`ops_cert_skip` leaves names out), whether the kernel has crashed since boot (taint flag D, last BUG line) and which processes sit in uninterruptible I/O (two reports in a row = stuck, critical: on 2026-10-23 a kernel BUG in NFS writeback froze a Tdarr copy and then a Plex scan, and only a VM restart cleared it), and on gpu Plex's view of plex.tv: Remote Access on or off, sign-in and mapping state, whether plex.tv lists the server, and which devices Plex refused (401) in the last 15 minutes (a device refused three or more times in two reports in a row is a warning: it holds a sign-in plex.tv no longer issues, and it needs signing out and in) (Plex's token goes only to Plex and plex.tv). Agent v3 (2026-10-24) checks each section's JSON on its own: a broken section arrives as null and is named in `errors`, and a report that cannot be built at all still arrives as `{agent_error}` |
 | Evaluate report | n8n | Turns one report into issues (critical / warning / info) with a stable key; keeps the previous report, restart samples and an hourly trend point per VM |
 | Every 15 min + Evaluate infra | n8n, at :14, :29, :44, :59 (after the five VMs) | Reads Proxmox (`cluster/resources`, `cluster/status`, node status for free memory and swap), TrueNAS (`pool`, `pool/dataset/id/DeepData`, `alert/list`) and Scrutiny (`/api/summary`), flags VMs that have not reported for 40 min, and raises "TrueNAS down" when two or more VMs cannot reach it on 2049 |
 | Decide | n8n | Updates the issue store (first seen, resolved after three clean checks, came-and-went count), emails new criticals (then every 6 h while they persist), plans fixes within the limits and logs them as `started`, then hands the email and the fixes to `/webhook/homelab/act` and finishes. It never waits on SSH |
@@ -35,6 +35,7 @@ Per-VM side: Ansible role `ops` (`homelab-agent`, `homelab-ops`).
 | `docker-prune` | over 20 GB reclaimable | dangling images and build cache only |
 | `plex-remote-on` | Plex Remote Access off (critical at once), or plex.tv not listing the server in two reports in a row (`PLEX_REMOTE` in settings.js; false = Plex is meant to be LAN/Tailscale-only). Signed out of plex.tv is critical with no fix | switches Remote Access on, or off and on again so Plex re-publishes itself; answers with the new mapping state |
 | `update <service>` | Diun (on every VM) found a newer image for a service on that VM's auto-update list (`auto_update` in hosts.yml: Plex and Emby on gpu; Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd, qBittorrent, FlareSolverr and Jellyseerr on media), and it is between 03:00 and 05:00 Pacific (`UPDATE_HOURS`; `AUTO_UPDATE` false = list only). Other services get an info issue "update available (by hand)" and no fix | pulls that service's image tag (100 s limit) and recreates only that container (`--no-deps`) if the image changed; config under `/opt/appdata` is kept. The door refuses any service not in `/etc/homelab-autoupdate.conf` |
+| `run-approved <script>` | Only from the chat, after Goobs's Confirm on a script the investigator proposed ([The investigator](#the-investigator-hard-questions)) | checks the script against `homelab-script-check`, then runs it as root with a 2-minute limit and logs each line |
 | `remount-nas` | `/mnt/nfs` empty or unmounted while TrueNAS answers on 2049 (a mount that hangs is critical but gets no fix: that is the NAS) | lazy unmount, re-trigger the automount, then recreate only the services that use `/mnt/nfs` (and the ones that depend on them), from `NFS_SERVICES` in `/etc/homelab-agent.conf`, and only the ones that are up: a service that was stopped on purpose stays stopped. n8n, Postgres and the rest of the stack keep running |
 
 Limits: one fix per target per hour, three per day; `ops_never` services (n8n, Postgres, Redis,
@@ -96,7 +97,7 @@ token), `stacks/apps/n8n/sysadmin/chat_*.js`, `tool_*.js`, `opsdoor_*.js`.
 
 | Part | Does |
 | --- | --- |
-| Sysadmin agent (n8n AI Agent, Claude Haiku 5.5, falling back to Gemini Flash on the same key as Open WebUI) | Answers from tools, never from memory alone: `lab_overview` (open issues, when each VM reported, pool space), `vm_report` (one VM's latest 15-minute report), `recent_fixes`, `ops_lookup` (live `status` or `logs <service>` through the ops door), `propose_fix` |
+| Sysadmin agent (n8n AI Agent, Claude Haiku 5.5, falling back to Gemini Flash on the same key as Open WebUI) | Answers from tools, never from memory alone: `lab_overview` (open issues, when each VM reported, pool space), `vm_report` (one VM's latest 15-minute report), `recent_fixes`, `ops_lookup` (live `status` or `logs <service>` through the ops door), `propose_fix`, and `investigate` for anything the quick tools cannot answer ([The investigator](#the-investigator-hard-questions)) |
 | Homelab ops door (second, small workflow) | Host switch plus one SSH node per VM; used by the agent's lookups and by confirmed fixes, so the SSH nodes exist once |
 | Chat memory | Per browser tab ("New chat" starts a fresh one), last 10 turns |
 | Confirm / Cancel | `propose_fix` only checks a fix (same verbs, never-list and per-target counters as the automatic fixes, plus `CHAT_FIX_PER_HOUR` / `CHAT_FIX_PER_DAY`), so the model hears at once whether it is allowed. When the agent has answered, Chat state checks the last allowed one again, numbers it and parks it for 15 minutes with the chat session; then the page shows Confirm and Cancel. Proposal numbers are seconds since 2026-10-01, so a number is never handed out twice. The Confirm button posts it back, and Chat state claims it, re-checks it and logs it in the fix log (the digest's "Fixed" section) as `started`; a stop is held from then on. The chat run then runs it through the ops door, answers ("Done: ..." or "That did not work: ..."), and posts the door's answer to Record fix result, which marks the entry `ok`, `refused` or `failed`. It sends no email for a chat fix, and a stop confirmed in chat is held like an automatic one. The model never runs anything |
@@ -116,6 +117,49 @@ Confirm button), even if `propose_fix` allowed it; ask again.
 Prompt injection: container logs and app names pass through the model, so a log line could try to
 talk it into something. It can only read and propose; nothing runs without your Confirm, and the
 ops door only knows its fixed verbs. `journalctl -t homelab-ops` on a VM shows every call, chat or automatic.
+
+## The investigator (hard questions)
+
+Added 2026-10-27 (Goobs: "I want him to be just as useful as claude code is"; picked the hybrid
+option). The chat stays on Claude Haiku 5.5 for quick answers; a question it cannot answer from
+its own tools goes to the investigator, a Claude Agent SDK agent (Claude Code's engine) on Claude
+Sonnet 5.5 that can read almost anything in the lab and may propose one fix. Sources:
+`stacks/apps/sysadmin-investigator/` (container `sysadmin-investigator` on the apps stack, no
+published port), `stacks/apps/n8n/sysadmin/investigate_*.js`, `investigation_email.js`, the
+"Homelab investigator" sub-workflow (`homelab-investigator.workflow.json`), and on every VM the
+`inspect` user (`ansible/roles/ops/files/homelab-inspect*.py|sh`) and `homelab-script-check`.
+
+| Part | Does |
+| --- | --- |
+| `investigate` tool | The chat agent hands over the whole question with what it already found. Goobs gets the investigator's answer word for word, and its proposal (if any) gets the usual Confirm card. Takes 1 to 4 minutes |
+| Auto-investigation | A new critical alert, a failed fix of a critical issue, or a stopped crash loop also goes to the investigator once, after the alert email and that run's fixes (`AUTO_INVESTIGATE`). Its note comes as a second email, "[Homelab] Investigation: ...", and on Telegram. It proposes, never runs: ask the chat to run the fix, which checks it again and shows Confirm. The 6-hourly repeats of a critical are not investigated again |
+| Its tools | `vm` (one read-only command on a VM as `inspect`), `proxmox` and `truenas` (GET only, the Homepage read-only token and key), `kuma` (monitor status), Read/Grep/Glob in `/repo` (this repository as deployed, without `*.sops.env`), `propose_fix`, `save_lesson` (notes it keeps for later cases in `data/lessons.md`). No shell, no writes, no web |
+| `inspect` user (every VM) | Key only from 192.168.1.53, forced command `homelab-inspect`: journalctl, systemctl status, docker ps/logs/inspect/stats, cat/grep/find/ls under /etc, /var/log, /opt/stacks, /opt/appdata (file names only under /mnt/nfs), df, free, ss, ip show, ps, dmesg, ping, curl GET to lab addresses, `app <name> <api path>` (reads an *arr/SABnzbd/Plex API with the key from the VM), `tcp <host> <port>`. No `;`, `&`, `>`, `$(`, backticks; pipes only into grep/head/tail/wc/sort/uniq/cut/tr/column. Secrets (passwords, API keys, tokens, private keys) are masked before anything leaves the VM, and again in the investigator. Every call is logged: `journalctl -t homelab-inspect` |
+| `run` fixes | Besides the usual verbs, the investigator may propose a short shell script (at most 25 lines, 3000 characters). The Confirm card shows the exact script; on Confirm it runs as root on that VM through the ops door's `run-approved` verb, with a 2-minute limit. Before that, n8n and the VM both refuse anything on the never-list: reboots, ZFS, changes under /mnt/nfs, mounts, disks, firewall, SSH/sudo/users, packages, removing containers or volumes, touching n8n/the databases/autoheal/tailscale, Tdarr's queue, anything left running (cron, nohup, `&`), and anything that hides what it runs (eval, base64, here-documents, another shell or interpreter). `journalctl -t homelab-ops` shows every line run |
+
+Costs and caps (environment in `stacks/apps/compose.yaml`, service `sysadmin-investigator`):
+`DAILY_USD` 2.00 a day for all cases, `CASE_USD` 0.75 a case, `PER_DAY` 10 cases a day,
+`AUTO_PER_DAY` 3 of them from alerts, one case at a time (a second gets "busy"), `MAX_TURNS` 30,
+4 minutes a case (`CASE_SECONDS`). When a cap is reached the chat answers from its own tools and
+says so. Expected spend is $5 to $20 a month (a typical case is 10 to 40 cents). The digest has an
+INVESTIGATOR line with yesterday's and today's spend. `MODEL` and `EFFORT` are there too (the
+fallback when Sonnet is unavailable is Haiku). Switches in `settings.js`: `INVESTIGATOR_ENABLED`
+(false = no `investigate` tool answers, nothing spent), `AUTO_INVESTIGATE`.
+
+Files on the apps VM: `/opt/appdata/sysadmin-investigator/investigator.env` (root, 600:
+`ANTHROPIC_API_KEY`, `INVESTIGATOR_TOKEN`), `data/state.json` (today's spend and counts),
+`data/cases/<id>.json` (each case's question, answer, tools used and cost, 30 days),
+`data/lessons.md`, `data/ssh/` (the inspect private key, known hosts), `repo/` (the repository
+copy, refreshed by every `docs/sysadmin_deploy.py` run). The key pair is
+`~/.config/homelab/inspect_ed25519` on the Mac (the deploy script makes it; the ops play installs
+the public half for `inspect` on every VM).
+
+Checks: `python3 docs/test_investigator.py` (inspect allow/refuse and masking, script never-list,
+n8n and VM rules agree, builder wiring). Live: ask the chat "investigate why ..." and look at
+`sudo docker compose -f /opt/stacks/apps/compose.yaml logs --tail 50 sysadmin-investigator`.
+"not set up yet" means the env file or the SSH key is missing: re-run the deploy script. A
+change to `investigator.py` or its Dockerfile needs a new image tag in compose.yaml so the stacks
+play builds it again.
 
 ## Telegram bot
 
@@ -297,7 +341,8 @@ message (see the log), and a 401 means the token did not match.
 | Gemini API key | Google Gemini (PaLM) API, the ai stack's `LLM_API_KEY` | the chat agent's fallback model (Gemini Flash) |
 | Sysadmin chat token | Header Auth `X-Chat-Token`, made by the deploy script and kept in `/opt/appdata/sysadmin-chat/token.env` on the apps VM | the chat webhook (chat page and Telegram bot), "Telegram push" and "Telegram digest push" (the bot's `/notify` checks it) |
 | Sysadmin internal token | Header Auth `X-Internal-Token`, made new by every deploy run and kept only in n8n | the internal `act`, `fixresult` and `chatstate` webhooks and the nodes that post to them (n8n calls them itself). Separate from the chat token, so the chat page or the bot (or a leaked `token.env`) cannot ask Act to run a fix or send mail |
-| ops edge / media / gpu / apps / ai | SSH private key, user `ops`, host `192.168.1.5x` | the five `ops <vm>` nodes |
+| ops edge / media / gpu / apps / ai / transcode | SSH private key, user `ops`, host `192.168.1.5x` | the six `ops <vm>` nodes |
+| Investigator token | Header Auth `X-Investigator-Token`, made once by the deploy script and kept in `/opt/appdata/sysadmin-investigator/investigator.env` on the apps VM | "Investigator" (the investigator sub-workflow) and "Investigator usage" (the digest) |
 | Proxmox API token | Header Auth, `Authorization: PVEAPIToken=homepage@pve!homepage=<secret>` | PVE nodes |
 | TrueNAS API key | Header Auth, `Authorization: Bearer <key>` | NAS nodes |
 | Telegram bot token | Not in n8n: the Bot API token from @BotFather, kept in `/opt/appdata/sysadmin-telegram/telegram.env` on the apps VM and `~/.config/homelab/telegram-bot-token` on the Mac (mode 600) | the `sysadmin-telegram` container only ([Telegram bot](#telegram-bot)) |
@@ -310,6 +355,11 @@ The ops key pair is generated on the Mac (`~/.config/homelab/ops_ed25519`); the 
 - Install or update everything in one go from the Mac: `python3 docs/sysadmin_deploy.py` (imports the
   credentials from the apps VM's `.env` and `~/.config/homelab/ops_ed25519`, imports the workflow with
   those credential ids, deactivates the old "Homelab digest", activates, restarts n8n).
+- First install of the investigator (or after changing `stacks/apps/sysadmin-*` files): make the
+  inspect key if it is missing, run the ops play for `docker_vms` and the stacks play for `apps` (they
+  install the inspect user, copy the new files and build the investigator image), then
+  `python3 docs/sysadmin_deploy.py` (it recreates the chat page, the bot and the investigator so they
+  read the new files and settings).
 - By hand instead: n8n > Workflows > Import from file > `homelab-sysadmin.workflow.json`, map the
   credentials, activate. Deactivate the old "Homelab digest" (same webhook paths would clash).
 - Test a report by hand: `sudo homelab-agent --print` on a VM shows what it sends;

@@ -17,10 +17,16 @@ Credentials are not in the file; n8n asks on import. Names it expects:
   "Sysadmin internal token" Header Auth: X-Internal-Token = <token> (n8n sends it to its own act,
                         fixresult and chatstate webhooks; sysadmin_deploy.py makes a new one on every
                         run and keeps it only in n8n)
+  "Investigator token"  Header Auth: X-Investigator-Token = <token> (n8n sends it to the investigator,
+                        stacks/apps/sysadmin-investigator; sysadmin_deploy.py writes the same token
+                        into /opt/appdata/sysadmin-investigator/investigator.env)
 
 The chat agent's lookups and confirmed fixes go through a second, small workflow, "Homelab ops
 door" (stacks/apps/n8n/homelab-ops-door.workflow.json, fixed id OPS_DOOR_ID): one SSH node per VM
-behind a host switch, so the sysadmin workflow does not need a second copy of them.
+behind a host switch, so the sysadmin workflow does not need a second copy of them. Hard
+questions go through a third, "Homelab investigator" (homelab-investigator.workflow.json, fixed id
+INVESTIGATOR_ID), which posts them to the investigator container: the chat agent's investigate
+tool and the act run's auto-investigation of new critical alerts both call it.
 """
 import json
 import pathlib
@@ -31,7 +37,13 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "stacks/apps/n8n/sysadmin"
 OUT = ROOT / "stacks/apps/n8n/homelab-sysadmin.workflow.json"
 OUT_DOOR = ROOT / "stacks/apps/n8n/homelab-ops-door.workflow.json"
+OUT_INVESTIGATOR = ROOT / "stacks/apps/n8n/homelab-investigator.workflow.json"
 OPS_DOOR_ID = "HomelabOpsDoor01"  # n8n keeps an id given on import; sysadmin_deploy.py checks it
+INVESTIGATOR_ID = "HomelabInvestig1"
+# The investigator (stacks/apps/sysadmin-investigator) on the apps stack's network. A case stops
+# itself after CASE_SECONDS (240) and answers with what it has; the wait here leaves room for that.
+INVESTIGATOR_URL = "http://sysadmin-investigator:3006"
+INVESTIGATOR_TOKEN = "Investigator token"
 CHAT_MODEL = "claude-haiku-5-5"  # Anthropic instead of Gemini Flash (Goobs, 2026-10-23)
 CHAT_FALLBACK_MODEL = "models/gemini-flash-latest"  # another provider, used when Anthropic fails (n8n takes one fallback)
 MAIL_FROM = "Homelab <filingbin69@gmail.com>"
@@ -53,7 +65,7 @@ TELEGRAM_NOTIFY_URL = "http://sysadmin-telegram:3004/notify"
 # page's nginx and the Telegram bot hold: act runs any fix and sends any email it is given.
 INTERNAL = "http://127.0.0.1:5678/webhook"
 INTERNAL_TOKEN = "Sysadmin internal token"
-HOSTS = {"edge": "192.168.1.50", "media": "192.168.1.51", "gpu": "192.168.1.52", "apps": "192.168.1.53", "ai": "192.168.1.54"}
+HOSTS = {"edge": "192.168.1.50", "media": "192.168.1.51", "gpu": "192.168.1.52", "apps": "192.168.1.53", "ai": "192.168.1.54", "transcode": "192.168.1.55"}
 HOSTS_LIST = list(HOSTS)
 NS = uuid.UUID("3f1d2a8e-6b44-4c1a-9a3e-0d5c7b2f9e10")
 
@@ -152,10 +164,10 @@ def _reset(cred_ids, cred_names):
     CRED_NAMES.clear(); CRED_NAMES.update(cred_names or {})
 
 
-def build(cred_ids=None, cred_names=None, ops_door_id=OPS_DOOR_ID):
+def build(cred_ids=None, cred_names=None, ops_door_id=OPS_DOOR_ID, investigator_id=INVESTIGATOR_ID):
     """Return the sysadmin workflow dict; cred_ids maps credential names to n8n ids (optional)."""
     _reset(cred_ids, cred_names)
-    _build(ops_door_id)
+    _build(ops_door_id, investigator_id)
     check_chat_run_writes_nothing()
     return {"name": "Homelab sysadmin", "nodes": list(nodes), "connections": dict(conn),
             "settings": {"executionOrder": "v1", "timezone": "America/Los_Angeles", "saveExecutionProgress": False}}
@@ -177,6 +189,26 @@ def build_ops_door(cred_ids=None, cred_names=None):
     link("By host", "Answer", len(HOSTS))  # unknown host or bad query: Parse's error goes straight back
     node("Answer", "n8n-nodes-base.code", 2, (1080, 0), {"jsCode": code("opsdoor_answer.js")})
     return {"id": OPS_DOOR_ID, "name": "Homelab ops door", "nodes": list(nodes), "connections": dict(conn),
+            "settings": {"executionOrder": "v1", "timezone": "America/Los_Angeles", "saveExecutionProgress": False}}
+
+
+def build_investigator(cred_ids=None, cred_names=None):
+    """Return the "Homelab investigator" sub-workflow: {query} (chat) or {query, source: auto, subject}
+    (an alert) in, {status, answer, proposal, ...} out. It holds no static data, so its long wait
+    loses nothing."""
+    _reset(cred_ids, cred_names)
+    node("When called", "n8n-nodes-base.executeWorkflowTrigger", 1.1, (0, 0), {"inputSource": "passthrough"})
+    node("Investigate request", "n8n-nodes-base.code", 2, (260, 0), {"jsCode": code("investigate_request.js")})
+    link("When called", "Investigate request")
+    node("Ask or skip", "n8n-nodes-base.switch", 3.2, (520, 0), {"rules": {"values": [is_("route", "ask", "ask"), is_("route", "skip", "skip")]}, "options": {}})
+    link("Investigate request", "Ask or skip")
+    http("Investigator", f"{INVESTIGATOR_URL}/investigate", (780, -100), auth=INVESTIGATOR_TOKEN, timeout=300000,
+         body={"question": "={{ $json.question }}", "source": "={{ $json.source }}"})
+    link("Ask or skip", "Investigator", 0)
+    node("Investigate answer", "n8n-nodes-base.code", 2, (1040, 0), {"jsCode": code("investigate_answer.js")})
+    link("Investigator", "Investigate answer")
+    link("Ask or skip", "Investigate answer", 1)
+    return {"id": INVESTIGATOR_ID, "name": "Homelab investigator", "nodes": list(nodes), "connections": dict(conn),
             "settings": {"executionOrder": "v1", "timezone": "America/Los_Angeles", "saveExecutionProgress": False}}
 
 
@@ -240,9 +272,10 @@ def check_chat_run_writes_nothing():
         raise SystemExit("The chat run must not write static data (only Chat state, homelab/chatstate, does):\n  " + "\n  ".join(bad))
 
 
-def _build(ops_door_id=OPS_DOOR_ID):
+def _build(ops_door_id=OPS_DOOR_ID, investigator_id=INVESTIGATOR_ID):
     PVE, NAS = "Proxmox API token", "TrueNAS API key"
     DOOR = {"__rl": True, "mode": "id", "value": ops_door_id}
+    INV = {"__rl": True, "mode": "id", "value": investigator_id}
 
 
     # ---- VM reports ----
@@ -251,7 +284,7 @@ def _build(ops_door_id=OPS_DOOR_ID):
     link("report", "Evaluate report")
 
     # ---- infra reads every 15 min ----
-    # At :14/:29/:44/:59, clear of the VM reports (homelab-agent.timer: edge :01, media :04, gpu :07,
+    # At :14/:29/:44/:59, clear of the VM reports (homelab-agent.timer: edge :01, media :04, gpu :07, transcode :09,
     # apps :10, ai :12) and of the 08:00 digest. Each read runs once (an array answer, like TrueNAS's
     # pools and alerts, becomes one item per element and would run the next read once per item), and
     # an empty answer still passes one empty item on, so the chain never stops early.
@@ -325,6 +358,21 @@ def _build(ops_door_id=OPS_DOOR_ID):
     node("Fix answer", "n8n-nodes-base.code", 2, (1820, 2720), {"jsCode": code("fix_answer.js")})
     handoff("Post fix result", "homelab/fixresult", (2080, 2720))
     link("Fix answer", "Post fix result")
+    # A new critical (or a fix that did not help one) also goes to the investigator, once per run.
+    # These nodes sit below the fixes on the canvas, so n8n runs them last: the alert email and this
+    # run's fixes are out before the investigation starts, and its note follows as a second email.
+    node("Investigate alert?", "n8n-nodes-base.code", 2, (780, 3000), {"jsCode": code("investigate_alert.js")})
+    link("Email or fix", "Investigate alert?", 0)
+    node("Investigate alert", "n8n-nodes-base.executeWorkflow", 1.2, (1040, 3000), {"source": "database", "workflowId": INV, "mode": "once", "options": {}}, onError="continueRegularOutput")
+    link("Investigate alert?", "Investigate alert")
+    node("Investigation email", "n8n-nodes-base.code", 2, (1300, 3000), {"jsCode": code("investigation_email.js")})
+    link("Investigate alert", "Investigation email")
+    node("Telegram investigation?", "n8n-nodes-base.code", 2, (1560, 2900), {"jsCode": code("telegram_alert.js")})
+    link("Investigation email", "Telegram investigation?")
+    telegram_push("Telegram investigation push", (1820, 2900))
+    link("Telegram investigation?", "Telegram investigation push")
+    email("Email investigation", (1560, 3020))
+    link("Investigation email", "Email investigation")
 
     # ---- fixresult: log the answer (a short run), then hand off its email or follow-up ----
     webhook("fixresult", "homelab/fixresult", (0, 3100), auth=INTERNAL_TOKEN)
@@ -382,9 +430,13 @@ def _build(ops_door_id=OPS_DOOR_ID):
     ]
     node("tool ops_lookup", "@n8n/n8n-nodes-langchain.toolWorkflow", 2.2, (1660, 1900), {
         "name": "ops_lookup",
-        "description": "Live read-only lookup on one VM through the ops door. Input is a plain string: \"<vm> status\" lists every container with its state, or \"<vm> logs <service> [lines]\" returns the last lines (default 80, max 200) of that container's log, e.g. \"media logs sonarr 100\". vm is one of edge, media, gpu, apps, ai.",
+        "description": "Live read-only lookup on one VM through the ops door. Input is a plain string: \"<vm> status\" lists every container with its state, or \"<vm> logs <service> [lines]\" returns the last lines (default 80, max 200) of that container's log, e.g. \"media logs sonarr 100\". vm is one of " + ", ".join(HOSTS_LIST) + ".",
         "source": "database", "workflowId": DOOR, "workflowInputs": {"mappingMode": "defineBelow", "value": None}})
-    for t in tools + ["tool ops_lookup"]:
+    node("tool investigate", "@n8n/n8n-nodes-langchain.toolWorkflow", 2.2, (1820, 1900), {
+        "name": "investigate",
+        "description": "Hand a hard question to the investigator, a stronger model that can read any log, config file, journal, the Proxmox and TrueNAS APIs, Uptime Kuma and the lab's docs, and may propose one fix (a fixed verb or a short script) for Goobs to confirm. Takes one to four minutes and costs money, so use it only when the quick tools did not find the cause, or when Goobs asks you to dig in. Input is a plain string: the whole question with everything you already found, e.g. \"Sonarr on media keeps failing imports since this morning; logs show 'access denied' on /mnt/nfs/Media/TV. Why, and what fixes it?\"",
+        "source": "database", "workflowId": INV, "workflowInputs": {"mappingMode": "defineBelow", "value": None}})
+    for t in tools + ["tool ops_lookup", "tool investigate"]:
         link(t, "Sysadmin agent", 0, "ai_tool")
     node("Chat finish", "n8n-nodes-base.code", 2, (1080, 1700), {"jsCode": chat_code("chat_finish.js")})
     link("Sysadmin agent", "Chat finish")
@@ -434,9 +486,12 @@ def _build(ops_door_id=OPS_DOOR_ID):
 
     # ---- the 08:00 digest and the legacy webhooks (unchanged paths) ----
     node("Every day 08:00", "n8n-nodes-base.scheduleTrigger", 1.2, (0, 900), {"rule": {"interval": [{"field": "cronExpression", "expression": "0 8 * * *"}]}})
+    # The investigator's spend for the digest; when it is down or not set up, the digest leaves it out.
+    http("Investigator usage", f"{INVESTIGATOR_URL}/usage", (130, 1000), auth=INVESTIGATOR_TOKEN, timeout=10000, executeOnce=True, alwaysOutputData=True)
     node("Build digest", "n8n-nodes-base.code", 2, (260, 900), {"jsCode": code("build_digest.js")})
     email("Email digest", (520, 900))
-    link("Every day 08:00", "Build digest")
+    link("Every day 08:00", "Investigator usage")
+    link("Investigator usage", "Build digest")
     link("Build digest", "Email digest")
     # Clears what the digest reported, only once the email is out.
     node("Digest sent", "n8n-nodes-base.code", 2, (780, 900), {"jsCode": code("digest_sent.js")})
@@ -456,6 +511,9 @@ if __name__ == "__main__":
     door = build_ops_door()
     OUT_DOOR.write_text(json.dumps(door, indent=2) + "\n")
     print(f"wrote {OUT_DOOR.relative_to(ROOT)}: {len(door['nodes'])} nodes")
+    inv = build_investigator()
+    OUT_INVESTIGATOR.write_text(json.dumps(inv, indent=2) + "\n")
+    print(f"wrote {OUT_INVESTIGATOR.relative_to(ROOT)}: {len(inv['nodes'])} nodes")
     wf = build()
     OUT.write_text(json.dumps(wf, indent=2) + "\n")
     print(f"wrote {OUT.relative_to(ROOT)}: {len(wf['nodes'])} nodes")

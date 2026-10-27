@@ -197,6 +197,39 @@ services:
       - /opt/appdata/sysadmin-telegram/data:/data
     depends_on: [n8n]
 
+  # The sysadmin's investigator (sysadmin-investigator/investigator.py): Claude Code's engine (Claude
+  # Agent SDK, Sonnet 5.5) for the questions the chat's quick model hands on, and for new critical
+  # alerts. It reads the VMs through the read-only inspect user (role ops), Proxmox with Homepage's
+  # PVEAuditor token and TrueNAS with GET only, and proposes fixes that run in n8n after Goobs's
+  # Confirm; it runs nothing itself. n8n reaches it at sysadmin-investigator:3006 (no host port).
+  # investigator.env (ANTHROPIC_API_KEY, INVESTIGATOR_TOKEN), the inspect key and the repo copy in
+  # /opt/appdata/sysadmin-investigator are written by docs/sysadmin_deploy.py; without them
+  # /healthz says "not configured". Spend caps below; the digest shows yesterday's spend.
+  sysadmin-investigator:
+    <<: *common
+    build: ./sysadmin-investigator
+    image: homelab/sysadmin-investigator:1
+    mem_limit: 1g
+    user: ${PUID}:${PGID}
+    env_file:
+      - {path: /opt/appdata/sysadmin-investigator/investigator.env, required: false}
+    environment:
+      TZ: ${TZ}
+      PVE_TOKEN_ID: ${HOMEPAGE_PROXMOX_TOKEN_ID}
+      PVE_TOKEN_SECRET: ${HOMEPAGE_PROXMOX_TOKEN_SECRET}
+      TRUENAS_KEY: ${HOMEPAGE_TRUENAS_KEY}
+      MODEL: claude-sonnet-5-5
+      EFFORT: medium
+      DAILY_USD: "2.00"
+      CASE_USD: "0.75"
+      PER_DAY: "10"
+      AUTO_PER_DAY: "3"
+    volumes:
+      # state.json, lessons.md, cases/ (30 days), ssh/ (inspect key, known_hosts), home/
+      - /opt/appdata/sysadmin-investigator/data:/data
+      - /opt/appdata/sysadmin-investigator/repo:/repo:ro
+    depends_on: [n8n]
+
   huginn:
     <<: *common
     image: ghcr.io/huginn/huginn:latest

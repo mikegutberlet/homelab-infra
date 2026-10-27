@@ -16,8 +16,10 @@ const SETTINGS = {
   // server, plex-remote-on puts it back. false = Plex is meant to be LAN/Tailscale-only.
   PLEX_REMOTE: true,
   // VMs that must report; a silent one is itself a critical issue.
-  HOSTS: ['edge', 'media', 'gpu', 'apps', 'ai'],
-  HOST_IP: { edge: '192.168.1.50', media: '192.168.1.51', gpu: '192.168.1.52', apps: '192.168.1.53', ai: '192.168.1.54' },
+  // transcode (VM 206, RicksPortalGun, the second Tdarr node) since 2026-10-27; drop it here and in
+  // docs/build_sysadmin_workflow.py HOSTS when that VM is retired.
+  HOSTS: ['edge', 'media', 'gpu', 'apps', 'ai', 'transcode'],
+  HOST_IP: { edge: '192.168.1.50', media: '192.168.1.51', gpu: '192.168.1.52', apps: '192.168.1.53', ai: '192.168.1.54', transcode: '192.168.1.55' },
   SILENT_AFTER_MIN: 40,
   // Per target (host + verb + name): at most one fix an hour and three a day.
   FIX_PER_HOUR: 1,
@@ -58,7 +60,7 @@ const SETTINGS = {
   LOGIN_FAILS_CRIT: 3,                       // failed arr web logins per 15 min that email at once
   KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,
   SCRUB_WARN_DAYS: 45,
-  PVE_EXPECT_RUNNING: [110, 201, 202, 203, 204, 205],
+  PVE_EXPECT_RUNNING: [110, 201, 202, 203, 204, 205, 206],
   PVE_EXPECT_STOPPED: [113, 117],
   TZ: 'America/Los_Angeles',
   // Chat page (sysadmin.<tailnet>). CHAT_FIXES_ENABLED lets a fix proposed in chat run after Goobs
@@ -68,6 +70,15 @@ const SETTINGS = {
   CHAT_FIX_PER_HOUR: 2,                      // per target, counting automatic fixes too
   CHAT_FIX_PER_DAY: 10,                      // all chat fixes together
   CHAT_CONFIRM_MIN: 15,                      // a proposal expires after this
+  // The investigator (stacks/apps/sysadmin-investigator, Goobs's 2026-10-27 pick "hybrid"): the chat's
+  // `investigate` tool hands it hard questions; AUTO_INVESTIGATE also sends it each new critical
+  // alert (not the 6-hourly repeats) and emails its note as a follow-up. Its spend caps are in
+  // stacks/apps/compose.yaml (DAILY_USD, PER_DAY, AUTO_PER_DAY). A fix script it proposes runs only
+  // after Confirm, through the ops door's run-approved verb, within RUN_MAX_CHARS / RUN_MAX_LINES.
+  INVESTIGATOR_ENABLED: true,
+  AUTO_INVESTIGATE: true,
+  RUN_MAX_CHARS: 3000,
+  RUN_MAX_LINES: 25,
   // Telegram bot (stacks/apps/sysadmin-telegram). Pushes go to POST sysadmin-telegram:3004/notify;
   // a Telegram failure never holds up the email.
   TELEGRAM_ALERTS: true,                     // every critical email is also pushed to Telegram

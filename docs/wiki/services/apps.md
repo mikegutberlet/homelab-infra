@@ -89,6 +89,15 @@ flowchart TB
 | API key | On the Mac at `~/.config/homelab/n8n-apikey`, used to activate the workflow and for future automation |
 | Health | Kuma `GET /healthz` |
 
+## Sysadmin investigator
+
+`homelab/sysadmin-investigator:1`, built from `stacks/apps/sysadmin-investigator/` (Python and the
+Claude Agent SDK), port 3006 on the stack's network only (n8n calls it; nothing is published).
+The sysadmin chat's `investigate` tool and the alert auto-investigation, on Claude Sonnet 5.5 with
+a $2 a day cap. Settings in `/opt/appdata/sysadmin-investigator/investigator.env` (written by
+`docs/sysadmin_deploy.py`), state in `data/`, a read-only copy of this repository in `repo/`.
+See [sysadmin: the investigator](../operations/sysadmin.md#the-investigator-hard-questions).
+
 ## Huginn
 
 `ghcr.io/huginn/huginn:latest`, port 3000, https://huginn.tail9af84.ts.net (SSO). Postgres database

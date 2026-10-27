@@ -23,7 +23,7 @@ server {
         proxy_set_header X-authentik-username $http_x_authentik_username;
         proxy_set_header X-Chat-Via ""; # only the Telegram bot sets it (fix log label); never from a browser
         proxy_set_header Content-Type application/json;
-        proxy_read_timeout 300s; # the agent can take minutes when Gemini is slow
+        proxy_read_timeout 480s; # the agent can take minutes (Gemini slow, or an investigation of up to 4 min)
     }
     location / {
         return 404;

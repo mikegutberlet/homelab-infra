@@ -17,10 +17,17 @@ What it does, in order:
      /opt/appdata/sysadmin-chat/token.env on the apps VM, where the chat page's nginx reads it.
      The internal token (n8n's calls to its own act, fixresult and chatstate webhooks) is new on
      every run and kept only in n8n, so the chat page and the bot cannot call those webhooks.
-  3. Imports the "Homelab ops door" sub-workflow (the chat agent's SSH lookups and confirmed fixes),
-     then builds the sysadmin workflow with those credential ids plus the existing "Gmail SMTP" id,
+  3. Sets up the investigator (stacks/apps/sysadmin-investigator): makes the inspect key pair at
+     ~/.config/homelab/inspect_ed25519 on first run (the ops play installs its .pub for the inspect
+     user on every VM), writes /opt/appdata/sysadmin-investigator/investigator.env (the Anthropic key
+     and the investigator token, made once and kept there) and the private key into its data/ssh,
+     refreshes its read-only copy of this repository (git HEAD, without *.sops.env) and adds the
+     "Investigator token" credential.
+  4. Imports the "Homelab ops door" sub-workflow (the chat agent's SSH lookups and confirmed fixes)
+     and the "Homelab investigator" sub-workflow, then builds the sysadmin workflow with those credential ids plus the existing "Gmail SMTP" id,
      imports it (replacing an earlier "Homelab sysadmin"), deactivates the old "Homelab digest" (same
-     webhook paths), activates the new one and restarts n8n so the webhooks and timers register.
+     webhook paths), activates the new one and restarts n8n so the webhooks and timers register,
+     and the investigator so it reads its new settings (it starts once the stacks play built it).
 Secrets travel over SSH on stdin, into the n8n container's /tmp, and are removed right after.
 """
 import json
@@ -38,7 +45,10 @@ APPS = "goobs@192.168.1.53"
 AI = "goobs@192.168.1.54"
 TOKEN_ENV = "/opt/appdata/sysadmin-chat/token.env"
 OPS_KEY = pathlib.Path.home() / ".config/homelab/ops_ed25519"
-ANTHROPIC_KEY = pathlib.Path.home() / ".config/homelab/anthropic_api_key"  # the chat agent's model
+ANTHROPIC_KEY = pathlib.Path.home() / ".config/homelab/anthropic_api_key"  # the chat agent's model, and the investigator's
+INSPECT_KEY = pathlib.Path.home() / ".config/homelab/inspect_ed25519"  # the investigator's read-only SSH user
+INV_DIR = "/opt/appdata/sysadmin-investigator"
+APP_UID = 3000  # the storage user; compose runs the investigator as PUID:PGID
 HOSTS = builder.HOSTS
 N8N = "sudo docker compose -f /opt/stacks/apps/compose.yaml exec -T n8n"
 
@@ -103,6 +113,32 @@ if not chat_token:
 # n8n's token for its own internal webhooks: both ends are in n8n, so a fresh one each run is enough.
 internal_token = secrets.token_urlsafe(32)
 
+print("Investigator...")
+if not INSPECT_KEY.exists():
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "homelab-inspect", "-f", str(INSPECT_KEY)], check=True)
+    print(f"  new inspect key {INSPECT_KEY} (run the ops play next so every VM accepts it)")
+inv_env = ssh(f"sudo cat {INV_DIR}/investigator.env 2>/dev/null", check=False)
+inv_token = dict(line.split("=", 1) for line in inv_env.splitlines() if "=" in line).get("INVESTIGATOR_TOKEN", "").strip()
+inv_token = inv_token or secrets.token_urlsafe(32)
+ssh(f"sudo install -d -m 750 -o {APP_UID} -g {APP_UID} {INV_DIR} {INV_DIR}/data {INV_DIR}/repo"
+    f" && sudo install -d -m 700 -o {APP_UID} -g {APP_UID} {INV_DIR}/data/ssh"
+    f" && sudo sh -c 'umask 077; cat > {INV_DIR}/investigator.env'",
+    stdin=f"ANTHROPIC_API_KEY={anthropic_key}\nINVESTIGATOR_TOKEN={inv_token}\n")
+ssh(f"sudo sh -c 'umask 077; cat > {INV_DIR}/data/ssh/inspect_ed25519' && sudo chown {APP_UID}:{APP_UID} {INV_DIR}/data/ssh/inspect_ed25519",
+    stdin=INSPECT_KEY.read_text())
+# The repository as committed here (HEAD), so the investigator reads the same docs and compose files
+# Goobs deploys. Encrypted secrets stay out; it never needs them.
+archive = subprocess.run(["git", "-C", str(ROOT), "archive", "--format=tar", "HEAD"], capture_output=True, check=True).stdout
+r = subprocess.run(["ssh", "-o", "BatchMode=yes", APPS,
+                    f"sudo rm -rf {INV_DIR}/repo.new && sudo install -d -m 750 -o {APP_UID} -g {APP_UID} {INV_DIR}/repo.new"
+                    f" && sudo tar -x -C {INV_DIR}/repo.new --no-same-owner --exclude='*.sops.env'"
+                    f" && sudo chown -R {APP_UID}:{APP_UID} {INV_DIR}/repo.new"
+                    f" && sudo rm -rf {INV_DIR}/repo.old && sudo mv {INV_DIR}/repo {INV_DIR}/repo.old"
+                    f" && sudo mv {INV_DIR}/repo.new {INV_DIR}/repo && sudo rm -rf {INV_DIR}/repo.old"], input=archive, capture_output=True)
+if r.returncode != 0:
+    sys.exit(f"copying the repository to the investigator failed:\n{r.stderr.decode(errors='replace').strip()[-500:]}")
+print(f"  settings, inspect key and repository copy in {INV_DIR}")
+
 print("Existing credentials...")
 all_creds = n8n_json("n8n export:credentials --all")
 existing = {c["name"]: c["id"] for c in all_creds}
@@ -122,7 +158,8 @@ for h in HOSTS:
 for name, header, value in (("Proxmox API token", "Authorization", f"PVEAPIToken=homepage@pve!homepage={pve_secret}"),
                             ("TrueNAS API key", "Authorization", f"Bearer {nas_key}"),
                             ("Sysadmin chat token", "X-Chat-Token", chat_token),
-                            (builder.INTERNAL_TOKEN, "X-Internal-Token", internal_token)):
+                            (builder.INTERNAL_TOKEN, "X-Internal-Token", internal_token),
+                            (builder.INVESTIGATOR_TOKEN, "X-Investigator-Token", inv_token)):
     ids[name] = existing.get(name, new_id())
     creds.append({"id": ids[name], "name": name, "type": "httpHeaderAuth", "data": {"name": header, "value": value}})
 ids["Gemini API key"] = existing.get("Gemini API key", new_id())
@@ -147,8 +184,18 @@ if not door_id:
     sys.exit("The import did not produce a 'Homelab ops door' workflow; check n8n > Workflows before re-running.")
 set_active(door_id, True)  # a sub-workflow needs no trigger, but published is what Execute Workflow expects
 
+print("Importing the investigator sub-workflow...")
+inv = builder.build_investigator(ids)
+inv["id"] = workflows.get("Homelab investigator", inv["id"])
+ssh(f"{N8N} sh -c 'cat > /tmp/inv.json && n8n import:workflow --input=/tmp/inv.json; rm -f /tmp/inv.json'", stdin=json.dumps(inv))
+workflows = list_workflows()
+inv_id = workflows.get("Homelab investigator")
+if not inv_id:
+    sys.exit("The import did not produce a 'Homelab investigator' workflow; check n8n > Workflows before re-running.")
+set_active(inv_id, True)
+
 print("Importing the workflow...")
-wf = builder.build(ids, {"Gmail SMTP": smtp_name}, ops_door_id=door_id)
+wf = builder.build(ids, {"Gmail SMTP": smtp_name}, ops_door_id=door_id, investigator_id=inv_id)
 if "Homelab sysadmin" in workflows:
     wf["id"] = workflows["Homelab sysadmin"]
 ssh(f"{N8N} sh -c 'cat > /tmp/wf.json && n8n import:workflow --input=/tmp/wf.json; rm -f /tmp/wf.json'", stdin=json.dumps(wf))
@@ -164,5 +211,13 @@ ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml restart n8n")
 ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml up -d --force-recreate sysadmin-chat", check=False)
 # The bot reads CHAT_TOKEN only when its container is created; a no-op while the service is not deployed.
 ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml up -d --no-deps --force-recreate sysadmin-telegram", check=False)
+# env_file is read when the container is created; a no-op until the stacks play has built the image.
+if "homelab/sysadmin-investigator" in ssh("sudo docker images --format '{{.Repository}}'", check=False):
+    ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml up -d --no-deps --force-recreate sysadmin-investigator", check=False)
+    health = ssh("sudo docker compose -f /opt/stacks/apps/compose.yaml exec -T sysadmin-investigator python -c "
+                 "\"import time,urllib.request as u;time.sleep(3);print(u.urlopen('http://127.0.0.1:3006/healthz').read().decode())\"", check=False).strip()
+    print(f"  investigator: {health or 'not ready (a 503 means a key or token is missing; docker compose logs sysadmin-investigator)'}")
+else:
+    print("  investigator image not built yet: the stacks play for apps builds and starts it")
 print("Done. Check n8n > Workflows > Homelab sysadmin (active) and Executions after the next 15-minute tick;")
 print("the chat page is https://sysadmin.<tailnet> (Homepage > Sysadmin chat).")

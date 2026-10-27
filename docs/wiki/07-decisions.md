@@ -233,3 +233,16 @@ qBittorrent, FlareSolverr) are updated by the sysadmin between 03:00 and 05:00 P
 upstream release can break one of them overnight until it is rolled back. **Consequence.** Authentik,
 Nextcloud, Immich, Paperless, databases and pinned images (ErsatzTV, Kometa) stay manual; they show as
 "update available (by hand)".
+
+### D32: The sysadmin gets an investigator (hybrid, Sonnet), read-only, fixes only on Confirm
+
+**Decision (Goobs, card 2026-10-27 04:01 UTC, "C. Hybrid with Claude Code engine", after "I want him
+to be just as useful as claude code is").** The chat stays on Claude Haiku 5.5; hard questions and new
+critical alerts go to a Claude Agent SDK agent on Claude Sonnet 5.5 (container on the apps stack)
+that reads logs, configs, the Proxmox/TrueNAS APIs and the repo through a read-only `inspect` user and
+may propose one fix, including a short script, which runs only after Goobs presses Confirm and passes
+a never-list on both n8n and the VM. **Cost.** About $5 to $20 a month, capped at $2 a day; answers
+take 1 to 4 minutes. **Consequence.** No unattended custom fixes: alert investigations only email
+their findings. The design doc first put it on its own VM on RicksPortalGun; it runs on the apps
+VM instead (now on RicksPortalGun since the 2026-10-27 move), which saves a VM and keeps it next
+to n8n.

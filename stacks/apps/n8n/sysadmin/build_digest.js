@@ -100,6 +100,15 @@ const evGroups = {};
 for (const e of ev) (evGroups[e.source] = evGroups[e.source] || []).push(e);
 for (const [src, items] of Object.entries(evGroups)) section(`${(names[src] || src).toUpperCase()} (${items.length})`, items.map((e) => `${fmtT(Date.parse(e.t))}  ${e.line}`));
 
+// The investigator's spend (GET /usage by "Investigator usage"; history holds the days before today).
+let inv = null;
+try { inv = $('Investigator usage').first().json; } catch (e) { inv = null; }
+if (inv && typeof inv.usd === 'number') {
+  const y = (inv.history || []).slice(-1)[0];
+  const line = (d) => `${d.cases} case${d.cases === 1 ? '' : 's'} (${d.auto || 0} from alerts), $${Number(d.usd).toFixed(2)}`;
+  section('INVESTIGATOR', [`${y ? `Yesterday ${line(y)}; ` : ''}today so far ${line(inv)}. Cap $${Number(inv.daily_usd).toFixed(2)} a day.`]);
+}
+
 // Quiet: which VMs report and have nothing open.
 const clean = reporting.filter((h) => !open.some((i) => i.host === h));
 text += `QUIET\n  ${reporting.length} of ${S.HOSTS.length} VMs reporting; nothing open on ${clean.join(', ') || 'none of them'}.\n`
