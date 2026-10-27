@@ -9,7 +9,7 @@ host, RicksPortalGun (NUC8i7BEH, 64 GB), joined on 2026-10-26; see [Cluster](#cl
 
 | | RicksGarage | RicksShip |
 | --- | --- | --- |
-| Role | Storage host: carries the DAS and the TrueNAS VM, plus edge and media | Compute host: gpu, apps and ai VMs; hands its iGPU to the gpu VM |
+| Role | Storage host: carries the DAS and the TrueNAS VM, plus edge (media moved to RicksPortalGun 2026-10-27) | Compute host: gpu and ai VMs (apps moved to RicksPortalGun 2026-10-27); hands its iGPU to the gpu VM |
 | Model | Intel NUC6i7KY (Skull Canyon) | Intel NUC6i7KY |
 | CPU | i7-6770HQ, 4 cores / 8 threads, Skylake | same |
 | RAM | 31 GiB usable (32 GB installed, the NUC's maximum) | same |
@@ -17,7 +17,7 @@ host, RicksPortalGun (NUC8i7BEH, 64 GB), joined on 2026-10-26; see [Cluster](#cl
 | Network | one 1 GbE port, bridge `vmbr0` | same |
 | LAN address | 192.168.1.137 | 192.168.1.37 |
 | Proxmox | 8.4.21, kernel 6.8.12-43-pve (was 8.0.4) | 8.4.21, kernel 6.8.12-43-pve (was 8.1.3) |
-| VM storage | `local` (ISO, snippets) and `local-lvm` | `local`, `local-lvm` and `RicksShipXFS` (directory storage; the app VMs' disks live here) |
+| VM storage | `local` (ISO, snippets) and `local-lvm` | `local`, `local-lvm` and `RicksShipXFS` (directory storage, qcow2, node-local: `shared 0` since 2026-10-27; gpu and ai disks live here) |
 | IOMMU | on (`intel_iommu=on iommu=pt`), iGPU alone in group 0 | on, iGPU alone in group 0 |
 | Boot | UEFI, GRUB (`grub-pc` package installed although the host boots UEFI; `grub-efi-amd64` someday) | same |
 | Kernel cmdline extras | `reboot=efi` added 2026-10-21 (did not fix the warm-reboot hang) | none |
@@ -40,12 +40,12 @@ hosts are up. If two hosts are down, the third is not quorate and will not start
 
 | | RicksPortalGun |
 | --- | --- |
-| Role | Third node, no VMs yet (2026-10-26). Plan (2026-10-27): transcode VM on its iGPU, then apps and media; see [Fill RicksPortalGun](operations/portalgun-moves.md) |
+| Role | Since 2026-10-27: media 202 (12 GB), apps 204 (16 GB) and transcode 206 (4 GB, gets the iGPU); see [Fill RicksPortalGun](operations/portalgun-moves.md) |
 | Model | Intel NUC8i7BEH (Bean Canyon, board NUC8BEB) |
 | CPU / RAM | i7-8559U, 4 cores / 8 threads, Coffee Lake; 62.7 GiB usable (64 GB installed) |
-| GPU | Iris Plus Graphics 655 (Quick Sync; stays with the host) |
+| GPU | Iris Plus Graphics 655, PCI 0000:00:02.0, device 8086:3ea5, bound to vfio-pci and passed to VM 206 (Tdarr node) |
 | Network | one 1 GbE port (Intel I219-V, `eno1`, MAC 1c:69:7a:01:d6:08, an ECS-assigned address), bridge `vmbr0`; Wi-Fi `wlp0s20f3` unused |
-| Disks | `sdb` Crucial MX500 1 TB holds Proxmox (`pve` VG: 96 GB root, 8 GB swap, 794 GB `local-lvm` thin pool; seen 2026-10-27, the earlier note had the disks swapped); `sda` Crucial MX300 525 GB is the spare, contents not checked yet |
+| Disks | `sdb` Crucial MX500 1 TB holds Proxmox (`pve` VG: 96 GB root, 8 GB swap, 794 GB `local-lvm` thin pool; seen 2026-10-27, the earlier note had the disks swapped); `sda` Crucial MX300 525 GB (old Windows install wiped 2026-10-27) is LVM-thin storage `PortalGunSpare` (464 GB), holding media's 200 GB SABnzbd scratch disk |
 | LAN address | 192.168.1.38 (static, set in the installer) |
 | Proxmox | 8.4.21 from `pve-no-subscription` (installed from the 8.4.0 ISO), kernel 6.8.12-43-pve |
 | Hardening | same settings as `proxmox-hardening.yml` (keys only, fail2ban, security updates), applied by hand on 2026-10-26 |
