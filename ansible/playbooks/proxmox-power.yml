@@ -1,0 +1,54 @@
+# Lets the NUCs drop their CPU clocks when idle. Proxmox's kernel boots intel_pstate in the
+# "performance" governor with EPP "performance", which holds the cores near max turbo all the time
+# (2026-10-27: RicksPortalGun averaged 4.2 GHz at load 1.2). "powersave" under intel_pstate is not
+# the old fixed-low-clock governor: with HWP the CPU still ramps to full turbo within milliseconds
+# when there is work, and EPP "balance_performance" biases it toward speed. Quick Sync encode speed
+# is set by the iGPU's own clock (i915, inside the gpu/transcode VMs), which this does not touch.
+# Turbo stays on. NIC and PCIe ASPM settings are left alone (see proxmox-nic.yml).
+# Takes effect at once, no reboot, and is undone with:
+#   ansible-playbook playbooks/proxmox-power.yml -e cpu_governor=performance -e cpu_epp=performance
+# Run one host first:
+#   ansible-playbook playbooks/proxmox-power.yml --limit ricksgarage
+- name: CPU governor and energy preference
+  hosts: proxmox
+  vars:
+    cpu_governor: powersave
+    cpu_epp: balance_performance
+  tasks:
+    - name: Persist at boot
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/cpu-power.service
+        content: |
+          [Unit]
+          Description=CPU governor {{ cpu_governor }}, EPP {{ cpu_epp }} (playbooks/proxmox-power.yml)
+          After=sysinit.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/bin/sh -c 'for c in /sys/devices/system/cpu/cpu*/cpufreq; do echo {{ cpu_governor }} > $c/scaling_governor; echo {{ cpu_epp }} > $c/energy_performance_preference; done'
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: "0644"
+      register: power_unit
+
+    - name: Apply now and enable at boot
+      ansible.builtin.systemd:
+        name: cpu-power.service
+        daemon_reload: true
+        enabled: true
+        state: restarted
+      when: power_unit.changed
+
+    - name: Read back
+      ansible.builtin.shell: |
+        echo "$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)" \
+             "$(cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference)" \
+             "turbo_off=$(cat /sys/devices/system/cpu/intel_pstate/no_turbo)"
+      register: power_now
+      changed_when: false
+
+    - name: Now
+      ansible.builtin.debug:
+        msg: "{{ power_now.stdout }}"
