@@ -93,7 +93,7 @@ old setup's local disks proved the apps' state is small enough to live on the VM
 VM disks: edge 32 GB, media 64 GB (+200 GB scratch), gpu 96 GB, apps 96 GB, ai 32 GB, all thin with `discard=on`.
 SABnzbd's temp folder lived on the media system disk until 2026-10-22; with its 15 GB free-space
 floor, any queue over about 22 GB paused downloads. Now: temp on the scratch disk, pause at 20 GB
-free there and at 500 GB free on the NAS, Direct Unpack on (`playbooks/sabnzbd-temp-disk.yml`).
+free there and at 500 GB free on the NAS, Direct Unpack on (set up by a one-off playbook, removed 2026-10-27; it is in git history).
 The gpu VM's 96 GB holds about 40 GB of Plex library data copied from the old server plus Tdarr's
 5.8 GB image and transcode space.
 

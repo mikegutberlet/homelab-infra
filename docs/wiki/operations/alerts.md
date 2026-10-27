@@ -21,7 +21,7 @@ Created by `docs/kuma_setup.py`. HTTP checks every 60 s with 2 retries unless no
 | Group | Monitors |
 | --- | --- |
 | Critical (instant email) | Plex `/identity`, Emby `/emby/System/Ping`, Sonarr `/ping`, Radarr `/ping`, Prowlarr `/ping`, SABnzbd `/`, qBittorrent `/api/v2/app/version` (any 2xx to 4xx counts as up, since 403 means both gluetun and qBittorrent answered), Requests `/api/v1/status` |
-| Digest | Bazarr, Audiobookshelf `/healthcheck`, Storyteller, RomM, MeTube, Tautulli `/status`, Nextcloud `/status.php`, Paperless, Stirling PDF, n8n `/healthz`, Huginn `/users/sign_in`, Homepage, Scrutiny `/api/health`, Dockge, Edge (TCP 192.168.1.50:80), Piper (TCP 10200), AnythingLLM `/api/ping`, TrueNAS (HTTPS UI), Proxmox RicksGarage and RicksShip (HTTPS 8006) |
+| Digest | Bazarr, Audiobookshelf `/healthcheck`, Storyteller, RomM, MeTube, Tautulli `/status`, Nextcloud `/status.php`, Paperless, Stirling PDF, n8n `/healthz`, Huginn `/users/sign_in`, Homepage, Scrutiny `/api/health`, Edge (TCP 192.168.1.50:80), Piper (TCP 10200), AnythingLLM `/api/ping`, TrueNAS (HTTPS UI), Proxmox RicksGarage and RicksShip (HTTPS 8006) |
 | Missing | ErsatzTV, Immich, Tdarr, Unmanic, wg-easy, Open WebUI (unreachable from the apps VM by design), the NFS mount itself, pool health |
 
 To add monitors: append to `MONITORS` in `docs/kuma_setup.py` and have Goobs run
@@ -60,7 +60,6 @@ report" or a grouped email within a minute.
 - **Scrutiny** `disks.tail9af84.ts.net`: SMART for 9 disks, refreshed daily at 04:15 by the host
   collectors. Watch `ZVTAM9MF`.
 - **Tautulli** `tautulli.tail9af84.ts.net`: Plex streams and history.
-- **Dockge** `dockge.tail9af84.ts.net`: apps-VM container logs (read-only by policy).
 - **Proxmox** UIs for host CPU, RAM, swap (RicksGarage should stay out of swap) and VM state.
 
 ## Quiet gaps to be aware of

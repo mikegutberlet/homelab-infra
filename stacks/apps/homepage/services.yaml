@@ -258,11 +258,6 @@
         description: Trend graphs (Prometheus)
         icon: grafana.png
         siteMonitor: "http://192.168.1.53:3005/api/health"
-    - Dockge:
-        href: "https://dockge.{{HOMEPAGE_VAR_TAILNET}}"
-        description: Compose stacks
-        icon: dockge.png
-        siteMonitor: "http://192.168.1.53:5001/"
     - OliveTin:
         href: "https://olivetin.{{HOMEPAGE_VAR_TAILNET}}"
         description: Maintenance buttons

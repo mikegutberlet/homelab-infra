@@ -24,7 +24,7 @@ services:
       N8N_DB_PASSWORD: ${N8N_DB_PASSWORD}
       HUGINN_DB_PASSWORD: ${HUGINN_DB_PASSWORD}
       AI_DB_PASSWORD: ${AI_DB_PASSWORD}
-    ports: ["5432:5432"] # the ai VM uses pgvector; Proxmox firewall limits this to 192.168.1.54
+    ports: ["5432:5432"] # the ai VM uses pgvector; lanfw limits this to the lab VMs (.50-.54)
     volumes:
       - /opt/appdata/postgres:/var/lib/postgresql/data
       - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
@@ -361,17 +361,6 @@ services:
     ports: ["1337:1337"]
     volumes:
       - ./olivetin:/config:ro
-
-  dockge:
-    <<: *common
-    image: louislam/dockge:1
-    environment:
-      DOCKGE_STACKS_DIR: /opt/stacks
-    ports: ["5001:5001"]
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/appdata/dockge:/app/data
-      - /opt/stacks:/opt/stacks
 
   # --- metrics and trend graphs (2026-10-23) ---
   # Prometheus keeps the history, Grafana draws it. Alerting stays in Kuma and the n8n digest;

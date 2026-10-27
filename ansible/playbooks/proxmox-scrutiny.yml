@@ -1,6 +1,6 @@
-# Scrutiny SMART collectors on both Proxmox hosts. The hosts are the only place that can read
+# Scrutiny SMART collectors on every Proxmox host. The hosts are the only place that can read
 # the disks' SMART data (TrueNAS sees virtual disks). Read-only: smartctl, no reboot.
-# Reports to the Scrutiny hub on the apps VM (lanfw allows these two hosts on 8087).
+# Reports to the Scrutiny hub on the apps VM (lanfw allows the three hosts on 8087).
 - name: Scrutiny collectors
   hosts: proxmox
   vars:

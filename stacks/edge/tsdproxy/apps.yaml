@@ -84,9 +84,6 @@ disks:
 olivetin:
   url: http://traefik:80
 
-dockge:
-  url: http://traefik:80
-
 tautulli:
   url: http://traefik:80
 

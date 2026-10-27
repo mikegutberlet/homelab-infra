@@ -2,7 +2,7 @@
 
 Infrastructure as code for Goobs's home lab: three Proxmox 8.4 hosts in one cluster (quorum 2):
 two Intel NUC6i7KY (RicksGarage, RicksShip, 31 GiB RAM each) and RicksPortalGun (192.168.1.38,
-62 GiB, no VMs yet, joined 2026-10-26), plus a TrueNAS VM
+62 GiB, joined 2026-10-26; media, apps and transcode since 2026-10-27), plus a TrueNAS VM
 serving a five-disk USB DAS (RAIDZ1, 5 x 20 TB).
 
 Design and decisions: see the "Home lab app stack: infrastructure design" doc in the
@@ -12,16 +12,17 @@ on Goobs's Mac.
 The full wiki (overview, architecture and data-flow diagrams, per-service deep dives,
 decision records, runbooks, open items) lives in [`docs/wiki/`](docs/wiki/README.md).
 
-## What runs where (2026-10-21)
+## What runs where (2026-10-27; `tofu/terraform.tfvars` is the source)
 
 | VM | Host | IP | Running | Held back |
 | --- | --- | --- | --- | --- |
 | truenas (110) | RicksGarage | 192.168.1.209 | not managed here (16 GB RAM) | |
 | edge (201) | RicksGarage | 192.168.1.50 | Traefik, Authentik, TSDProxy (`<app>.tail9af84.ts.net`), Tailscale subnet router | wg-easy (admin not set up) |
-| media (202) | RicksGarage | 192.168.1.51 | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd (migrated from the old Servarr VM), qBittorrent via PIA (gluetun, port forwarding), Recyclarr, Jellyseerr (migrated Overseerr), MeTube, Storyteller, Audiobookshelf, RomM, Listenarr (audiobooks), Chaptarr (ebooks, in place of the retired Readarr; `docs/books.md`) | |
-| gpu (203) | RicksShip | 192.168.1.52 | Plex (migrated, Quick Sync), Emby (Premiere, Quick Sync) | ErsatzTV, Immich, Tdarr, Unmanic |
-| apps (204) | RicksShip | 192.168.1.53 | Postgres, Nextcloud, Paperless, Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny, Diun, OliveTin (report-only), Dockge, Prometheus + Grafana (`docs/wiki/services/monitoring.md`) | |
+| media (202) | RicksPortalGun | 192.168.1.51 | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd (migrated from the old Servarr VM), qBittorrent via PIA (gluetun, port forwarding), Recyclarr, Jellyseerr (migrated Overseerr), MeTube, Storyteller, Audiobookshelf, RomM, Listenarr (audiobooks), Chaptarr (ebooks, in place of the retired Readarr; `docs/books.md`) | |
+| gpu (203) | RicksShip | 192.168.1.52 | Plex (migrated, Quick Sync), Emby (Premiere, Quick Sync), ErsatzTV, Immich, Tdarr server + node, Unmanic | |
+| apps (204) | RicksPortalGun | 192.168.1.53 | Postgres, Nextcloud, Paperless, Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny, Diun, OliveTin (report-only), Prometheus + Grafana (`docs/wiki/services/monitoring.md`) | |
 | ai (205) | RicksShip | 192.168.1.54 | Piper | Open WebUI (no LLM key), AnythingLLM + worker |
+| transcode (206) | RicksPortalGun | 192.168.1.55 | Tdarr node on the Iris Plus 655 iGPU (pinned to the server's version) | |
 
 Old VMs Servarr (113, RicksGarage) and Plex (117, RicksShip) were removed on 2026-10-26; their vzdump backups stay on `DeepData_NFS` until about 2026-11-25.
 Deferred: Kasm, local Ollama models (until the eGPU), Frigate (no cameras).

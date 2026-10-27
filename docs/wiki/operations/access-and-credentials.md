@@ -34,7 +34,7 @@ This page says **where** each credential lives and how it is used. It never cont
 | Authentik secret key and DB password | edge secrets | Authentik |
 | Plex claim token | Was used once during the move (`PLEX_CLAIM` in gpu secrets); the server is claimed | |
 | Emby Premiere key | Inside Emby | |
-| App logins Goobs set (Sonarr, Radarr, Prowlarr, SABnzbd, Nextcloud, n8n owner, Kuma, Dockge, Emby admin, Immich admin, AnythingLLM) | Goobs's password manager | |
+| App logins Goobs set (Sonarr, Radarr, Prowlarr, SABnzbd, Nextcloud, n8n owner, Kuma, Emby admin, Immich admin, AnythingLLM) | Goobs's password manager | |
 | healthchecks.io ping URLs | To be placed in `ansible/inventory/hosts.yml` (`heartbeat_url`); they are secrets in practice | heartbeat cron |
 
 ## How access works for operations
