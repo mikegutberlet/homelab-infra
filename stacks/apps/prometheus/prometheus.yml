@@ -36,6 +36,7 @@ scrape_configs:
     static_configs:
       - {targets: ["192.168.1.37"], labels: {host: RicksShip, cluster: "1", node: "1"}}
       - {targets: ["192.168.1.137"], labels: {host: RicksGarage, cluster: "0", node: "1"}}
+      - {targets: ["192.168.1.38"], labels: {host: RicksPortalGun, cluster: "0", node: "1"}}
     relabel_configs:
       - {source_labels: [__address__], target_label: __param_target}
       - {source_labels: [cluster], target_label: __param_cluster}
