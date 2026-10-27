@@ -1,8 +1,9 @@
 # transcode VM (RicksPortalGun, 192.168.1.55): a second Tdarr node on that NUC's Iris Plus 655
 # (passed through like the gpu VM's iGPU). It joins the Tdarr server on the gpu VM, runs the same
 # flow and library schedule (17:00-23:00 PT pause), and halves the TV backlog. Retire it when
-# Tdarr is done. No secrets, so no secrets.sops.env; values the other stacks read from .env are
-# written out here.
+# Tdarr is done. Its only secret is the Tdarr server's API key (the server has auth on, so a node
+# without it gets 401): TDARR_API_KEY in secrets.sops.env, the same key as the gpu VM's
+# /root/tdarr-api-key. Other values are written out here.
 #
 # The flow reads /app/configs/hevc (flow.js, radarr/sonarr maps and API keys) on the node that
 # runs it, so that folder is a copy of the gpu VM's /opt/appdata/tdarr/configs/hevc; refresh it
@@ -28,6 +29,7 @@ services:
       serverPort: 8266
       inContainer: "true"
       nodeName: transcode-vm
+      apiKey: ${TDARR_API_KEY}
     devices: [/dev/dri:/dev/dri]
     group_add: ["1000"] # same reason as on the gpu VM: 870 movie folders are goobs:goobs 0775
     volumes:
