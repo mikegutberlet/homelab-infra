@@ -12,14 +12,15 @@ it with its undo in `~/HomeLab/changes-<date>.md`.
 | --- | --- | --- |
 | 1. Restart the empty host (new kernel, vfio, warm-reboot test, BIOS) | none | Goobs at the button |
 | 2. Transcode VM (second Tdarr node) | none | step 1 |
-| 3. (optional) the spare 525 GB SSD as extra storage | none | Goobs's OK: wipes `sda` after it is checked |
+| 3. The spare 525 GB SSD as `PortalGunSpare` (media's scratch disk) | none | Goobs's OK (2026-10-27: "not used for anything"); the command refuses a non-blank `sda` |
 | 4. Move apps from RicksShip, then grow gpu and ai | apps 15-30 min; Plex/Emby ~2 min | step 1 |
 | 5. Move media from RicksGarage | media 30-45 min (downloads pause) | step 1 |
 
 **Disks (corrected 2026-10-27).** Proxmox is installed on the 1 TB MX500, `sdb`: its `pve` volume
 group holds root, swap and the 794 GB `local-lvm` thin pool. The spare is the 525 GB MX300, `sda`.
 Never run `wipefs`, `pvcreate` or `vgcreate` on `sdb`. `local-lvm` alone fits apps (96 GB), media
-(64 + 200 GB) and transcode (48 GB), so every VM here goes there and step 3 is optional.
+(64 + 200 GB) and transcode (48 GB), but media's 200 GB SABnzbd scratch disk goes to the spare
+`sda` instead (Goobs, 2026-10-27), so download and unpack writes never compete with the VMs' system disks.
 
 Migrate VMs **stopped**. Every VM uses CPU type `host`, and a live move between Skylake and
 Coffee Lake can crash the guest.
@@ -97,9 +98,9 @@ log is `/opt/appdata/tdarr-node/logs/hevc-run.tsv` on the transcode VM; progress
 
 Undo: pause or delete the node in Tdarr, `qm stop 206`, remove `transcode` from tfvars and hosts.yml.
 
-## 3. (Optional) the spare 525 GB SSD
+## 3. The spare 525 GB SSD
 
-Only if more room is needed. First confirm which disk is booted and that `sda` holds nothing:
+First confirm which disk is booted and that `sda` holds nothing:
 
 ```sh
 ssh root@192.168.1.38 'findmnt -n -o SOURCE /; pvs; lsblk -o NAME,SIZE,MODEL,FSTYPE,MOUNTPOINT /dev/sda; wipefs -n /dev/sda'
@@ -156,11 +157,12 @@ Downloads and imports stop during the copy (64 GB system disk + the 200 GB SABnz
 Pause SABnzbd's queue first so nothing is mid-unpack.
 
 ```sh
-ssh root@192.168.1.137 'qm shutdown 202 --timeout 300 && qm migrate 202 RicksPortalGun --targetstorage local-lvm'
+ssh root@192.168.1.137 'qm shutdown 202 --timeout 300 && qm migrate 202 RicksPortalGun --targetstorage local-lvm:local-lvm,xfstest:PortalGunSpare'
 ssh root@192.168.1.38  'qm set 202 --memory 12288 && qm start 202'
 ```
 
-Its tofu PR moves `media` to RicksPortalGun / `local-lvm` at 12288 MB, with the scratch disk as raw
+Its tofu PR moves `media` to RicksPortalGun / `local-lvm` at 12288 MB, with the scratch disk on
+`PortalGunSpare` as raw
 (LVM-thin has no qcow2); re-import it as in step 4 with `RicksPortalGun/202`.
 
 Check: `systemctl is-active wait-nas docker` and `df -h /srv/usenet-incomplete` on the media VM,
