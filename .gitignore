@@ -1,5 +1,6 @@
 *.tfstate
 *.tfstate.*
+!tofu/terraform.tfstate.sops.json
 .terraform/
 **/.env
 !**/.env.example

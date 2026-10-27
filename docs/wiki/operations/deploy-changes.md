@@ -74,6 +74,7 @@ cd tofu
 set -a; . ~/.config/homelab/proxmox-tofu.env; set +a
 tofu plan
 tofu apply
+./backup-state.sh   # encrypted copy of the state; commit tofu/terraform.tfstate.sops.json
 ```
 
 Memory and CPU changes apply at the next VM power cycle (shut down cleanly through Proxmox; the
