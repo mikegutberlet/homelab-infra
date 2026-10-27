@@ -1,4 +1,4 @@
-# apps VM (RicksShip): personal cloud, documents, automation, and the ops tools.
+# apps VM (RicksPortalGun since 2026-10-27): personal cloud, documents, automation, and the ops tools.
 # Monitoring lives here, on the other host from TrueNAS and the edge VM, so it can
 # still alert when RicksGarage is down.
 
