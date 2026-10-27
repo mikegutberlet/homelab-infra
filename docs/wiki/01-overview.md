@@ -86,7 +86,7 @@ All Tailscale names end in `.tail9af84.ts.net`. "SSO" means the Authentik login 
 | OliveTin | olivetin | SSO | apps | Buttons for fixed maintenance commands (not wired up yet) |
 | Open WebUI | chat | SSO (auto login) | ai | Chat on Google Gemini |
 | AnythingLLM | anythingllm | SSO + own | ai | Chat with your documents, Gemini + pgvector |
-| Proxmox | https://192.168.1.137:8006, https://192.168.1.37:8006 | own | hosts | Hypervisor UIs (LAN or Tailscale subnet route) |
+| Proxmox | https://192.168.1.137:8006, https://192.168.1.37:8006, https://192.168.1.38:8006 | own | hosts | Hypervisor UIs (LAN or Tailscale subnet route) |
 | TrueNAS | https://192.168.1.209 | own | truenas | NAS UI |
 
 ## Numbers worth knowing

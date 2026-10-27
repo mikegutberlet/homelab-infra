@@ -242,7 +242,7 @@ flowchart TB
     BIOS -- "not set yet" --> BTN["Goobs presses both power buttons"]
     BIOS -- set --> BOOT
     BTN --> BOOT["Both hosts boot Proxmox"]
-    BOOT --> Q{"Both nodes seen?<br/>(wait_for_all)"}
+    BOOT --> Q{"Two of three nodes up?<br/>(quorum 2)"}
     Q -- no --> HOLD["Neither host starts VMs"]
     Q -- yes --> RG["RicksGarage: truenas 110 (order 1, 120 s)<br/>then edge 201 (order 3), media 202 (order 4)"]
     Q -- yes --> RS["RicksShip: gpu 203, apps 204, ai 205<br/>(order 10, 30 s apart; no dependency on TrueNAS)"]

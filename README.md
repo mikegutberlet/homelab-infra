@@ -1,7 +1,8 @@
 # homelab-infra
 
-Infrastructure as code for Goobs's home lab: two Intel NUC6i7KY Proxmox 8.4 hosts
-(RicksGarage, RicksShip, 31 GiB RAM each, 2-node cluster with `two_node`) and a TrueNAS VM
+Infrastructure as code for Goobs's home lab: three Proxmox 8.4 hosts in one cluster (quorum 2):
+two Intel NUC6i7KY (RicksGarage, RicksShip, 31 GiB RAM each) and RicksPortalGun (192.168.1.38,
+62 GiB, no VMs yet, joined 2026-10-26), plus a TrueNAS VM
 serving a five-disk USB DAS (RAIDZ1, 5 x 20 TB).
 
 Design and decisions: see the "Home lab app stack: infrastructure design" doc in the

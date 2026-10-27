@@ -60,6 +60,7 @@ MONITORS = [
     ("TrueNAS", "https://192.168.1.209/", False, ["200-299", "300-399"]),
     ("Proxmox RicksGarage", "https://192.168.1.137:8006/", False, None),
     ("Proxmox RicksShip", "https://192.168.1.37:8006/", False, None),
+    ("Proxmox RicksPortalGun", "https://192.168.1.38:8006/", False, None),
 ]
 
 
