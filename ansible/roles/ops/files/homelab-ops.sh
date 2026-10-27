@@ -16,6 +16,9 @@
 #   plex-remote-on                  switch Plex Remote Access back on, or off and on to re-publish
 #   update <service>                pull the service's image tag and recreate it if the image changed;
 #                                   only services in /etc/homelab-autoupdate.conf (hosts.yml auto_update)
+#   run-approved <base64url script> a short fix script the investigator wrote and Goobs confirmed in
+#                                   the chat (n8n sends it only after Confirm); never-list checked again
+#                                   here (homelab-script-check), run as root, 120 s, every line logged
 #
 # Never: reboot, poweroff, anything under /mnt/nfs, pulls beyond the auto-update list, settings
 # changes (the one exception: Plex Remote Access back on, which Goobs keeps on; D05 in the wiki).
@@ -188,6 +191,25 @@ case "$verb" in
     st=$(docker inspect -f '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || echo absent)
     docker image prune -f >/dev/null 2>&1 # the old image, now dangling; tagged images stay
     out ok "$1 updated: image ${before:-none} -> ${after:-?}, now $st"
+    ;;
+
+  run-approved)
+    # Only n8n's chat run sends this, after Goobs pressed Confirm on the exact text (stacks/apps/n8n/
+    # sysadmin/chat_state.js); the automatic fixes never do. The door takes plain words only, so the
+    # script arrives as base64url. homelab-script-check is the same never-list n8n checked.
+    b64=${1:-}
+    [[ "$b64" =~ ^[A-Za-z0-9_-]{4,6000}$ ]] || die "needs the script as base64url"
+    pad=$(( (4 - ${#b64} % 4) % 4 )); eq=""; for _ in $(seq 1 "$pad"); do eq="$eq="; done
+    script=$(printf '%s%s' "$b64" "$eq" | tr '_-' '/+' | base64 -d 2>/dev/null) || die "the script is not valid base64"
+    sum=$(printf '%s' "$script" | sha256sum | cut -c1-12)
+    why=$(printf '%s' "$script" | /usr/local/sbin/homelab-script-check) || die "refused by the never-list: $why"
+    while IFS= read -r l; do logger -t homelab-ops "run-approved $sum| $l"; done <<<"$script"
+    tmp=$(mktemp /root/homelab-fix.XXXXXX); printf '%s\n' "$script" >"$tmp"
+    res=$(cd / && timeout -k 5 120 bash -eu -o pipefail "$tmp" 2>&1); rc=$?
+    rm -f "$tmp"
+    logger -t homelab-ops "run-approved $sum exit $rc"
+    detail="exit $rc: $(printf '%s' "$res" | tail -c 1500)"
+    [ "$rc" -eq 0 ] && out ok "$detail" || { out failed "$detail"; exit 1; }
     ;;
 
   ""|help) die "no verb given";;
