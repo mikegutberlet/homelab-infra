@@ -40,7 +40,7 @@ hosts are up. If two hosts are down, the third is not quorate and will not start
 
 | | RicksPortalGun |
 | --- | --- |
-| Role | Third node, no VMs yet (2026-10-26) |
+| Role | Third node, no VMs yet (2026-10-26). Plan (2026-10-27): transcode VM on its iGPU, then apps and media; see [Fill RicksPortalGun](operations/portalgun-moves.md) |
 | Model | Intel NUC8i7BEH (Bean Canyon, board NUC8BEB) |
 | CPU / RAM | i7-8559U, 4 cores / 8 threads, Coffee Lake; 62.7 GiB usable (64 GB installed) |
 | GPU | Iris Plus Graphics 655 (Quick Sync; stays with the host) |

@@ -1,15 +1,26 @@
-# Hands RicksShip's Iris Pro 580 (00:02.0, alone in IOMMU group 0) to vfio-pci so the
-# gpu VM can use Quick Sync. Changes the host's boot config and needs a reboot, and these
-# NUCs hang on warm reboot, so run it only with Goobs next to RicksShip.
+# Hands a host's iGPU (00:02.0, alone in IOMMU group 0) to vfio-pci so a VM can use Quick Sync:
+# RicksShip's Iris Pro 580 goes to the gpu VM, RicksPortalGun's Iris Plus 655 to the transcode VM.
+# Changes the host's boot config and needs a power cycle, and the NUC6s hang on warm reboot, so
+# run it only with Goobs next to the host (docs/wiki/operations/reboot-a-host.md).
+# One host at a time: ansible-playbook playbooks/proxmox-igpu.yml --limit ricksportalgun
 - name: Reserve the iGPU for passthrough
-  hosts: ricksship
+  hosts: ricksship:ricksportalgun
   tasks:
-    # 8086:193b confirmed with `lspci -nn -s 00:02.0` on RicksShip (2026-10-21).
-    - name: Bind 8086:193b to vfio-pci
+    # RicksShip 8086:193b confirmed with `lspci -nn -s 00:02.0` (2026-10-21). Read live instead of
+    # hard-coded so the same play fits RicksPortalGun; it refuses anything that isn't an Intel VGA device.
+    - name: Read the iGPU's vendor:device id
+      ansible.builtin.shell: set -o pipefail; lspci -n -s 00:02.0 | awk '$2 ~ /^03/ {print $3}'
+      args:
+        executable: /bin/bash
+      register: igpu_id
+      changed_when: false
+      failed_when: igpu_id.stdout is not match('^8086:[0-9a-f]{4}$')
+
+    - name: Bind {{ igpu_id.stdout }} to vfio-pci
       ansible.builtin.copy:
         dest: /etc/modprobe.d/vfio-igpu.conf
         content: |
-          options vfio-pci ids=8086:193b
+          options vfio-pci ids={{ igpu_id.stdout }}
           softdep i915 pre: vfio-pci
         mode: "0644"
       register: vfio_conf
@@ -19,7 +30,7 @@
       when: vfio_conf.changed
       changed_when: true
 
-    - name: Remind about the manual reboot
+    - name: Remind about the manual restart
       ansible.builtin.debug:
-        msg: "Shut down RicksShip's VMs, power it off, and have Goobs press the power button."
+        msg: "Shut down {{ inventory_hostname }}'s VMs, power it off, and have Goobs press the power button."
       when: vfio_conf.changed
