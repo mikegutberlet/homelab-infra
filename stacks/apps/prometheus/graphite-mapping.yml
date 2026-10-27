@@ -1,11 +1,26 @@
 # TrueNAS (netdata) Graphite paths look like truenas.<namespace>.<chart id with dots>.<dimension>,
-# e.g. truenas.nas.system.cpu.user or truenas.nas.zfs.arc_size.arcsz. One rule keeps the chart as
-# the metric name and the last part as a label: truenas_system_cpu{dimension="user"}.
-# Set the NAS exporter to prefix "truenas", namespace "nas" (docs/wiki/services/monitoring.md).
+# e.g. truenas.nas.system.load.load1 or truenas.nas.truenas_arcstats.size.size. The chart becomes the
+# metric name and the last part a label: truenas_system_load{dimension="load1"}.
+# The NAS exporter uses prefix "truenas", namespace "nas" (docs/wiki/services/monitoring.md).
+# First match wins, so the specific rules come first.
 mappings:
+  # Per-disk charts carry the device in the chart id ({devicename}_sda): make it a label.
+  # truenas_disk_stats.busy.{devicename}_sda.busy and .ops. -> truenas_disk_busy, truenas_disk_ops
+  - match: 'truenas\.([^.]+)\.truenas_disk_stats\.([a-z]+)\.[^.]*devicename[^a-z0-9]*([a-z0-9]+)\.([^.]+)$'
+    match_type: regex
+    name: 'truenas_disk_${2}'
+    labels: {nas: '${1}', device: '${3}', dimension: '${4}'}
+  # truenas_disk_stats.{devicename}_sda.reads -> truenas_disk (KiB/s)
+  - match: 'truenas\.([^.]+)\.truenas_disk_stats\.[^.]*devicename[^a-z0-9]*([a-z0-9]+)\.([^.]+)$'
+    match_type: regex
+    name: 'truenas_disk'
+    labels: {nas: '${1}', device: '${2}', dimension: '${3}'}
+  # TrueNAS's own charts are named truenas_*; don't repeat the prefix.
+  - match: 'truenas\.([^.]+)\.truenas_(.+)\.([^.]+)$'
+    match_type: regex
+    name: 'truenas_${2}'
+    labels: {nas: '${1}', dimension: '${3}'}
   - match: 'truenas\.([^.]+)\.(.+)\.([^.]+)$'
     match_type: regex
     name: 'truenas_${2}'
-    labels:
-      nas: '${1}'
-      dimension: '${3}'
+    labels: {nas: '${1}', dimension: '${3}'}
