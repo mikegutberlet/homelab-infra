@@ -81,14 +81,18 @@ ansible-playbook playbooks/site.yml --limit gpu --tags lanfw   # lets .55 reach 
 ```
 
 The Tdarr server has auth on, so the node needs its API key (the gpu VM's `/root/tdarr-api-key`).
-Put it in the stack's secrets once (it never shows on screen), then commit the encrypted file:
+`docs/tdarr_node_key.py` encrypts it into the stack's secrets without showing it (locally if sops is
+installed, else with the gpu VM's sops), then commit the file:
 
 ```sh
-cd ~/HomeLab/homelab-infra/stacks/transcode
-printf 'TDARR_API_KEY=%s\n' "$(ssh goobs@192.168.1.52 'sudo cat /root/tdarr-api-key')" > secrets.sops.env
-sops --encrypt --in-place --input-type dotenv --output-type dotenv secrets.sops.env
-cd ../../ansible
+cd ~/HomeLab/homelab-infra
+python3 docs/tdarr_node_key.py && git add stacks/transcode/secrets.sops.env \
+  && git commit -m "transcode: Tdarr API key (sops)" && git push
+cd ansible
 ```
+
+Never write a secrets file by hand: on 2026-10-27 the Mac had no sops and the key landed in Git in
+plaintext (commit 7b2fcb8), so that key is rotated: a new one made in Tdarr goes in with `python3 docs/tdarr_node_key.py --new`.
 
 Start the node (this also creates its folders), then copy the flow's folder (flow.js, maps, API
 keys) from the gpu VM into it:
