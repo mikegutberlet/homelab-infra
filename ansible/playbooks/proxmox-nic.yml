@@ -6,6 +6,11 @@
 # Changing offloads resets an e1000e adapter (link down for a few seconds, cluster and VMs blip),
 # so run one host at a time, outside Tdarr hours if possible:
 #   ansible-playbook playbooks/proxmox-nic.yml --limit ricksportalgun
+# It also installs a watchdog (timer every 30 s): on 2026-10-27 the kernel logged the hang 751
+# times in 25 min and never reset the adapter itself, so the host stayed off the network until
+# someone pressed the button. The watchdog resets the NIC when the hang is being logged and the
+# gateway does not answer, at most once every 5 minutes, and reloads the driver if that fails.
+# Its actions are in `journalctl -t e1000e-hang-watchdog`.
 - name: Turn off e1000e offloads
   hosts: proxmox
   tasks:
@@ -63,3 +68,86 @@
       loop: "{{ offloads.results }}"
       loop_control:
         label: "{{ item.item }}"
+
+    - name: Install the hang watchdog
+      ansible.builtin.copy:
+        dest: /usr/local/sbin/e1000e-hang-watchdog
+        mode: "0755"
+        content: |
+          #!/bin/bash
+          # Installed by playbooks/proxmox-nic.yml. Resets e1000e NICs stuck in "Detected Hardware
+          # Unit Hang" (the kernel only logs it), but only while the gateway is unreachable.
+          set -u
+          tag=e1000e-hang-watchdog
+          last=/run/$tag.last
+          hangs=$(journalctl -k --since "90 seconds ago" -o cat --no-pager | grep -c "Detected Hardware Unit Hang")
+          [ "$hangs" -ge 10 ] || exit 0
+          gw=$(ip -4 route show default | awk '{print $3; exit}')
+          ping -c3 -W2 "$gw" >/dev/null 2>&1 && exit 0
+          now=$(date +%s)
+          if [ $((now - $(cat "$last" 2>/dev/null || echo 0))) -lt 300 ]; then
+            logger -t $tag -p warning "hang logged $hangs times, gateway $gw down, reset skipped (one in the last 5 min)"
+            exit 0
+          fi
+          echo "$now" > "$last"
+          nics=$(for d in /sys/class/net/*/device/driver; do
+            [ "$(basename "$(readlink -f "$d")")" = e1000e ] && basename "$(dirname "$(dirname "$d")")"
+          done)
+          for nic in $nics; do
+            logger -t $tag -p warning "hang logged $hangs times, gateway $gw down: resetting $nic"
+            ip link set "$nic" down; sleep 2; ip link set "$nic" up
+          done
+          sleep 20
+          if ping -c3 -W2 "$gw" >/dev/null 2>&1; then
+            logger -t $tag -p warning "gateway back after the link reset"
+            exit 0
+          fi
+          logger -t $tag -p err "still no gateway: reloading e1000e"
+          modprobe -r e1000e && modprobe e1000e
+          sleep 5
+          ifreload -a
+          systemctl restart nic-offloads-off.service
+          sleep 20
+          if ping -c3 -W2 "$gw" >/dev/null 2>&1; then
+            logger -t $tag -p warning "gateway back after the driver reload"
+          else
+            logger -t $tag -p err "gateway still down after the driver reload; needs the power button"
+          fi
+
+    - name: Watchdog service and timer
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ item.name }}"
+        content: "{{ item.content }}"
+        mode: "0644"
+      loop:
+        - name: e1000e-hang-watchdog.service
+          content: |
+            [Unit]
+            Description=Reset an e1000e NIC stuck in Hardware Unit Hang (playbooks/proxmox-nic.yml)
+
+            [Service]
+            Type=oneshot
+            ExecStart=/usr/local/sbin/e1000e-hang-watchdog
+        - name: e1000e-hang-watchdog.timer
+          content: |
+            [Unit]
+            Description=Check for an e1000e Hardware Unit Hang every 30 s
+
+            [Timer]
+            OnBootSec=2min
+            OnUnitActiveSec=30s
+            AccuracySec=5s
+
+            [Install]
+            WantedBy=timers.target
+      loop_control:
+        label: "{{ item.name }}"
+      when: e1000e_nics.stdout_lines | length > 0
+
+    - name: Start the watchdog timer
+      ansible.builtin.systemd:
+        name: e1000e-hang-watchdog.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+      when: e1000e_nics.stdout_lines | length > 0

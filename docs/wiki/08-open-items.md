@@ -10,6 +10,7 @@ Everything that is pending, waiting on a decision, or known but not yet verified
 | Set **After Power Failure = Power On** in the BIOS of both NUCs | Without it the hosts stay off after a power cut until someone presses the button | Pending; needs a monitor and keyboard at each NUC (see [Power outage](operations/power-outage.md)) |
 | Buy a UPS (about 1500 VA, USB data port) and run NUT | Clean shutdown on a long outage instead of a hard power loss for the NAS | Decision open; NUT configuration is not in the repo yet |
 | Fix the warm-reboot hang (try `reboot=pci` / `reboot=efi` kernel parameters or a BIOS update) | Every host restart currently needs the power button | Not started; power-off restarts remain the rule |
+| Update RicksPortalGun's BIOS from 0064 (2019) to 0095 or newer (ASUS NUC support site) | Old ME/PCH firmware under the I219 that hung on 2026-10-27; offloads off and the watchdog cover it meanwhile | Needs Goobs at the NUC with a USB stick (F7 at boot); not started |
 
 ## Needs Goobs's input
 

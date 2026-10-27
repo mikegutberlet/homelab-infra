@@ -63,6 +63,31 @@ off, and press the button. `reboot=efi` was tried on RicksGarage and did not hel
 BIOS update are the next things to try, with Goobs nearby. Runbook:
 [Reboot a host](operations/reboot-a-host.md).
 
+### The e1000e NIC hang (RicksPortalGun, 2026-10-27)
+
+During the first media VM move (115 MB/s from RicksGarage for about 25 minutes), RicksPortalGun's
+onboard NIC froze at 21:54:58 PDT on 2026-10-26: the kernel logged `e1000e ... Detected Hardware
+Unit Hang` every 2 s (751 times) with the transmit ring stuck (TDH 0x36, TDT 0x5c) while the link
+stayed up. The kernel never reset the adapter (no transmit timeout fired), so the host lost the
+network for good, NFS to TrueNAS timed out, and only the power button brought it back (22:20).
+
+| | RicksPortalGun | RicksGarage / RicksShip |
+| --- | --- | --- |
+| NIC | I219-V `8086:15be`, e1000e MAC type 13 (Cannon Point PCH), NVM 0.4-4 | I219-LM `8086:15b7` (Sunrise Point), NVM 0.8-4 |
+| BIOS | BECFL357.86A.**0064** (2019-02-13); 0095 (2024) and 0098 (2026) exist | KYSKLi70.86A.0041 (2016) |
+| Kernel / driver | 6.8.12-43-pve, in-tree e1000e | same |
+| EEE | enabled but inactive (the switch does not negotiate it) | same |
+| Hangs in the journal | this one only | none in 17 boots each |
+
+This is the long-known e1000e/I219 transmit hang under sustained load with TCP segmentation offload
+on. Prevention is in `ansible/playbooks/proxmox-nic.yml`: TSO/GSO/GRO off at boot (applied on
+RicksPortalGun and RicksGarage 2026-10-27, RicksShip still has GSO/GRO on), plus a watchdog that
+resets the NIC, then reloads the driver, when the hang is being logged and the gateway does not
+answer (`journalctl -t e1000e-hang-watchdog`). The remaining step is a BIOS update on RicksPortalGun
+(it carries Intel ME and PCH firmware the NIC depends on); see [Open items](08-open-items.md).
+It is not related to the NUC6 warm-reboot hang below: RicksPortalGun reboots fine and the NUC6s
+have never logged this hang.
+
 ### BIOS auto power-on (pending)
 
 After the 2026-10-21 power cut both NUCs stayed off until Goobs pressed the buttons. The fix is the

@@ -22,6 +22,7 @@ Known failure modes from the build, with the fix that worked.
 | Plex shows an empty or shrinking library after a reboot | Containers started before the NAS was mounted (empty autofs root) and "Empty trash automatically" was on | `wait-nas.service` (role nfs) and the Plex setting off; if it happens, stop scans, remount, restart the stack, and do not empty trash |
 | Scrutiny crashes once at boot | InfluxDB not ready | It restarts by itself (autoheal / restart policy); planned `depends_on` with healthcheck |
 | Host does not come back after `reboot` | NUC6 warm-reboot hang | Power button; always power off instead ([Reboot a host](reboot-a-host.md)) |
+| A Proxmox host drops off the network under heavy transfer; `dmesg` shows `e1000e ... Detected Hardware Unit Hang` | I219 transmit hang ([Hardware](../02-hardware.md#the-e1000e-nic-hang-ricksportalgun-2026-10-27)) | The watchdog resets the NIC within about a minute (`journalctl -t e1000e-hang-watchdog`); if it says "needs the power button", press it. Check offloads with `ethtool -k eno1` |
 | Hosts up after a power cut but no VM starts | Quorum needs two of the three nodes | Make sure a second NUC is on; check `pvecm status` |
 | RicksShip screen is black after boot | iGPU is passed to VM 203 | Normal; use ping and SSH |
 | New VM has no IP / panics on first boot | Wrong Debian image (`genericcloud`) or no serial port | Use `debian-12-generic`, keep the `serial_device` block (already in `vms.tf`) |
