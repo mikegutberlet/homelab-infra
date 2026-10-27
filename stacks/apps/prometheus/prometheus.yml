@@ -19,6 +19,7 @@ scrape_configs:
       - {targets: ["192.168.1.52:9100"], labels: {vm: gpu}}
       - {targets: ["192.168.1.53:9100"], labels: {vm: apps}}
       - {targets: ["192.168.1.54:9100"], labels: {vm: ai}}
+      - {targets: ["192.168.1.55:9100"], labels: {vm: transcode}}
   - job_name: cadvisor
     scrape_interval: 60s # the per-container series are the bulk of the TSDB
     static_configs:
@@ -27,6 +28,7 @@ scrape_configs:
       - {targets: ["192.168.1.52:9101"], labels: {vm: gpu}}
       - {targets: ["192.168.1.53:9101"], labels: {vm: apps}}
       - {targets: ["192.168.1.54:9101"], labels: {vm: ai}}
+      - {targets: ["192.168.1.55:9101"], labels: {vm: transcode}}
 
   # Proxmox through pve-exporter. RicksShip answers for the cluster (every guest and both nodes);
   # each host also reports its own node data (version, replication, subscription).
