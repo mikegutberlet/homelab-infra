@@ -80,13 +80,24 @@ ansible-playbook playbooks/site.yml --limit transcode --skip-tags stacks
 ansible-playbook playbooks/site.yml --limit gpu --tags lanfw   # lets .55 reach the Tdarr server on 8266
 ```
 
-Copy the flow's folder (flow.js, maps, API keys) from the gpu VM, then start the node:
+The Tdarr server has auth on, so the node needs its API key (the gpu VM's `/root/tdarr-api-key`).
+Put it in the stack's secrets once (it never shows on screen), then commit the encrypted file:
 
 ```sh
+cd ~/HomeLab/homelab-infra/stacks/transcode
+printf 'TDARR_API_KEY=%s\n' "$(ssh goobs@192.168.1.52 'sudo cat /root/tdarr-api-key')" > secrets.sops.env
+sops --encrypt --in-place --input-type dotenv --output-type dotenv secrets.sops.env
+cd ../../ansible
+```
+
+Start the node (this also creates its folders), then copy the flow's folder (flow.js, maps, API
+keys) from the gpu VM into it:
+
+```sh
+ansible-playbook playbooks/site.yml --limit transcode --tags stacks
 ssh goobs@192.168.1.52 'sudo tar -C /opt/appdata/tdarr/configs -cf - hevc' \
   | ssh goobs@192.168.1.55 'sudo tar -C /opt/appdata/tdarr-node/configs -xpf -'
-ansible-playbook playbooks/site.yml --limit transcode --tags stacks
-ssh goobs@192.168.1.55 'vainfo 2>&1 | grep -i hevc | head -3; sudo docker logs --tail 20 transcode-tdarr-node-1'
+ssh goobs@192.168.1.55 'sudo ls /opt/appdata/tdarr-node/configs/hevc; ls -l /dev/dri; sudo vainfo 2>&1 | grep -iE "driver|hevc" | head -5; sudo docker logs --tail 10 transcode-tdarr-node-1'
 ```
 
 In Tdarr (https://tdarr.tail9af84.ts.net), the node `transcode-vm` appears under Nodes. Set its
