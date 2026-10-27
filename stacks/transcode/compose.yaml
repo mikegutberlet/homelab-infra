@@ -18,7 +18,10 @@ x-common: &common
 services:
   tdarr-node:
     <<: *common
-    image: ghcr.io/haveagitgat/tdarr_node:latest
+    # A node must match the server's version exactly or it exits ("Node version 3.03.00 does not
+    # match Server version 3.01.00", 2026-10-27). The server runs :latest as pulled on the gpu VM;
+    # when it is updated, bump this tag to the same version.
+    image: ghcr.io/haveagitgat/tdarr_node:3.01.00
     mem_limit: 4g
     cpus: 4
     environment:
