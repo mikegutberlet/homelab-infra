@@ -143,6 +143,14 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Image | `python:3.12-alpine`, runs as 3000, script `stacks/media/profile-sorter/sort_profiles.py` (standard library only) |
 | Rules | Only moves titles off the main profile, never back; skips anything tagged `keep-original`; never starts a search. `DRY_RUN=true` logs without changing, `ONCE=true` exits after one pass |
 
+## stalled-cleaner
+
+| | |
+| --- | --- |
+| Purpose | Every 6 h removes torrents that sat in the Radarr/Sonarr queue 48 h without downloading a byte (dead swarm): deleted from qBittorrent, release blocklisted, app searches again. Added 2026-10-27 after 62 dead torrents filled qBittorrent's slots |
+| Image | `python:3.12-alpine`, runs as 3000, script `stacks/media/stalled-cleaner/clean_stalled.py` (standard library only) |
+| Rules | Torrents only, never Usenet or anything with progress; at most 20 per app per pass. `STALL_HOURS`, `MAX_PER_RUN`, `DRY_RUN=true`, `ONCE=true` |
+
 ## Jellyseerr ("Requests")
 
 | | |

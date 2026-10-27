@@ -28,10 +28,18 @@ to have. Public trackers only. Never a cam, telesync or screener; nothing below 
   qBittorrent's previous default `/downloads` was not a mounted path.
 - qBittorrent: port fixed to gluetun's forwarded PIA port (58253 at setup; gluetun re-pushes
   it on reconnect), re-announce on address change, UPnP off, encryption *preferred* (value 0;
-  1 would force it and shrink public swarms), DHT/PEX on, queue 5 downloads / 10 uploads /
-  15 active with slow torrents not counted, POSIX disk IO (the default memory-mapped IO
+  1 would force it and shrink public swarms), DHT/PEX on, queue 10 downloads / 15 uploads /
+  25 active with slow torrents not counted (5/10/15 until 2026-10-27), POSIX disk IO (the default memory-mapped IO
   misbehaves on NFS). Since 2026-10-26 (see *Safety*): bound to `tun0`, anonymous mode on,
   LSD off, executable file types skipped.
+- Dead torrents (2026-10-27): the 3-seeder minimum is a tracker scrape and often stale, so many
+  public grabs never get a single peer. 62 of 80 unfinished torrents were dead (some a week old)
+  and held every download slot. The `stalled-cleaner` service (`stacks/media/stalled-cleaner/`)
+  now removes, every 6 hours, any torrent in the Radarr/Sonarr queue older than 48 h with zero
+  bytes downloaded: deleted from qBittorrent, that release blocklisted, and the app searches again
+  (Usenet or a torrent with seeders). Finished torrents also stop seeding after 12 h without an
+  upload (most public torrents here upload nothing, and queued seeders never ran the 3-day
+  limit), so Radarr/Sonarr can remove them. Check after a deploy that the apps do remove them.
 - VPN: all qBittorrent traffic leaves through PIA (CA Vancouver, port-forwarding servers);
   gluetun's firewall is the kill switch. Checked: qBittorrent's public IP differs from the VM's.
   qBittorrent's healthcheck reaches the internet through the tunnel, so if gluetun restarts
@@ -105,6 +113,10 @@ Prowlarr until it is back, and the sysadmin digest reports the indexer errors.
 `--check` it applies and then tests every torrent indexer through the proxy.
 
 ## Undo
+
+Dead-torrent cleanup (2026-10-27): remove the `stalled-cleaner` service from compose (or set
+`DRY_RUN=true`); qBittorrent queue back to 5/10/15 and *inactive seeding time limit* off. The
+blocklisted releases are in each app's Activity > Blocklist.
 
 Safety settings (2026-10-26): qBittorrent *Excluded file names* off, interface *Any*, anonymous
 mode off, LSD on; SABnzbd unwanted extensions empty, action Pause; Prowlarr: delete the **PIA

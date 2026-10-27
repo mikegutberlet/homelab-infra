@@ -5,7 +5,8 @@ Run by playbooks/torrent-hardening.yml as root on the media VM; `--dry-run` only
 Idempotent: every setting is read first and only written when it differs. Nothing is restarted.
 
   qBittorrent  skip executable file types in every torrent, bind to tun0 (second belt under
-               gluetun's firewall), anonymous mode on, local peer discovery off
+               gluetun's firewall), anonymous mode on, local peer discovery off; queue 10
+               downloads / 15 uploads / 25 active, stop seeding after 12 h without an upload
   SABnzbd      abort a job whose archive holds an executable (unwanted extensions)
   Prowlarr     tag `vpn` + HTTP indexer proxy gluetun:8888 on every torrent indexer (searches and
                .torrent fetches leave through PIA), FlareSolverr at http://gluetun:8191 (it shares
@@ -88,6 +89,14 @@ def qbit():
         "current_interface_address": "",
         "anonymous_mode": True,
         "lsd": False,
+        # Queue (2026-10-27): 5 downloads / 15 active let dead magnets block every healthy torrent,
+        # and finished torrents queued for seeding never ran their 3-day limit, so they never left.
+        # A torrent that uploads nothing for 12 h now counts as done seeding.
+        "max_active_downloads": 10,
+        "max_active_uploads": 15,
+        "max_active_torrents": 25,
+        "max_inactive_seeding_time_enabled": True,
+        "max_inactive_seeding_time": 720,
     }
     diff = {k: v for k, v in want.items() if prefs.get(k) != v}
     for k, v in diff.items():
