@@ -3,7 +3,9 @@
 
 Goobs runs this on the Mac from the repo root (needs the lab SSH key):
     python3 docs/tdarr_node_key.py          # use the key already in /root/tdarr-api-key on the gpu VM
-    python3 docs/tdarr_node_key.py --new    # first store a new key there (asked for, never echoed)
+    python3 docs/tdarr_node_key.py --new    # first store a new key there (asked for, never echoed);
+                                            # also updates gpu-vm's built-in node and restarts Tdarr.
+                                            # Delete the old key in Tdarr only after this ran.
 
 The transcode VM's Tdarr node needs the server's API key (the server has auth on; without it the
 node gets 401). The key is read on the gpu VM and encrypted with sops, locally when sops is
@@ -35,6 +37,12 @@ if "--new" in sys.argv:
         sys.exit("No key given; nothing changed.")
     ssh("sudo install -m 600 -o root -g root /dev/stdin /root/tdarr-api-key", new + "\n")
     print("Stored the new key in /root/tdarr-api-key on the gpu VM.")
+    # The gpu VM's built-in node logs in with its own copy of the key; after the old key was deleted
+    # on 2026-10-27 it dropped out of Tdarr until this file was updated and Tdarr restarted.
+    ssh("F=/opt/appdata/tdarr/configs/Tdarr_Node_Config.json && sudo python3 -c "
+        "'import json,sys; p=sys.argv[1]; c=json.load(open(p)); c[\"apiKey\"]=open(\"/root/tdarr-api-key\").read().strip(); "
+        "json.dump(c, open(p, \"w\"), indent=2)' $F && sudo docker restart gpu-tdarr-1 >/dev/null")
+    print("Updated gpu-vm's own node config and restarted Tdarr on the gpu VM.")
 
 key = ssh("sudo cat /root/tdarr-api-key").strip()
 if not key:
