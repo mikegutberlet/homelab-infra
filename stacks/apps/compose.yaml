@@ -132,7 +132,7 @@ services:
 
   n8n:
     <<: *common
-    image: docker.n8n.io/n8nio/n8n:latest
+    image: docker.n8n.io/n8nio/n8n:2.44.5 # pinned 2026-10-27 (the running version); upgrade by hand
     mem_limit: 1536m
     environment:
       DB_TYPE: postgresdb
@@ -232,7 +232,8 @@ services:
 
   huginn:
     <<: *common
-    image: ghcr.io/huginn/huginn:latest
+    # Pinned to the running image 2026-10-27; Huginn publishes no version tags, so the digest it is.
+    image: ghcr.io/huginn/huginn@sha256:8a9d4cc1aa001d9ddf716c7289bc285a849bfc6f7835964183658a4d6ed87f67
     mem_limit: 1536m
     environment:
       DATABASE_ADAPTER: postgresql
