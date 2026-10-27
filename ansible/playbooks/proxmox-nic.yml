@@ -1,0 +1,65 @@
+# Works around the Intel e1000e "Detected Hardware Unit Hang" freeze by turning off the NIC's
+# segmentation/receive offloads. 2026-10-27: RicksPortalGun's I219 (eno1) hung after ~25 min of a
+# steady 115 MB/s VM migration from RicksGarage; the host stayed up but lost the network until
+# Goobs power-cycled it, taking apps and the transcode VM with it. The offloads are the usual cause;
+# turning them off costs a little CPU at full line rate and nothing else.
+# Changing offloads resets an e1000e adapter (link down for a few seconds, cluster and VMs blip),
+# so run one host at a time, outside Tdarr hours if possible:
+#   ansible-playbook playbooks/proxmox-nic.yml --limit ricksportalgun
+- name: Turn off e1000e offloads
+  hosts: proxmox
+  tasks:
+    - name: Find e1000e interfaces
+      ansible.builtin.shell: |
+        set -o pipefail
+        for d in /sys/class/net/*/device/driver; do
+          [ "$(basename "$(readlink -f "$d")")" = e1000e ] && basename "$(dirname "$(dirname "$d")")"
+        done
+      args:
+        executable: /bin/bash
+      register: e1000e_nics
+      changed_when: false
+      failed_when: false
+
+    - name: Persist offloads off at boot
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/nic-offloads-off.service
+        content: |
+          [Unit]
+          Description=Turn off e1000e offloads (Hardware Unit Hang workaround, playbooks/proxmox-nic.yml)
+          After=network-pre.target
+          Before=network.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          {% for nic in e1000e_nics.stdout_lines %}
+          ExecStart=/sbin/ethtool -K {{ nic }} tso off gso off gro off
+          {% endfor %}
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: "0644"
+      when: e1000e_nics.stdout_lines | length > 0
+      register: nic_unit
+
+    - name: Apply now and enable at boot
+      ansible.builtin.systemd:
+        name: nic-offloads-off.service
+        daemon_reload: true
+        enabled: true
+        state: restarted
+      when: nic_unit.changed
+
+    - name: Show the result
+      ansible.builtin.command: ethtool -k {{ item }}
+      loop: "{{ e1000e_nics.stdout_lines }}"
+      register: offloads
+      changed_when: false
+
+    - name: Offloads now
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ item.stdout_lines | select('search', '^(tcp-segmentation-offload|generic-segmentation-offload|generic-receive-offload):') | list }}"
+      loop: "{{ offloads.results }}"
+      loop_control:
+        label: "{{ item.item }}"
