@@ -363,7 +363,8 @@ The ops key pair is generated on the Mac (`~/.config/homelab/ops_ed25519`); the 
   credentials, activate. Deactivate the old "Homelab digest" (same webhook paths would clash).
 - Test a report by hand: `sudo homelab-agent --print` on a VM shows what it sends;
   `sudo homelab-agent` sends it. Then n8n > Executions.
-- Test the door: `ssh -i ~/.config/homelab/ops_ed25519 ops@192.168.1.51 status` from the Mac.
+- Test the door: ask the sysadmin chat for a VM's status. The key only works from the apps VM
+  (`ops_from` in `group_vars/docker_vms.yml`), so it can no longer be tested from the Mac.
 - Test the digest: open the workflow, select "Every day 08:00", Execute step.
 - Reset the memory (issues, trends, fix log): the workflow's static data is cleared by
   deactivating and re-activating it after an import; or add a Code node that sets

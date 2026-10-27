@@ -141,11 +141,11 @@
     mode: "0755"
   when: ops_pubkey is defined
 
-- name: ops key pinned to the door (no pty, no forwarding)
+- name: ops key pinned to the door and to the apps VM (no pty, no forwarding)
   ansible.posix.authorized_key:
     user: ops
     key: "{{ ops_pubkey }}"
-    key_options: 'command="/usr/local/sbin/homelab-ops-door",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc'
+    key_options: 'from="{{ ops_from }}",command="/usr/local/sbin/homelab-ops-door",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc'
     exclusive: true
   when: ops_pubkey is defined
 
