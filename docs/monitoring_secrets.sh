@@ -10,7 +10,6 @@ PVE=root@192.168.1.37 # any cluster node; users and tokens are cluster-wide
 FILE=stacks/apps/secrets.sops.env
 SOPS=~/.local/bin/sops
 export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
-AGE=$(awk '/age:/ {print $2}' .sops.yaml)
 
 tmp=$(mktemp -d)
 chmod 700 "$tmp"
@@ -32,7 +31,8 @@ echo "Updating $FILE..."
 "$SOPS" --decrypt --input-type dotenv --output-type dotenv "$FILE" \
   | grep -v -E '^(PVE_EXPORTER_TOKEN|GRAFANA_ADMIN_PASSWORD)=' > "$tmp/plain.env"
 printf 'PVE_EXPORTER_TOKEN=%s\nGRAFANA_ADMIN_PASSWORD=%s\n' "$token" "$password" >> "$tmp/plain.env"
-"$SOPS" --encrypt --age "$AGE" --input-type dotenv --output-type dotenv "$tmp/plain.env" > "$tmp/enc.env"
+# --filename-override: the temp file is outside stacks/, so .sops.yaml would match no rule.
+"$SOPS" --encrypt --filename-override "$FILE" --input-type dotenv --output-type dotenv "$tmp/plain.env" > "$tmp/enc.env"
 mv "$tmp/enc.env" "$FILE"
 
 echo "Done. Both secrets are saved, encrypted, in $FILE."
