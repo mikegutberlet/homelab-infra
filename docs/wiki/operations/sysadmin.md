@@ -321,10 +321,9 @@ message (see the log), and a 401 means the token did not match.
   `sysadmin_deploy.py` recreates the bot after it writes the token; otherwise recreate the bot
   (command above) so it re-reads `token.env`.
   "I could not reach n8n" means n8n is down or restarting.
-- **"not configured" right after using Dockge**: never press Start or Update on the apps stack in
-  Dockge. Its `docker compose` runs inside the Dockge container, which cannot see
-  the env files under `/opt/appdata`. Both env files are optional, so it recreates `sysadmin-telegram` (and
-  `sysadmin-chat`) without their tokens. Restart is safe. To recover, run on the apps VM:
+- **"not configured" after a container was recreated outside Ansible**: the env files under
+  `/opt/appdata` are optional, so a `docker compose` run that cannot see them recreates
+  `sysadmin-telegram` (and `sysadmin-chat`) without their tokens. To recover, run on the apps VM:
   `sudo docker compose -f /opt/stacks/apps/compose.yaml up -d --force-recreate sysadmin-chat sysadmin-telegram`.
 - **State not saved** (log `cannot write /data/state.json: PermissionError`, the same in
   `/healthz`): Docker created the data folder as root before the setup script ran. Fix it with

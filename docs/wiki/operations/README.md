@@ -24,7 +24,7 @@ with the tools installed during the build (OpenTofu, the Ansible venv at
    their own words.
 3. Old and new instances of a library manager (Sonarr, Radarr) never run at the same time.
 4. Change the repo, then deploy; never hand-edit a file on a VM except to debug, and then commit the
-   fix. Dockge is read-only by policy.
+   fix.
 5. Secrets go into `secrets.sops.env` through sops, or into `~/.config/homelab/` on the Mac. Never
    into chat, Git plaintext, or a VM's `/tmp`.
 6. Log host-level changes with their undo step in `~/HomeLab/changes-<date>.md`.

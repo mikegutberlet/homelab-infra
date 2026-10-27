@@ -362,17 +362,6 @@ services:
     volumes:
       - ./olivetin:/config:ro
 
-  dockge:
-    <<: *common
-    image: louislam/dockge:1
-    environment:
-      DOCKGE_STACKS_DIR: /opt/stacks
-    ports: ["5001:5001"]
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/appdata/dockge:/app/data
-      - /opt/stacks:/opt/stacks
-
   # --- metrics and trend graphs (2026-10-23) ---
   # Prometheus keeps the history, Grafana draws it. Alerting stays in Kuma and the n8n digest;
   # Grafana has no contact points. Every VM runs node-exporter and cAdvisor (role metrics); the

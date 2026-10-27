@@ -20,7 +20,7 @@ decision records, runbooks, open items) lives in [`docs/wiki/`](docs/wiki/README
 | edge (201) | RicksGarage | 192.168.1.50 | Traefik, Authentik, TSDProxy (`<app>.tail9af84.ts.net`), Tailscale subnet router | wg-easy (admin not set up) |
 | media (202) | RicksPortalGun | 192.168.1.51 | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd (migrated from the old Servarr VM), qBittorrent via PIA (gluetun, port forwarding), Recyclarr, Jellyseerr (migrated Overseerr), MeTube, Storyteller, Audiobookshelf, RomM, Listenarr (audiobooks), Chaptarr (ebooks, in place of the retired Readarr; `docs/books.md`) | |
 | gpu (203) | RicksShip | 192.168.1.52 | Plex (migrated, Quick Sync), Emby (Premiere, Quick Sync), ErsatzTV, Immich, Tdarr server + node, Unmanic | |
-| apps (204) | RicksPortalGun | 192.168.1.53 | Postgres, Nextcloud, Paperless, Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny, Diun, OliveTin (report-only), Dockge, Prometheus + Grafana (`docs/wiki/services/monitoring.md`) | |
+| apps (204) | RicksPortalGun | 192.168.1.53 | Postgres, Nextcloud, Paperless, Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny, Diun, OliveTin (report-only), Prometheus + Grafana (`docs/wiki/services/monitoring.md`) | |
 | ai (205) | RicksShip | 192.168.1.54 | Piper | Open WebUI (no LLM key), AnythingLLM + worker |
 | transcode (206) | RicksPortalGun | 192.168.1.55 | Tdarr node on the Iris Plus 655 iGPU (pinned to the server's version) | |
 

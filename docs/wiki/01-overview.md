@@ -26,7 +26,7 @@ flowchart TB
     end
     subgraph RS["RicksShip NUC (192.168.1.37) - compute host"]
         GPU["gpu VM 203<br/>192.168.1.52 + Iris Pro 580<br/>Plex, Emby, ErsatzTV, Immich,<br/>Tdarr, Unmanic"]
-        APPS["apps VM 204<br/>192.168.1.53<br/>Postgres, Nextcloud, Paperless,<br/>Stirling-PDF, n8n, Huginn, Tautulli,<br/>Homepage, Uptime Kuma, Scrutiny,<br/>Diun, OliveTin, Dockge"]
+        APPS["apps VM 204<br/>192.168.1.53<br/>Postgres, Nextcloud, Paperless,<br/>Stirling-PDF, n8n, Huginn, Tautulli,<br/>Homepage, Uptime Kuma, Scrutiny,<br/>Diun, OliveTin"]
         AI["ai VM 205<br/>192.168.1.54<br/>Open WebUI, AnythingLLM, Piper"]
     end
     TN -- "NFS /mnt/DeepData/NAS" --> MEDIA
@@ -47,7 +47,7 @@ flowchart TB
 | edge (201) | RicksGarage | 192.168.1.50 | 2 / 4 GB / 32 GB | Traefik, Authentik (server, worker, Postgres, Redis), TSDProxy, Tailscale subnet router, Docker socket proxy, autoheal. wg-easy defined but not started | no |
 | media (202) | RicksPortalGun | 192.168.1.51 | 4 / 12 GB fixed / 64 GB + 200 GB SABnzbd temp disk | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd, gluetun + qBittorrent, Recyclarr, Jellyseerr, MeTube, Storyteller, Audiobookshelf, RomM + MariaDB, autoheal | yes |
 | gpu (203) | RicksShip | 192.168.1.52 | 6 / 16 GB / 96 GB + iGPU passthrough | Plex, Emby, ErsatzTV, Immich (server, ML, Postgres, Valkey), Tdarr, Unmanic, autoheal | yes |
-| apps (204) | RicksPortalGun | 192.168.1.53 | 4 / 16 GB / 96 GB | Postgres (pgvector), Redis, Nextcloud (+ nginx, cron), Paperless (+ Gotenberg, Tika), Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny (+ InfluxDB), Diun, OliveTin, Dockge, autoheal | yes (Nextcloud, Paperless, backups) |
+| apps (204) | RicksPortalGun | 192.168.1.53 | 4 / 16 GB / 96 GB | Postgres (pgvector), Redis, Nextcloud (+ nginx, cron), Paperless (+ Gotenberg, Tika), Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny (+ InfluxDB), Diun, OliveTin, autoheal | yes (Nextcloud, Paperless, backups) |
 | ai (205) | RicksShip | 192.168.1.54 | 2 / 6 GB / 32 GB | Open WebUI, AnythingLLM, Piper TTS; LangChain/CrewAI worker defined but not started | no |
 | transcode (206) | RicksPortalGun | 192.168.1.55 | 4 / 4 GB / 48 GB + iGPU passthrough | Tdarr node (second worker for the gpu VM's Tdarr server), autoheal, Diun | yes |
 
@@ -83,7 +83,6 @@ All Tailscale names end in `.tail9af84.ts.net`. "SSO" means the Authentik login 
 | Tautulli | tautulli | SSO | apps | Plex statistics (history migrated) |
 | Uptime Kuma | status | SSO + own | apps | 27 monitors, instant email for critical media apps |
 | Scrutiny | disks | SSO | apps | SMART health of the nine disks seen by the hosts |
-| Dockge | dockge | SSO + own | apps | View stacks (read-only by policy; Git is the source of truth) |
 | OliveTin | olivetin | SSO | apps | Buttons for fixed maintenance commands (not wired up yet) |
 | Open WebUI | chat | SSO (auto login) | ai | Chat on Google Gemini |
 | AnythingLLM | anythingllm | SSO + own | ai | Chat with your documents, Gemini + pgvector |

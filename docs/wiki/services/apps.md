@@ -29,7 +29,6 @@ flowchart TB
         SCR[scrutiny :8087] --> INF[(scrutiny-influx)]
         DIUN[diun]
         OT[olivetin :1337]
-        DK[dockge :5001]
         TAU[tautulli :8181]
     end
     KUMA -- webhook --> N8N
@@ -163,14 +162,13 @@ list of commands in `stacks/apps/olivetin/config.yaml`: a jdupes duplicate repor
 (read-only, via SSH to the media VM) and `zpool status DeepData` (via SSH to TrueNAS). **Not wired
 up**: the SSH key and restricted users do not exist yet, by design, until Goobs wants them.
 
-## Dockge
+## Dockge (removed 2026-10-27)
 
-`louislam/dockge:1`, port 5001, https://dockge.tail9af84.ts.net (SSO) plus its own admin. Shows the
-stacks in `/opt/stacks` with logs and restart buttons. Policy: **look, don't edit**. A change made in
-Dockge is overwritten by the next Ansible deploy unless it is also committed to the repo. Dockge only
-sees the apps VM's stacks.
+Dockge ran here until 2026-10-27. It was removed because it held the Docker socket with write access
+(root on this VM from a web page) and invited edits that bypass the repo. Container logs: Grafana or
+`sudo docker compose -f /opt/stacks/apps/compose.yaml logs <service>` on the VM.
 
 ## Backups on this VM
 
-Nightly: `pg_dumpall` of the shared Postgres, SQLite copies (Kuma, Tautulli, Dockge, Homepage), and
+Nightly: `pg_dumpall` of the shared Postgres, SQLite copies (Kuma, Tautulli, Homepage), and
 the appdata tar. Excluded: `nextcloud/html`, `scrutiny/influxdb`, caches and logs.

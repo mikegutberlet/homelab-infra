@@ -142,11 +142,6 @@ http:
       entryPoints: [web]
       service: olivetin
       middlewares: [authentik]
-    dockge:
-      rule: Host(`dockge.{{ env "TS_TAILNET" }}`)
-      entryPoints: [web]
-      service: dockge
-      middlewares: [authentik]
     tautulli:
       rule: Host(`tautulli.{{ env "TS_TAILNET" }}`)
       entryPoints: [web]
@@ -299,10 +294,6 @@ http:
       loadBalancer:
         servers:
           - url: http://192.168.1.53:1337
-    dockge:
-      loadBalancer:
-        servers:
-          - url: http://192.168.1.53:5001
     tautulli:
       loadBalancer:
         servers:
