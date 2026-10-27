@@ -40,7 +40,7 @@ vms = {
     node      = "RicksShip"
     ip        = "192.168.1.52/24"
     cores     = 6
-    memory_mb = 10240
+    memory_mb = 16384 # was 10240; RicksShip had room once apps moved off (2026-10-27)
     disk_gb   = 96
     datastore = "RicksShipXFS"
     # The iGPU (00:02.0, vfio-pci on RicksShip since 2026-10-21) is attached by root with
@@ -51,12 +51,15 @@ vms = {
   }
   apps = {
     vm_id     = 204
-    node      = "RicksShip"
+    # Moved to RicksPortalGun with 16 GB on 2026-10-27 (was RicksShip / RicksShipXFS / 10 GB):
+    # Prometheus and Grafana are joining Nextcloud, Paperless, n8n and the sysadmin, and the
+    # sysadmin now runs on the host that reboots cleanly. operations/portalgun-moves.md step 4.
+    node      = "RicksPortalGun"
     ip        = "192.168.1.53/24"
     cores     = 4
-    memory_mb = 10240
+    memory_mb = 16384
     disk_gb   = 96
-    datastore = "RicksShipXFS"
+    datastore = "local-lvm"
     tags      = ["apps", "docker"]
   }
   ai = {
@@ -64,7 +67,7 @@ vms = {
     node      = "RicksShip"
     ip        = "192.168.1.54/24"
     cores     = 2
-    memory_mb = 4096
+    memory_mb = 6144 # was 4096 (2026-10-27)
     disk_gb   = 32
     datastore = "RicksShipXFS"
     tags      = ["ai", "docker"]
