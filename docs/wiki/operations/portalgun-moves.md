@@ -186,9 +186,23 @@ and recreate the cloud-init drive on the target.
 ssh root@192.168.1.137 'grep -A6 "dir: xfstest" /etc/pve/storage.cfg; qm config 202 | grep -E "^(scsi|ide)"'
 ssh root@192.168.1.137 'pvesm set xfstest --shared 0'   # was wrongly shared 1 too (2026-10-27)
 ssh root@192.168.1.137 'qm disk move 202 scsi1 xfstest --format raw --delete 1'   # live
-ssh root@192.168.1.137 'qm shutdown 202 --timeout 300 && qm set 202 --delete ide2 && qm migrate 202 RicksPortalGun --targetstorage local-lvm:local-lvm,xfstest:PortalGunSpare'
+ssh root@192.168.1.137 'qm shutdown 202 --timeout 300 && qm set 202 --delete ide2 && qm migrate 202 RicksPortalGun --targetstorage local-lvm:local-lvm,xfstest:PortalGunSpare --bwlimit 81920'
 ssh root@192.168.1.38  'qm set 202 --ide2 local-lvm:cloudinit --memory 12288 && qm start 202'
 ```
+
+**First try, 2026-10-27, aborted.** The live raw conversion and the 64 GB system disk went fine,
+but ~25 minutes into the 200 GB scratch copy (steady 115 MB/s) RicksPortalGun's NIC froze
+(`e1000e eno1: Detected Hardware Unit Hang`, repeated). The host lost the network until it was
+power-cycled, the migration aborted, and media was restarted on RicksGarage (`qm unlock 202`, ide2
+recreated). Before retrying:
+
+1. Turn the NIC offloads off on both ends, one host at a time:
+   `ansible-playbook playbooks/proxmox-nic.yml --limit ricksportalgun`, then `--limit ricksgarage`.
+2. Remove the partial copies the abort left on RicksPortalGun (check first; only `vm-202-*`):
+   `ssh root@192.168.1.38 'qm list; pvesm list local-lvm | grep vm-202; pvesm list PortalGunSpare | grep vm-202'`,
+   then `pvesm free <volid>` for each.
+3. Re-run the migrate with a bandwidth cap so the link is never pinned: add `--bwlimit 81920`
+   (80 MiB/s, about 60 minutes for the two disks).
 
 Its tofu PR moves `media` to RicksPortalGun / `local-lvm` at 12288 MB, with the scratch disk on
 `PortalGunSpare` as raw
