@@ -7,8 +7,9 @@ let answer = null;
 try { answer = JSON.parse(String(j.stdout || '').trim().split('\n').pop()); } catch (e) { answer = null; }
 const ok = !j.error && answer && answer.result === 'ok';
 const detail = answer ? `${answer.result}: ${answer.detail}` : (j.error ? `ssh failed: ${String(j.error).slice(0, 300)}` : String(j.stderr || j.stdout || 'no answer').slice(0, 300));
-const text = ok ? `Done: ${st.cmd} on ${st.host}.\n${answer.detail}` : `That did not work: ${st.cmd} on ${st.host}.\n${detail}\nNothing else was changed.`;
+const label = st.label || st.cmd;
+const text = ok ? `Done: ${label} on ${st.host}.\n${answer.detail}` : `That did not work: ${label} on ${st.host}.\n${detail}\nNothing else was changed.`;
 // Same shape as fix_answer.js posts for the automatic fixes.
 const error = j.error ? String(typeof j.error === 'string' ? j.error : j.error.message || JSON.stringify(j.error)).slice(0, 300) : '';
-const result = { id: st.fixid, host: st.host, cmd: st.cmd, key: 'chat', title: st.title, stdout: String(j.stdout || '').slice(-4000), stderr: String(j.stderr || '').slice(-2000), error };
+const result = { id: st.fixid, host: st.host, cmd: label, key: 'chat', title: st.title, stdout: String(j.stdout || '').slice(-4000), stderr: String(j.stderr || '').slice(-2000), error };
 return [{ json: { reply: { text }, results: [result] } }];

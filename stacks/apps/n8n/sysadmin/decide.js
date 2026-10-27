@@ -39,6 +39,7 @@ if (sd.chat && sd.chat.pending) for (const [k, p] of Object.entries(sd.chat.pend
 // Upsert the active ones. fix_planned and fix_held describe this run only. An issue that resolved
 // less than FLAP_WINDOW_H ago keeps its first-seen time and its last email, and counts one more flap.
 const toEmail = [];
+let freshCritical = false; // a critical emailed for the first time (not a 6-hourly repeat): the investigator looks at it
 for (const i of issues) {
   const prev = sd.issues[i.key];
   const back = prev ? null : sd.recent[i.key];
@@ -46,7 +47,7 @@ for (const i of issues) {
     ? { ...prev, ...i, first: prev.first, count: (prev.count || 0) + 1, last: now, miss: 0, miss_at: null, fix_planned: null, fix_held: null }
     : { ...i, first: back ? back.first : now, last: now, count: 1, flaps: back ? (back.flaps || 0) + 1 : 0, emailed_at: back ? back.emailed_at : null };
   if (back) delete sd.recent[i.key];
-  if (i.sev === 'critical' && (!it.emailed_at || now - it.emailed_at > S.EMAIL_REPEAT_H * H)) { toEmail.push(it); it.emailed_at = now; }
+  if (i.sev === 'critical' && (!it.emailed_at || now - it.emailed_at > S.EMAIL_REPEAT_H * H)) { freshCritical = freshCritical || !it.emailed_at; toEmail.push(it); it.emailed_at = now; }
   sd.issues[i.key] = it;
 }
 
@@ -100,7 +101,7 @@ if (toEmail.length) {
   });
   const subject = toEmail.length === 1 ? `[Homelab] ${toEmail[0].title}` : `[Homelab] ${toEmail[0].title} (+${toEmail.length - 1} more)`;
   const text = `${lines.join('\n')}\n\nOpen issues right now: ${Object.keys(sd.issues).length}. Fixes ${S.FIXES_ENABLED ? 'enabled' : 'in report-only mode'}.\nThe morning digest has the full picture.`;
-  out.push({ json: { kind: 'email', subject, text } });
+  out.push({ json: { kind: 'email', subject, text, investigate: freshCritical } });
 }
 for (const p of planned) out.push({ json: p });
 return out;

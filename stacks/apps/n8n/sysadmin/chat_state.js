@@ -3,6 +3,8 @@
 // under a second, like a report run (n8n saves the whole static data when a run ends, last writer
 // wins). Called by "Register proposal" and "Claim" in the chat run, with the internal token:
 //   {op: 'propose', sessionId, fix: {host, verb, args}, reason} -> {n, host, cmd, reason} or {error}
+//     (cmd is the label Goobs sees: "restart sonarr", or "run script 1a2b3c4d (3 lines)" for a script,
+//     whose exact text is kept in the proposal and is what runs after Confirm)
 //   {op: 'claim', sessionId, n, action: 'confirm'|'cancel', who} -> {route: 'reply', text}
 //                                                                 or {route: 'fix', host, cmd, fixid, title}
 const S = SETTINGS;
@@ -25,8 +27,8 @@ if (b.op === 'propose') {
   const n = Math.max(chat.next, Math.floor((now - Date.UTC(2026, 9, 1)) / 1000));
   chat.next = n + 1;
   // One pending proposal per session: a newer one replaces it, and its old Confirm finds it gone.
-  chat.pending[sessionId] = { n, t: now, host: fix.host, cmd: fix.cmd, fix: { host: p.host, verb: p.verb, args: p.args }, reason: p.reason };
-  return answer({ n, host: fix.host, cmd: fix.cmd, reason: p.reason });
+  chat.pending[sessionId] = { n, t: now, host: fix.host, cmd: fix.label, fix: { host: p.host, verb: p.verb, args: p.args }, reason: p.reason };
+  return answer({ n, host: fix.host, cmd: fix.label, reason: p.reason });
 }
 
 if (b.op === 'claim' && (b.action === 'confirm' || b.action === 'cancel')) {
@@ -47,13 +49,14 @@ if (b.op === 'claim' && (b.action === 'confirm' || b.action === 'cancel')) {
   sd.fixlog = sd.fixlog || [];
   const fixid = `chat-${n}-${now}`;
   const title = `chat (${who}): ${p.reason}`;
-  sd.fixlog.push({ t: now, host: fix.host, verb: fix.verb, target: fix.target, tkey: fix.tkey, cmd: fix.cmd, key: 'chat', title, status: 'started', source: 'chat', id: fixid });
+  // The log keeps the label (a script's base64 would fill the digest); the script text goes with it.
+  sd.fixlog.push({ t: now, host: fix.host, verb: fix.verb, target: fix.target, tkey: fix.tkey, cmd: fix.label, key: 'chat', title, status: 'started', source: 'chat', id: fixid, ...(fix.script ? { script: fix.script.slice(0, 1500) } : {}) });
   // A stop is held from now on, as Decide does for its own, so the hold does not depend on the later
   // fixresult write surviving (Evaluate report holds only an 'ok' stop, and holds it again if a
   // report saw the service still running meanwhile and dropped this one). A failed stop drops it
   // (Record fix result).
   if (fix.verb === 'stop') { sd.held = sd.held || {}; sd.held[`${fix.host}:${fix.target}`] = { t: now, by: 'chat', id: fixid }; }
-  return answer({ route: 'fix', host: fix.host, cmd: fix.cmd, fixid, title });
+  return answer({ route: 'fix', host: fix.host, cmd: fix.cmd, label: fix.label, fixid, title });
 }
 
 return answer({ error: `unknown request (op ${JSON.stringify(String(b.op || '')).slice(0, 40)})` });

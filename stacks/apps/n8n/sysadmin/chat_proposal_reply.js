@@ -5,7 +5,10 @@ const S = SETTINGS;
 const f = $('Chat finish').first().json;
 const j = $input.first().json || {};
 if (Number.isInteger(j.n) && j.host && j.cmd) {
-  return reply(f.text, { proposal: { n: j.n, host: j.host, cmd: j.cmd, reason: j.reason, expires_min: S.CHAT_CONFIRM_MIN, enabled: S.CHAT_FIXES_ENABLED } });
+  // A script is shown in full: it is exactly what runs (as root on that VM) if Goobs presses Confirm.
+  const script = f.fix && f.fix.verb === 'run' ? String((f.fix.args || [])[0] || '').trim() : '';
+  const text = script ? `${f.text}\n\nIf you press Confirm, this runs on ${j.host} as root:\n\n${script.split('\n').map((l) => `    ${l}`).join('\n')}${f.undo ? `\n\nUndo: ${f.undo}` : ''}` : f.text;
+  return reply(text, { proposal: { n: j.n, host: j.host, cmd: j.cmd, reason: j.reason, expires_min: S.CHAT_CONFIRM_MIN, enabled: S.CHAT_FIXES_ENABLED } });
 }
 // A refusal from Chat state is a string; a failed call leaves the HTTP node's error object.
 const why = typeof j.error === 'string' ? j.error

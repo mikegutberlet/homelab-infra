@@ -51,7 +51,7 @@ CASE_USD = float(E("CASE_USD", "0.75"))
 PER_DAY = int(E("PER_DAY", "10"))
 AUTO_PER_DAY = int(E("AUTO_PER_DAY", "3"))
 MAX_TURNS = int(E("MAX_TURNS", "30"))
-CASE_SECONDS = int(E("CASE_SECONDS", "240"))  # the chat page waits 300 s, Telegram 310 s
+CASE_SECONDS = int(E("CASE_SECONDS", "240"))  # n8n waits 300 s, the chat page 480 s, Telegram 490 s
 SSH_KEY = DATA / "ssh/inspect_ed25519"
 HOSTS = dict(x.split("=", 1) for x in E("HOSTS", "edge=192.168.1.50 media=192.168.1.51 gpu=192.168.1.52 apps=192.168.1.53 ai=192.168.1.54 transcode=192.168.1.55").split())
 PVE_HOSTS = E("PVE_HOSTS", "192.168.1.137 192.168.1.37 192.168.1.38").split()

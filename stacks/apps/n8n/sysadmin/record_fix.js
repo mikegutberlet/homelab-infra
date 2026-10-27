@@ -39,7 +39,7 @@ for (const j of b.results || []) {
 
   if (verb === 'stop') {
     if (ok) {
-      out.push({ kind: 'email', subject: `[Homelab] stopped ${target} on ${host}: it kept crashing`, text: `${about}\n\nTwo restarts in the last 24 h did not help, so I stopped ${target}. It stays stopped: I will not start it again, and the digest lists it until you do.\n\n${answer.detail}` });
+      out.push({ kind: 'email', investigate: true, subject: `[Homelab] stopped ${target} on ${host}: it kept crashing`, text: `${about}\n\nTwo restarts in the last 24 h did not help, so I stopped ${target}. It stays stopped: I will not start it again, and the digest lists it until you do.\n\n${answer.detail}` });
     } else delete sd.held[`${host}:${target}`];
   }
   if (!ok) {
@@ -47,7 +47,7 @@ for (const j of b.results || []) {
     const plan = entry.status === 'refused'
       ? 'The ops door refused it, so I will not try it again today. This one needs you.'
       : tries < S.FIX_PER_DAY ? `Try ${tries} of ${S.FIX_PER_DAY} today. I try again in an hour if it is still open.` : `That was try ${tries} of ${S.FIX_PER_DAY}; no more tries today. This one needs you.`;
-    if (sev === 'critical') out.push({ kind: 'email', subject: `[Homelab] fix failed (${sev}): ${it ? it.title : entry.title}`, text: `${about}\n\nTried: ${entry.cmd} on ${host}\nAnswer: ${detail}\n\n${plan}` });
+    if (sev === 'critical') out.push({ kind: 'email', investigate: true, subject: `[Homelab] fix failed (${sev}): ${it ? it.title : entry.title}`, text: `${about}\n\nTried: ${entry.cmd} on ${host}\nAnswer: ${detail}\n\n${plan}` });
   } else if (entry.then) {
     // gluetun -> qbittorrent: the follow-up is a fix of its own (logged, limited, held like any other).
     const tkey = `${host}:restart:${entry.then}`;

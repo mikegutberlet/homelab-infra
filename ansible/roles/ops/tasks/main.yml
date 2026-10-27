@@ -97,7 +97,7 @@
       TimeoutStartSec=360
       Nice=10
 
-# Fixed minutes per VM (edge :01, media :04, gpu :07, apps :10, ai :12, then every 15 minutes),
+# Fixed minutes per VM (edge :01, media :04, gpu :07, transcode :09, apps :10, ai :12, then every 15 minutes),
 # so two reports never land at once: n8n saves the whole static data at the end of each run, and
 # of two overlapping runs the later one wins. The infra check runs at :14 and the digest at 08:00.
 - name: Agent timer (every 15 minutes, a fixed minute per VM)
@@ -109,7 +109,7 @@
       Description=Homelab sysadmin reporter
 
       [Timer]
-      OnCalendar=*:{{ '%02d' | format(ops_report_minute | default({'edge': 1, 'media': 4, 'gpu': 7, 'apps': 10, 'ai': 12}.get(inventory_hostname, 0)) | int) }}/15
+      OnCalendar=*:{{ '%02d' | format(ops_report_minute | default({'edge': 1, 'media': 4, 'gpu': 7, 'transcode': 9, 'apps': 10, 'ai': 12}.get(inventory_hostname, 0)) | int) }}/15
       AccuracySec=1s
       RandomizedDelaySec=15
       Persistent=false
