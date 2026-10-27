@@ -8,15 +8,17 @@ power cycle with a person at the button. The only unplanned restarts so far were
 - Someone must be physically at the NUC.
 - RicksGarage restarts take the NAS down, so every NAS-backed app pauses. Pick a quiet time, and get
   Goobs's OK in their own words for anything that restarts TrueNAS.
-- Know what the host runs: RicksGarage = truenas 110, edge 201, media 202; RicksShip = gpu 203,
-  apps 204, ai 205.
+- Know what the host runs (since 2026-10-27): RicksGarage = truenas 110, edge 201; RicksShip = gpu 203,
+  ai 205; RicksPortalGun = media 202, apps 204, transcode 206. RicksPortalGun reboots warm without
+  hanging, but its guests still go down for the restart.
 
 ## Procedure
 
 1. Shut the guests down cleanly, apps first, TrueNAS last (RicksGarage):
    ```sh
-   ssh root@192.168.1.137 'qm shutdown 202 --timeout 300; qm shutdown 201 --timeout 300; qm shutdown 110 --timeout 300'
-   ssh root@192.168.1.37  'qm shutdown 205 --timeout 300; qm shutdown 204 --timeout 300; qm shutdown 203 --timeout 300'
+   ssh root@192.168.1.137 'qm shutdown 201 --timeout 300; qm shutdown 110 --timeout 300'
+   ssh root@192.168.1.37  'qm shutdown 205 --timeout 300; qm shutdown 203 --timeout 300'
+   ssh root@192.168.1.38  'qm shutdown 206 --timeout 300; qm shutdown 204 --timeout 300; qm shutdown 202 --timeout 300'
    ```
    `qm shutdown` goes through the guest agent (installed everywhere, including the old VMs); never use
    `qm stop` on TrueNAS.
@@ -28,8 +30,10 @@ power cycle with a person at the button. The only unplanned restarts so far were
    and on RicksGarage `zpool status DeepData` inside TrueNAS once it is up.
 6. On the app VMs, `systemctl is-active wait-nas docker` and `docker ps`; then Homepage dots.
 
-Expected timings: TrueNAS is up about 2 minutes after the host; edge and media follow at 30 s gaps;
-NAS-backed containers on RicksShip start as soon as wait-nas sees the share.
+Expected timings: TrueNAS is up about 2 minutes after the host; edge follows 30 s later;
+NAS-backed containers on the other hosts start as soon as wait-nas sees the share. After any
+RicksPortalGun restart check the transcode node sees `/dev/dri/renderD128` (its healthcheck makes
+autoheal restart it if not; on 2026-10-27 a container that started too early failed every encode).
 
 ## If a host does not come back
 
