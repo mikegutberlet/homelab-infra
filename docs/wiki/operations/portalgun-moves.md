@@ -138,10 +138,17 @@ Undo: `pvesm remove PortalGunSpare; vgremove portalgun-spare; pvremove /dev/sda`
 Outside Tdarr's hours is not needed for apps, but n8n, the sysadmin, Nextcloud and Paperless are
 offline during the copy (96 GB over 1 GbE, roughly 15 to 30 minutes).
 
+What actually worked on 2026-10-27 (about 35 minutes offline in total). Two things blocked a
+plain `qm migrate`: `RicksShipXFS` was flagged `shared 1` although it is RicksShip's own disk
+(Proxmox then expects it on the target), and qcow2 volumes cannot land on LVM-thin. So: clear the
+flag, convert the main disk to raw **live** first, and recreate the small cloud-init drive on the
+new node instead of copying it.
+
 ```sh
-ssh root@192.168.1.38 'pve-firewall status'   # running: VM 204's Postgres rule moves with the VM
-ssh root@192.168.1.37 'qm shutdown 204 --timeout 300 && qm migrate 204 RicksPortalGun --targetstorage local-lvm'
-ssh root@192.168.1.38 'qm set 204 --memory 16384 && qm start 204'
+ssh root@192.168.1.37 'pvesm set RicksShipXFS --shared 0'
+ssh root@192.168.1.37 'qm disk move 204 scsi0 RicksShipXFS --format raw --delete 1'   # live, ~3 min
+ssh root@192.168.1.37 'qm shutdown 204 --timeout 300 && qm set 204 --delete ide2 && qm migrate 204 RicksPortalGun --targetstorage local-lvm'
+ssh root@192.168.1.38 'qm set 204 --ide2 local-lvm:cloudinit --memory 16384 && qm start 204'
 ```
 
 Then on RicksShip (each a short restart; Plex and Emby blink once):
@@ -171,9 +178,15 @@ Undo: shut 204 down and `qm migrate 204 RicksShip --targetstorage RicksShipXFS` 
 Downloads and imports stop during the copy (64 GB system disk + the 200 GB SABnzbd scratch disk).
 Pause SABnzbd's queue first so nothing is mid-unpack.
 
+Same pattern as step 4. First look at `xfstest` in `/etc/pve/storage.cfg` (clear `shared 1` if it
+is set) and at `qm config 202`: the scratch disk is qcow2 on `xfstest`, so convert it to raw live,
+and recreate the cloud-init drive on the target.
+
 ```sh
-ssh root@192.168.1.137 'qm shutdown 202 --timeout 300 && qm migrate 202 RicksPortalGun --targetstorage local-lvm:local-lvm,xfstest:PortalGunSpare'
-ssh root@192.168.1.38  'qm set 202 --memory 12288 && qm start 202'
+ssh root@192.168.1.137 'grep -A6 "dir: xfstest" /etc/pve/storage.cfg; qm config 202 | grep -E "^(scsi|ide)"'
+ssh root@192.168.1.137 'qm disk move 202 scsi1 xfstest --format raw --delete 1'   # live
+ssh root@192.168.1.137 'qm shutdown 202 --timeout 300 && qm set 202 --delete ide2 && qm migrate 202 RicksPortalGun --targetstorage local-lvm:local-lvm,xfstest:PortalGunSpare'
+ssh root@192.168.1.38  'qm set 202 --ide2 local-lvm:cloudinit --memory 12288 && qm start 202'
 ```
 
 Its tofu PR moves `media` to RicksPortalGun / `local-lvm` at 12288 MB, with the scratch disk on
