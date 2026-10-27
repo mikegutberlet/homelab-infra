@@ -152,7 +152,9 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   lifecycle {
     # hostpci: the gpu VM's iGPU is attached by root (see terraform.tfvars).
-    ignore_changes = [initialization, hostpci]
+    # disk[0].file_id: only used to create the disk; a VM moved to another node and re-imported
+    # (operations/portalgun-moves.md) has none in state, and the plan must not rebuild it for that.
+    ignore_changes = [initialization, hostpci, disk[0].file_id]
   }
 }
 

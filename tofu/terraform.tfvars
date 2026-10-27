@@ -1,4 +1,6 @@
 # 192.168.1.50-.54 approved by Goobs for these VMs (2026-10-21); none answered ping beforehand.
+# 192.168.1.55 for the transcode VM (RicksPortalGun plan, 2026-10-27); the runbook checks it
+# doesn't answer ping before the first apply (docs/wiki/operations/portalgun-moves.md).
 ssh_public_keys = [
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOW8hZY715awim22lxBudezY7UPcl6Uo83oULh9J0cO4 homelab-inventory@goobss-macbook-pro",
 ]
@@ -66,5 +68,19 @@ vms = {
     disk_gb   = 32
     datastore = "RicksShipXFS"
     tags      = ["ai", "docker"]
+  }
+  # Second Tdarr node on RicksPortalGun's Iris Plus 655 (2026-10-27). The iGPU is attached by root
+  # after the host binds it to vfio-pci, like the gpu VM's: `qm set 206 --hostpci0 0000:00:02.0,pcie=1`.
+  # local-lvm is the 525 GB system SSD; the 1 TB SSD is kept for apps and media.
+  transcode = {
+    vm_id     = 206
+    node      = "RicksPortalGun"
+    ip        = "192.168.1.55/24"
+    cores     = 4
+    memory_mb = 4096
+    disk_gb   = 48 # Tdarr's /temp cache holds one movie at a time (largest ~30 GB)
+    datastore = "local-lvm"
+    igpu      = false
+    tags      = ["transcode", "docker"]
   }
 }

@@ -82,6 +82,8 @@
     executable: /bin/bash
     stdin: "{{ lookup('file', playbook_dir ~ '/../../stacks/' ~ item ~ '/secrets.sops.env') }}"
   loop: "{{ stacks }}"
+  # A stack with no secrets (transcode) has no secrets.sops.env and keeps its values in compose.yaml.
+  when: (playbook_dir ~ '/../../stacks/' ~ item ~ '/secrets.sops.env') is file
   changed_when: true
   no_log: true
 
