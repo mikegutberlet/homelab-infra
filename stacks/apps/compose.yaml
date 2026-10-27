@@ -390,7 +390,7 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false" # Diun watches the image
       GF_NEWS_NEWS_FEED_ENABLED: "false"
       GF_UNIFIED_ALERTING_ENABLED: "false" # alerts stay in Kuma and n8n
-    ports: ["3004:3000"]
+    ports: ["3005:3000"]
     volumes:
       - /opt/appdata/grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

@@ -314,7 +314,7 @@ http:
     grafana:
       loadBalancer:
         servers:
-          - url: http://192.168.1.53:3004
+          - url: http://192.168.1.53:3005
     prometheus:
       loadBalancer:
         servers:

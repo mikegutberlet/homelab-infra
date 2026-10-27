@@ -24,7 +24,7 @@ APPS = {
     "status": ("192.168.1.53", 3002, True), "disks": ("192.168.1.53", 8087, True),
     "olivetin": ("192.168.1.53", 1337, True), "dockge": ("192.168.1.53", 5001, True),
     "tautulli": ("192.168.1.53", 8181, True), "sysadmin": ("192.168.1.53", 3003, True),
-    "grafana": ("192.168.1.53", 3004, True), "prometheus": ("192.168.1.53", 9090, True),
+    "grafana": ("192.168.1.53", 3005, True), "prometheus": ("192.168.1.53", 9090, True),
     # ai VM
     "chat": ("192.168.1.54", 3010, True), "anythingllm": ("192.168.1.54", 3011, True),
     # edge VM

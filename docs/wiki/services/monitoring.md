@@ -14,7 +14,7 @@ flowchart LR
     end
     subgraph apps["apps VM 192.168.1.53 (stacks/apps)"]
         P[(prometheus :9090<br/>180 d / 15 GB)]
-        G[grafana :3004]
+        G[grafana :3005]
         PVE[pve-exporter]
         EXA[exportarr x4]
         GE[graphite-exporter :2003]
@@ -38,7 +38,7 @@ flowchart LR
 | Service | Where | Image | Notes |
 | --- | --- | --- | --- |
 | prometheus | apps, `:9090` | `prom/prometheus:v3.15.1` | 30 s scrape (cAdvisor 60 s, exportarr 2 min). Keeps 180 days or 15 GB, whichever is first. Data `/opt/appdata/prometheus` (excluded from the nightly tar: it is regenerable). 1 GB cap. |
-| grafana | apps, `:3004` | `grafana/grafana:13.2.4` | `grafana.tail9af84.ts.net` behind Authentik. 512 MB cap. |
+| grafana | apps, `:3005` | `grafana/grafana:13.2.4` | `grafana.tail9af84.ts.net` behind Authentik. 512 MB cap. |
 | pve-exporter | apps (no port) | `prompve/prometheus-pve-exporter:3.10.1` | Token `prometheus@pve!prometheus`, role PVEAuditor (read-only). RicksShip answers for the whole cluster. |
 | exportarr-sonarr/radarr/prowlarr/sabnzbd | apps (no port) | `ghcr.io/onedr0p/exportarr:v2.3.0` | Reuse Homepage's read-only API keys. 128 MB cap each. |
 | graphite-exporter | apps, `:2003` (TCP) | `prom/graphite-exporter:v0.17.0` | Receives TrueNAS's netdata metrics. Only 192.168.1.209 may send (`lanfw_extra_allow`). |
@@ -61,7 +61,7 @@ Prometheus's own UI (`prometheus.tail9af84.ts.net`, behind Authentik) is handy f
 ## Firewall
 
 - Published ports (Prometheus 9090, cAdvisor 9101, Traefik 8082, graphite 2003) follow the usual
-  DOCKER-USER rule: lab VMs only. Grafana 3004 is edge-only, graphite 2003 also accepts the NAS.
+  DOCKER-USER rule: lab VMs only. Grafana 3005 is edge-only, graphite 2003 also accepts the NAS.
 - node-exporter and Tailscale's metrics are host-networked, so DOCKER-USER does not see them.
   `lanfw` adds a small `LANFW-IN` chain at the top of `INPUT` that accepts those ports
   (`host_metrics_ports`) only from 192.168.1.53 and drops them from the rest of the LAN. Nothing else
