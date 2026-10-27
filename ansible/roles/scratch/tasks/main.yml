@@ -1,7 +1,7 @@
 # A dedicated scratch disk for download churn (SABnzbd's incomplete folder on the media VM,
 # 2026-10-22). Until then temp lived on the 64 GB system disk next to every app database and
 # paused SABnzbd at 15 GB free, which any season pack reached. The disk is hot-added on the
-# Proxmox host (playbooks/sabnzbd-temp-disk.yml) and shows up as the second SCSI disk.
+# Proxmox host (declared in tofu/vms.tf) and shows up as the second SCSI disk.
 #
 # scratch_disk (hosts.yml):
 #   device: /dev/sdb              the raw disk; formatted ONLY when blkid sees nothing on it
