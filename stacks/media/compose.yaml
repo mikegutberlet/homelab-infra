@@ -245,9 +245,16 @@ services:
       - ./backlog-search:/app:ro
     depends_on: [sonarr, radarr]
 
+  # Seerr since 2026-10-28: Jellyseerr and Overseerr merged into it and the fallenbagel/jellyseerr
+  # image reports itself deprecated. Same data (/opt/appdata/jellyseerr, migrated on first start),
+  # same port and name, so routes, Homepage, Kuma and the sysadmin keep working; the service keeps
+  # its old name for that reason. The image runs as uid 1000 (no PUID), so the appdata folder is
+  # owned by 1000 (playbooks/seerr-migration.yml did the one-time chown + backup), and it has no
+  # init of its own. Rollback: fallenbagel/jellyseerr:2 + the backup tar the playbook leaves.
   jellyseerr:
     <<: *common
-    image: fallenbagel/jellyseerr:2
+    image: ghcr.io/seerr-team/seerr:v3.5.1
+    init: true
     mem_limit: 768m
     environment:
       TZ: ${TZ}

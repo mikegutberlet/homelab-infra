@@ -18,7 +18,7 @@ decision records, runbooks, open items) lives in [`docs/wiki/`](docs/wiki/README
 | --- | --- | --- | --- | --- |
 | truenas (110) | RicksGarage | 192.168.1.209 | not managed here (16 GB RAM) | |
 | edge (201) | RicksGarage | 192.168.1.50 | Traefik, Authentik, TSDProxy (`<app>.tail9af84.ts.net`), Tailscale subnet router | wg-easy (admin not set up) |
-| media (202) | RicksPortalGun | 192.168.1.51 | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd (migrated from the old Servarr VM), qBittorrent via PIA (gluetun, port forwarding), Recyclarr, Jellyseerr (migrated Overseerr), MeTube, Storyteller, Audiobookshelf, RomM, Listenarr (audiobooks), Chaptarr (ebooks, in place of the retired Readarr; `docs/books.md`) | |
+| media (202) | RicksPortalGun | 192.168.1.51 | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd (migrated from the old Servarr VM), qBittorrent via PIA (gluetun, port forwarding), Recyclarr, Seerr (the Jellyseerr/Overseerr successor, since 2026-10-28), MeTube, Storyteller, Audiobookshelf, RomM, Listenarr (audiobooks), Chaptarr (ebooks, in place of the retired Readarr; `docs/books.md`) | |
 | gpu (203) | RicksShip | 192.168.1.52 | Plex (migrated, Quick Sync), Emby (Premiere, Quick Sync), ErsatzTV, Immich, Tdarr server + node, Unmanic | |
 | apps (204) | RicksPortalGun | 192.168.1.53 | Postgres, Nextcloud, Paperless, Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny, Diun, OliveTin (report-only), Prometheus + Grafana (`docs/wiki/services/monitoring.md`) | |
 | ai (205) | RicksShip | 192.168.1.54 | Piper | Open WebUI (no LLM key), AnythingLLM + worker |
@@ -51,7 +51,7 @@ docs/       gen_routes.py regenerates Traefik and TSDProxy routes; torrent-fallb
   `NAS/Backups/homelab/<vm>/<date>` (root-only), 14 days kept. Never media.
 - LAN firewall (role `lanfw`): published container ports are reachable only from the five
   VMs (which includes the Traefik/Tailscale path); open to the whole LAN: Plex 32400, Emby
-  8096, Jellyseerr 5055 (and SMB/NFS on TrueNAS). Open WebUI 3010 only from the edge VM.
+  8096, Seerr (Requests) 5055 (and SMB/NFS on TrueNAS). Open WebUI 3010 only from the edge VM.
 - Disk health: Scrutiny collectors on both Proxmox hosts (`playbooks/proxmox-scrutiny.yml`).
 - Junior sysadmin (role `ops`): every VM POSTs its state (containers, disks, NFS mount, backups,
   arr queues, Tdarr, Tailscale) to n8n every 15 min (`homelab-agent`), and n8n can act only through
