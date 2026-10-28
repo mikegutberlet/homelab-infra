@@ -101,7 +101,7 @@ flowchart TB
 ```
 
 The firewall rules (`ansible/roles/lanfw`) rebuild the `DOCKER-USER` iptables chain on every Docker
-start: established traffic passes; the five lab VMs (.50 to .54) reach everything; a short list of
+start: established traffic passes; the six lab VMs (.50 to .55) reach everything; a short list of
 ports is open to the whole LAN (Plex is host-networked so it is open by nature; Emby 8096; Jellyseerr
 5055; wg-easy 51820/udp once enabled); the Scrutiny port 8087 on the apps VM also accepts the two
 Proxmox hosts; Open WebUI's port 3010 accepts only the edge VM; everything else new from the LAN is

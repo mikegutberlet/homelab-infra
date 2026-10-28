@@ -5,7 +5,8 @@ Kuma login and the Gmail app password itself and stores nothing.
 
 Kuma isn't reachable from the LAN (lanfw) and its tailnet name sits behind Authentik, so this
 opens an SSH tunnel to the apps VM and talks to Kuma on localhost. Existing monitors (same
-name) are left alone, so it is safe to run again.
+name) are left alone, so it is safe to run again. Monitors no longer in MONITORS are listed as
+stale; `--prune` deletes them (Dockge was removed on 2026-10-27).
 """
 import getpass
 import socket
@@ -105,22 +106,23 @@ def kuma2_compat(api):
     api._call = _call
 
 
-def existing_monitor_names(api):
+def existing_monitors(api):
     """Kuma 2 only sends incremental monitor updates, so this library's monitor list stays empty.
-    get_monitor(id) still works: walk the ids until 25 in a row are missing."""
-    names, misses, i = set(), 0, 1
+    get_monitor(id) still works: walk the ids until 25 in a row are missing. Returns {name: id}."""
+    found, misses, i = {}, 0, 1
     while misses < 25 and i < 2000:
         try:
-            names.add(api.get_monitor(i)["name"])
+            found[api.get_monitor(i)["name"]] = i
             misses = 0
         except Exception:
             misses += 1
         i += 1
-    return names
+    return found
 
 
-def configure(api, gmail):
-    """Notifications + monitors. Idempotent: existing ones (same name) are left alone."""
+def configure(api, gmail, prune=False):
+    """Notifications + monitors. Idempotent: existing ones (same name) are left alone.
+    prune: delete monitors that are no longer in MONITORS (a removed app, e.g. Dockge, 2026-10-27)."""
     kuma2_compat(api)
     digest = notification_id(api, "n8n daily digest", type=NotificationType.WEBHOOK,
                              webhookURL=DIGEST_WEBHOOK, webhookContentType="json")
@@ -131,8 +133,17 @@ def configure(api, gmail):
             smtpHost="smtp.gmail.com", smtpPort=465, smtpSecure=True,
             smtpUsername=MAIL_FROM, smtpPassword=gmail,
             smtpFrom=f"Homelab <{MAIL_FROM}>", smtpTo=MAIL_TO)
-    existing = existing_monitor_names(api)
+    existing = existing_monitors(api)
     added = 0
+    wanted = {name for name, _, _, _ in MONITORS}
+    for name, mid in existing.items():
+        if name in wanted:
+            continue
+        if prune:
+            api.delete_monitor(mid)
+            print(f"  deleted  {name}")
+        else:
+            print(f"  stale    {name}  (not in MONITORS; --prune deletes it)")
     for name, url, critical, codes in MONITORS:
         if name in existing:
             print(f"  exists   {name}")
@@ -160,7 +171,7 @@ def main():
     try:
         with UptimeKumaApi(f"http://127.0.0.1:{LOCAL_PORT}", timeout=30) as api:
             api.login(user, password)
-            added, urgent = configure(api, gmail)
+            added, urgent = configure(api, gmail, prune="--prune" in sys.argv[1:])
             print(f"{added} monitor(s) added.")
             if urgent:
                 api.test_notification(name="Email now (critical)", type=NotificationType.SMTP, smtpHost="smtp.gmail.com", smtpPort=465,

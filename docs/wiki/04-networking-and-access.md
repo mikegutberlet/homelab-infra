@@ -68,7 +68,7 @@ by Goobs and checked free before use; whether they sit outside the router's DHCP
 The LAN firewall (`ansible/roles/lanfw`, chain `DOCKER-USER`) applies to published container ports.
 Host services (SSH on the VMs, Plex on host networking) are not covered by it.
 
-Default for every published port: reachable from the five lab VMs (.50 to .54) and nothing else on
+Default for every published port: reachable from the six lab VMs (.50 to .55) and nothing else on
 the LAN. Exceptions:
 
 | Port | VM | Open to | Why |

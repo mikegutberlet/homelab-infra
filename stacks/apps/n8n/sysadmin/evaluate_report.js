@@ -98,9 +98,13 @@ const incOf = (a, b) => {
   return b.r - a.r + (b.r === a.r && a.s && b.s && a.s !== b.s ? 1 : 0);
 };
 let restartsNow = 0;
+// What the ops door would accept: the VM's own allow-list (agent v4, 2026-10-28) when it reports
+// one, else the never-list here. Before, the two lists could drift (socket-proxy was added to
+// ops_never only) and the sysadmin planned a restart the door refused, then gave up for the day.
+const canFix = Array.isArray(dk.allowed) ? (svc) => dk.allowed.includes(svc) : (svc) => !S.NEVER_RESTART.includes(svc);
+const needsYou = (svc) => (canFix(svc) ? '' : `; ${svc} is not on the ops door's allow-list, so this one needs you`);
 for (const c of dk.containers || []) {
   const svc = c.service || c.name;
-  const canFix = !S.NEVER_RESTART.includes(svc);
   // A held service that runs again was started by someone: the hold ends.
   if (c.state === 'running' && sd.held[`${host}:${svc}`]) delete sd.held[`${host}:${svc}`];
   // Restart samples over the last 70 minutes.
@@ -110,14 +114,15 @@ for (const c of dk.containers || []) {
   let delta = 0;
   for (let k = 1; k < samples.length; k++) delta += incOf(samples[k - 1], samples[k]);
   if (samples.length > 1) restartsNow += incOf(samples[samples.length - 2], samples[samples.length - 1]);
-  if (delta >= S.RESTARTS_CRIT) add(`crashloop:${c.name}`, 'critical', `${host}: ${c.name} restarted ${delta} times in the last hour`, `State ${c.state}, exit code ${c.exit_code}; stopping beats hammering the NAS`, canFix ? { verb: 'stop', target: svc, escalate: 'restart' } : null);
+  if (delta >= S.RESTARTS_CRIT) add(`crashloop:${c.name}`, 'critical', `${host}: ${c.name} restarted ${delta} times in the last hour`, `State ${c.state}, exit code ${c.exit_code}; stopping beats hammering the NAS${needsYou(svc)}`, canFix(svc) ? { verb: 'stop', target: svc, escalate: 'restart' } : null);
   else if (delta >= S.RESTARTS_WARN) add(`restarts:${c.name}`, 'warning', `${host}: ${c.name} restarted ${delta} times in the last hour`, `State ${c.state}, health ${c.health}${svc === 'qbittorrent' || svc === 'gluetun' ? '; usually the PIA tunnel dropping (qBittorrent\'s health check restarts it until gluetun is back)' : ''}`);
   if (c.health === 'unhealthy') {
-    if (prevHealth[c.name] === 'unhealthy') add(`unhealthy:${c.name}`, 'critical', `${host}: ${c.name} unhealthy for 30 minutes`, 'autoheal has not brought it back', canFix ? { verb: 'restart', target: svc } : null);
+    if (prevHealth[c.name] === 'unhealthy') add(`unhealthy:${c.name}`, 'critical', `${host}: ${c.name} unhealthy for 30 minutes`, `autoheal has not brought it back${needsYou(svc)}`, canFix(svc) ? { verb: 'restart', target: svc } : null);
     else add(`unhealthy:${c.name}`, 'warning', `${host}: ${c.name} is unhealthy`, 'autoheal gets one more interval');
   }
 }
-sd.rsTotal[host] = (sd.rsTotal[host] || 0) + restartsNow;
+// A VM restart starts every container once; that is not container churn, so the 24 h trend skips it.
+if (!(sys.uptime_s != null && sys.uptime_s < 1200)) sd.rsTotal[host] = (sd.rsTotal[host] || 0) + restartsNow;
 // An expected service that is not running: a warning the first time (a deploy or a maintenance
 // playbook may have stopped it for a minute), a critical with a restart when it is still down 15
 // minutes later. A service stopped on purpose is only a reminder, with the command that starts it.
@@ -129,7 +134,7 @@ for (const missing of dk.missing || []) {
   const held = sd.held[`${host}:${svc}`];
   if (held) add(`missing:${svc}`, 'warning', `${host}: ${svc} stopped ${held.by === 'chat' ? 'from chat' : 'by the sysadmin after a crash loop'} at ${fmtT(held.t)}`, `It stays stopped until you start it: cd /opt/stacks/${stack} && sudo docker compose up -d ${svc}`);
   else if (!prevMissing.includes(missing)) add(`missing:${svc}`, 'warning', `${host}: ${svc} is ${state}`, 'Expected by stack_services / the compose file; if it is still down at the next check it gets a restart');
-  else add(`missing:${svc}`, 'critical', `${host}: ${svc} should be running but is ${state}`, 'Expected by stack_services / the compose file', S.NEVER_RESTART.includes(svc) ? null : { verb: 'restart', target: svc });
+  else add(`missing:${svc}`, 'critical', `${host}: ${svc} should be running but is ${state}`, `Expected by stack_services / the compose file${needsYou(svc)}`, canFix(svc) ? { verb: 'restart', target: svc } : null);
 }
 if (dk.reclaimable_bytes > S.RECLAIM_WARN_GB * GB) add('docker-space', 'warning', `${host}: ${gb(dk.reclaimable_bytes)} of dangling images and build cache`, 'docker image prune (dangling only) frees it', { verb: 'docker-prune', target: 'docker' });
 
