@@ -161,7 +161,16 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | qBittorrent incomplete folder | `/incomplete/torrents` on the 200 GB scratch disk (compose volume `/srv/usenet-incomplete`, set by the same playbook, 2026-10-28): a 1 MB/s torrent landing on the NAS was about 70 small NFS sync writes a second, keeping all five disks 40-50 % busy at idle. Finished torrents move to `/mnt/nfs/sabnzb/torrents`, so imports stay hardlinks |
 | Usenet minimum age | Set to 15 min in both apps by `playbooks/media-fixups.yml` (2026-10-28): fresh posts grabbed at 0 min failed as "cannot be completed" before all articles had propagated |
 
-## Jellyseerr ("Requests")
+## Seerr ("Requests", was Jellyseerr)
+
+Since 2026-10-28 the container runs `ghcr.io/seerr-team/seerr:v3.5.1`: Jellyseerr and Overseerr were
+merged into Seerr and the old `fallenbagel/jellyseerr` image reports itself deprecated. Seerr migrated
+the Jellyseerr database on its first start; the service, port, address, data folder and API key are
+unchanged, so nothing else had to move. Seerr runs as uid 1000 and ships no init, so the compose
+service has `init: true` and `/opt/appdata/jellyseerr` is owned by 1000 (`playbooks/seerr-migration.yml`
+stopped the old container, left `/opt/appdata/jellyseerr-pre-seerr-<date>.tar.gz` as the rollback copy
+and did the chown; the stacks play then started the new image). The table below predates the switch.
+
 
 | | |
 | --- | --- |

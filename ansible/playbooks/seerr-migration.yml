@@ -1,0 +1,41 @@
+# One-time move from Jellyseerr to Seerr (2026-10-28, docs/wiki/services/media.md). Seerr keeps
+# Jellyseerr's data and migrates it on first start, but runs as uid 1000 where Jellyseerr ran as
+# root, so the appdata folder must change hands first or the new image crashes on "permission
+# denied". Run from the Mac, then deploy the stack (which pulls the new image and starts it):
+#
+#   ansible-playbook playbooks/seerr-migration.yml
+#   ansible-playbook playbooks/site.yml --limit media --tags stacks
+#
+# Rollback: image back to fallenbagel/jellyseerr:2 in compose, then on the VM
+#   docker compose -f /opt/stacks/media/compose.yaml stop jellyseerr
+#   rm -rf /opt/appdata/jellyseerr && tar -C /opt/appdata -xzf /opt/appdata/jellyseerr-pre-seerr-<date>.tar.gz
+# and deploy the stack again.
+- name: Jellyseerr -> Seerr (stop, backup, chown)
+  hosts: media
+  become: true
+  vars:
+    stamp: "{{ lookup('pipe', 'date +%Y%m%d') }}"
+    backup: "{{ appdata_root }}/jellyseerr-pre-seerr-{{ stamp }}.tar.gz"
+  tasks:
+    - name: Stop Jellyseerr (the database must be quiet for the copy)
+      ansible.builtin.command:
+        cmd: docker compose stop -t 30 jellyseerr
+        chdir: "{{ stacks_root }}/media"
+      changed_when: true
+
+    - name: Backup of the appdata folder (root-only)
+      ansible.builtin.command:
+        cmd: tar -C {{ appdata_root }} -czf {{ backup }} jellyseerr
+        creates: "{{ backup }}"
+
+    - name: Appdata owned by uid 1000, the user Seerr runs as
+      ansible.builtin.file:
+        path: "{{ appdata_root }}/jellyseerr"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        recurse: true
+
+    - name: Next step
+      ansible.builtin.debug:
+        msg: "Backup at {{ backup }}. Now: ansible-playbook playbooks/site.yml --limit media --tags stacks"
