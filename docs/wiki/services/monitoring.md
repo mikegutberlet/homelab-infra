@@ -43,7 +43,7 @@ flowchart LR
 | exportarr-sonarr/radarr/prowlarr/sabnzbd | apps (no port) | `ghcr.io/onedr0p/exportarr:v2.3.0` | Reuse Homepage's read-only API keys. 128 MB cap each. |
 | graphite-exporter | apps, `:2003` (TCP) | `prom/graphite-exporter:v0.17.0` | Receives TrueNAS's netdata metrics. Only 192.168.1.209 may send (`lanfw_extra_allow`). |
 | node-exporter | every VM, `:9100` host network | `prom/node-exporter:v1.12.1` | CPU, memory, disks, NFS mount, network, systemd units. 64 MB cap. |
-| cadvisor | every VM, `:9101` | `ghcr.io/google/cadvisor:v0.60.6` | Per-container CPU, memory, network, I/O, labelled with compose project and service. 192 MB cap. |
+| cadvisor | every VM, `:9101` | `ghcr.io/google/cadvisor:v0.60.6` | Per-container CPU, memory, network, blkio, labelled with compose project and service. 384 MB cap, 60 s housekeeping, container filesystem usage (`container_fs_usage_bytes`) off since 2026-10-28: the overlay walk had every cAdvisor thrashing at its old 192 MB cap. |
 
 Traefik exposes `/metrics` on its own entrypoint `:8082`, and the Tailscale subnet router on `:9002`
 (`TS_ENABLE_METRICS`). Scrape targets live in `stacks/apps/prometheus/prometheus.yml`.

@@ -11,7 +11,11 @@ vms = {
     node      = "RicksGarage"
     ip        = "192.168.1.50/24"
     cores     = 2
-    memory_mb = 4096 # 3 GB left ~0.5 GB free (Authentik + tsdproxy ~1.8 GB), 2026-10-22
+    # 6 GB since 2026-10-28: at 4 GB the VM averaged 0.8 GB available, dipped to 0.7 GB, swapped
+    # (190 MB) and showed I/O pressure from paging. tsdproxy alone holds ~900 MB for ~31 tailnet
+    # nodes, Authentik server+worker ~1.2 GB. RicksGarage had 9.9 GB free. The change needs a VM
+    # restart (the provider reboots edge on apply: Tailscale and Authentik are down for ~1 minute).
+    memory_mb = 6144
     disk_gb   = 32
     datastore = "local-lvm"
     startup   = 3 # after TrueNAS (1) and the old Servarr VM (2)
@@ -43,7 +47,10 @@ vms = {
     ip        = "192.168.1.52/24"
     cores     = 6
     memory_mb = 16384 # was 10240; RicksShip had room once apps moved off (2026-10-27)
-    disk_gb   = 96
+    # 128 GB since 2026-10-28: the 96 GB disk was 85% full (Plex metadata, Immich model cache,
+    # Tdarr's /temp, 23 GB of images). RicksShipXFS has 400 GB free. Growing is online; inside the
+    # VM afterwards: sudo growpart /dev/sda 1 && sudo resize2fs /dev/sda1 (or the next reboot does it).
+    disk_gb   = 128
     datastore = "RicksShipXFS"
     # The iGPU (00:02.0, vfio-pci on RicksShip since 2026-10-21) is attached by root with
     # `qm set 203 --hostpci0 0000:00:02.0,pcie=1`: the tofu@pve token can't set raw PCI devices,

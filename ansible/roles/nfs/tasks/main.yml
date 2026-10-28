@@ -84,17 +84,61 @@
 
 # Read-ahead (2026-10-22): the kernel gives an NFS mount 128 KB of read-ahead, sized for small
 # random reads. Plex streams and Tdarr sources are long sequential reads over 1 GbE that stutter
-# while the pool is busy (scrub, transcode batch). The udev rule covers every future NFS mount
-# (their bdi devices are the only "0:*" ones on these VMs); the live write covers the mounts
-# that exist now, so nothing is remounted. Undo: set nfs_readahead_kb back to 128 and run again.
-- name: NFS read-ahead for future mounts
+# while the pool is busy (scrub, transcode batch). Undo: set nfs_readahead_kb back to 128 and run again.
+# 2026-10-28: the udev rule used until now never held. NFS registers the bdi device (the udev event)
+# and then sets its own read-ahead, so after every boot all six VMs were back at 128 (checked live).
+# A one-shot service wanted by the mount unit runs after the mount instead, also when the automount
+# triggers it; the live write below covers the mounts that exist now, so nothing is remounted.
+- name: Old udev read-ahead rule removed (never took effect)
+  ansible.builtin.file:
+    path: /etc/udev/rules.d/99-nfs-readahead.rules
+    state: absent
+  when: nfs_mounts | default([]) | length > 0
+
+- name: NFS read-ahead service template
   ansible.builtin.copy:
-    dest: /etc/udev/rules.d/99-nfs-readahead.rules
+    dest: /etc/systemd/system/nfs-readahead@.service
     mode: "0644"
     content: |
-      # homelab-infra, role nfs: read-ahead in KiB for NFS mounts (kernel default 128)
-      SUBSYSTEM=="bdi", ACTION=="add", KERNEL=="0:*", ATTR{read_ahead_kb}="{{ nfs_readahead_kb }}"
+      [Unit]
+      Description=NFS read-ahead {{ nfs_readahead_kb }} KiB for /%I (homelab-infra, role nfs)
+      After=%i.mount
+      BindsTo=%i.mount
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/sh -c 'echo {{ nfs_readahead_kb }} > /sys/class/bdi/$(mountpoint -d /%I)/read_ahead_kb'
   when: nfs_mounts | default([]) | length > 0
+
+- name: Mount unit names
+  ansible.builtin.command: systemd-escape -p "{{ nfs_shares[item].path }}"
+  loop: "{{ nfs_mounts | default([]) }}"
+  register: nfs_unit_names
+  changed_when: false
+
+- name: Wants folder of each mount unit
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item.stdout }}.mount.wants"
+    state: directory
+    mode: "0755"
+  loop: "{{ nfs_unit_names.results }}"
+  loop_control:
+    label: "{{ item.stdout }}"
+
+- name: Read-ahead service wanted by each mount unit
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item.stdout }}.mount.wants/nfs-readahead@{{ item.stdout }}.service"
+    src: /etc/systemd/system/nfs-readahead@.service
+    state: link
+  loop: "{{ nfs_unit_names.results }}"
+  loop_control:
+    label: "{{ item.stdout }}"
+  register: nfs_ra_wants
+
+- name: systemd sees the new unit
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: nfs_ra_wants.changed
 
 - name: NFS read-ahead on the mounts that exist now
   ansible.builtin.shell: |
