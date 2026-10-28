@@ -138,6 +138,11 @@ services:
     volumes:
       - /opt/appdata/qbittorrent:/config
       - /mnt/nfs:/mnt/nfs
+      # Incomplete torrents on the scratch disk, like SABnzbd's: a 1 MB/s torrent landing on NFS
+      # was ~70 small sync writes/s that kept all five NAS disks 40-50% busy around the clock
+      # (2026-10-28). Finished torrents move to /mnt/nfs/sabnzb/torrents (save path unchanged),
+      # so imports stay hardlinks. qBittorrent's "keep incomplete in" is set by media-fixups.yml.
+      - /srv/usenet-incomplete:/incomplete
     depends_on:
       gluetun: {condition: service_healthy}
     # Checks the internet through the tunnel, not just the WebUI: when gluetun restarts, this
@@ -219,6 +224,25 @@ services:
       STALL_HOURS: "48"
     volumes:
       - ./stalled-cleaner:/app:ro
+    depends_on: [sonarr, radarr]
+
+  # Once a day (04:00) searches the 20 missing movies and 30 missing episodes that were searched
+  # longest ago (never first): RSS only finds new posts, so a title missing when it was added was
+  # never looked for again (2026-10-28: 226 released movies, 79 open requests). Tag `no-auto-search`
+  # to exempt a title; daily series are skipped. DRY_RUN=true logs only; ONCE=true runs one pass.
+  backlog-search:
+    <<: *common
+    image: python:3.12-alpine
+    user: ${PUID}:${PGID}
+    command: ["python", "-u", "/app/search_backlog.py"]
+    environment:
+      TZ: ${TZ}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      MOVIES_PER_DAY: "20"
+      EPISODES_PER_DAY: "30"
+    volumes:
+      - ./backlog-search:/app:ro
     depends_on: [sonarr, radarr]
 
   jellyseerr:

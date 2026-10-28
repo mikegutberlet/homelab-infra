@@ -144,7 +144,7 @@ sonarr:
         assign_scores_to:
           - name: *sonarr_main
           - name: *sonarr_foreign
-      # Smaller files (2026-10-23): x265 is welcome (the Golden Rule group below scores it -10000),
+      # Smaller files (2026-10-23): x265 is welcome (the guide's Golden Rule group would score it -10000),
       # 10-bit is not (the target is 8-bit HEVC; the iGPU can't decode 10-bit when a client transcodes).
       - trash_ids:
           - 47435ece6b99a0b477caf360e79ba0bb # x265 (HD)
@@ -170,8 +170,8 @@ sonarr:
           assign_scores_to: [name: *sonarr_main, name: *sonarr_foreign]
         - trash_id: 85fae4a2294965b75710ef2989c850eb # HD/UHD Streaming Boost
           assign_scores_to: [name: *sonarr_main, name: *sonarr_foreign]
-        - trash_id: 158188097a58d7687dee647e04af0da3 # Golden Rule HD (x265 (HD))
-          assign_scores_to: [name: *sonarr_main, name: *sonarr_foreign]
+        # Golden Rule HD (158188097a58d7687dee647e04af0da3) is not listed: it only carries x265 (HD)
+        # at -10000, which conflicted with the +500 above every sync (2026-10-28).
 
 radarr:
   radarr:
