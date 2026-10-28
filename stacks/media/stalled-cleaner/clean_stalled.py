@@ -6,8 +6,11 @@ dead torrents fill its 5 download slots so healthy ones never start (2026-10-27:
 unfinished torrents were dead, some for a week). Every 6 hours this removes any torrent in the
 Radarr/Sonarr queue that is older than STALL_HOURS and has not downloaded a single byte, deletes
 it from qBittorrent, blocklists that release and lets the app search again (skipRedownload=false),
-so the next pick can be Usenet or a torrent that has seeders. Usenet items and anything with
-progress are never touched. At most MAX_PER_RUN removals per app per pass.
+so the next pick can be Usenet or a torrent that has seeders. A torrent that has made progress
+is left alone until MAX_HOURS (7 days): public torrents with one or two seeders crawl for a week
+at 1-60 % and never finish (2026-10-28: eight of them, 127 h old, held Radarr's queue), so after
+that it is removed the same way. Usenet items are never touched. At most MAX_PER_RUN removals per
+app per pass.
 """
 
 import json
@@ -19,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 
 APPS = [("radarr", "http://radarr:7878", "RADARR_API_KEY"), ("sonarr", "http://sonarr:8989", "SONARR_API_KEY")]
 STALL_HOURS = int(os.environ.get("STALL_HOURS", "48"))
+MAX_HOURS = int(os.environ.get("MAX_HOURS", "168"))
 MAX_PER_RUN = int(os.environ.get("MAX_PER_RUN", "20"))
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
 
@@ -30,26 +34,29 @@ def api(base, key, path, method="GET"):
     return json.loads(data) if data else None
 
 
-def dead(item, cutoff):
+def dead(item, cutoff, deadline):
     if item.get("protocol") != "torrent" or not item.get("added"):
         return False
     added = datetime.fromisoformat(item["added"].replace("Z", "+00:00"))
     size, left = item.get("size") or 0, item.get("sizeleft") or 0
+    if added < deadline and left > 0:
+        return True  # a week old and still not finished
     return added < cutoff and (size == 0 or left >= size)
 
 
 def clean_app(name, base, key_env):
     key = os.environ[key_env]
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=STALL_HOURS)
+    now = datetime.now(timezone.utc)
+    cutoff, deadline = now - timedelta(hours=STALL_HOURS), now - timedelta(hours=MAX_HOURS)
     queue = api(base, key, "queue?pageSize=1000&includeUnknownMovieItems=false&includeUnknownSeriesItems=false")
     # A season pack is one download but one queue record per episode; remove each download once.
     seen, todo = set(), []
     for item in queue.get("records", []):
-        if dead(item, cutoff) and item.get("downloadId") not in seen:
+        if dead(item, cutoff, deadline) and item.get("downloadId") not in seen:
             seen.add(item.get("downloadId"))
             todo.append(item)
     for item in todo[:MAX_PER_RUN]:
-        print(f"{name}: dead since {item['added'][:16]}Z: {item['title']}", flush=True)
+        print(f"{name}: since {item['added'][:16]}Z, {item.get('sizeleft') or 0} bytes left: {item['title']}", flush=True)
         if not DRY_RUN:
             api(base, key, f"queue/{item['id']}?removeFromClient=true&blocklist=true&skipRedownload=false", "DELETE")
     print(f"{name}: {min(len(todo), MAX_PER_RUN)} removed of {len(todo)} dead"

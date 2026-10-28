@@ -149,7 +149,14 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | --- | --- |
 | Purpose | Every 6 h removes torrents that sat in the Radarr/Sonarr queue 48 h without downloading a byte (dead swarm): deleted from qBittorrent, release blocklisted, app searches again. Added 2026-10-27 after 62 dead torrents filled qBittorrent's slots |
 | Image | `python:3.12-alpine`, runs as 3000, script `stacks/media/stalled-cleaner/clean_stalled.py` (standard library only) |
-| Rules | Torrents only, never Usenet or anything with progress; at most 20 per app per pass. `STALL_HOURS`, `MAX_PER_RUN`, `DRY_RUN=true`, `ONCE=true` |
+| Rules | Torrents only, never Usenet. Zero bytes after 48 h, or still unfinished after 7 days (`MAX_HOURS`, added 2026-10-28 when eight one-seeder torrents had crawled for 127 h at 1-65 %); at most 20 per app per pass. `STALL_HOURS`, `MAX_PER_RUN`, `DRY_RUN=true`, `ONCE=true` |
+
+## unpackerr
+
+| | |
+| --- | --- |
+| Purpose | Radarr and Sonarr do not extract archives inside torrents ("Found archive file, might need to be extracted" sat 135 h on 2026-10-28). Unpackerr watches both queues, unpacks into the download folder, the app imports, and the extracted copies are removed 5 minutes later; the archive stays for seeding |
+| Image | `golift/unpackerr:0.16.1`, runs as 3000, env-only config (`UN_RADARR_0_*`, `UN_SONARR_0_*`, torrent protocol only; SABnzbd unpacks its own) in `stacks/media/compose.yaml` |
 
 ## backlog-search
 
