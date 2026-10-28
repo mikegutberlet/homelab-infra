@@ -230,12 +230,31 @@ services:
       TZ: ${TZ}
       DIUN_WATCH_SCHEDULE: "0 */6 * * *"
       DIUN_PROVIDERS_DOCKER: "true"
+      DIUN_PROVIDERS_DOCKER_ENDPOINT: tcp://socket-proxy:2375
       DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT: "true"
       DIUN_NOTIF_WEBHOOK_ENDPOINT: http://192.168.1.53:5678/webhook/homelab/diun # daily digest (n8n)
       DIUN_NOTIF_WEBHOOK_METHOD: POST
       DIUN_NOTIF_WEBHOOK_HEADERS_CONTENT-TYPE: application/json # Diun sets none; n8n then sees an empty body
     volumes:
       - /opt/appdata/diun:/data
+
+  # Docker API for autoheal and Diun (2026-10-28, security plan step 11). They used to mount
+  # /var/run/docker.sock, which is root on the VM (a read-only mount still allows every API call).
+  # The proxy passes only what they use: reading containers, images, events and info, plus
+  # restart/stop/kill for autoheal. Everything else (create, exec, volumes, ...) gets 403.
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/run]
+    environment:
+      CONTAINERS: 1
+      IMAGES: 1
+      INFO: 1
+      EVENTS: 1
+      ALLOW_RESTARTS: 1
+      POST: 0
+    volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   autoheal:
@@ -244,5 +263,5 @@ services:
     environment:
       AUTOHEAL_CONTAINER_LABEL: autoheal
       AUTOHEAL_INTERVAL: 30
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      DOCKER_SOCK: tcp://socket-proxy:2375
+    depends_on: [socket-proxy]
