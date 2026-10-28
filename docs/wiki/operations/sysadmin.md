@@ -39,7 +39,8 @@ Per-VM side: Ansible role `ops` (`homelab-agent`, `homelab-ops`).
 | `remount-nas` | `/mnt/nfs` empty or unmounted while TrueNAS answers on 2049 (a mount that hangs is critical but gets no fix: that is the NAS) | lazy unmount, re-trigger the automount, then recreate only the services that use `/mnt/nfs` (and the ones that depend on them), from `NFS_SERVICES` in `/etc/homelab-agent.conf`, and only the ones that are up: a service that was stopped on purpose stays stopped. n8n, Postgres and the rest of the stack keep running |
 
 Limits: one fix per target per hour, three per day; `ops_never` services (n8n, Postgres, Redis,
-MariaDB, autoheal, tailscale) are never touched. Never: reboot or power off anything, delete
+MariaDB, tailscale) are never touched; since 2026-10-28 each VM's agent reports its allow-list, so the
+sysadmin only plans fixes the door will take (autoheal and socket-proxy are restartable: no state). Never: reboot or power off anything, delete
 under `/mnt/nfs`, pull images (the `update` fix aside, auto-update list only), change app settings (except Plex Remote Access back on), touch the Tdarr queue.
 
 Fixes run in a separate n8n execution from the one that planned them. n8n saves a workflow's

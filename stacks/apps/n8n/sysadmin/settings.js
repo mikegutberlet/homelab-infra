@@ -25,7 +25,7 @@ const SETTINGS = {
   FIX_PER_HOUR: 1,
   FIX_PER_DAY: 3,
   // Services the ops door never restarts (mirrors ops_never in ansible group_vars).
-  NEVER_RESTART: ['n8n', 'postgres', 'redis', 'autoheal', 'tailscale', 'immich-db', 'immich-redis', 'romm-db', 'authentik-db', 'authentik-redis', 'scrutiny-influx'],
+  NEVER_RESTART: ['n8n', 'postgres', 'redis', 'tailscale', 'immich-db', 'immich-redis', 'romm-db', 'authentik-db', 'authentik-redis', 'scrutiny-influx'],
   // Critical issues are emailed at once, then again only every 6 hours while they persist.
   EMAIL_REPEAT_H: 6,
   // An issue resolves only after this many checks of its scope (15 min apart) without it, so a value

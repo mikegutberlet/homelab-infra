@@ -151,7 +151,11 @@ backup_json() {
 
 # ---------- docker ----------
 docker_json() {
-  local containers='[]' missing='[]' reclaim=0 auto='[]'
+  local containers='[]' missing='[]' reclaim=0 auto='[]' allowed='[]'
+  # Services the ops door may restart or stop (/etc/homelab-ops.allow): n8n plans fixes from this
+  # list, so a fix it would plan is never one the door then refuses.
+  [ -r /etc/homelab-ops.allow ] && allowed=$(awk -F/ '!/^#/ && NF == 2 { print $2 }' /etc/homelab-ops.allow \
+    | jq -R -s -c 'split("\n") | map(select(length > 0))')
   # Services the sysadmin may update itself (role ops, hosts.yml auto_update): "stack/service".
   [ -r /etc/homelab-autoupdate.conf ] && auto=$(awk '!/^#/ && NF > 1 { for (i = 2; i <= NF; i++) print $1 "/" $i }' \
     /etc/homelab-autoupdate.conf | jq -R -s -c 'split("\n") | map(select(length > 0))')
@@ -182,8 +186,8 @@ docker_json() {
         m=1; if (u ~ /^kB/) m=1e3; if (u ~ /^MB/) m=1e6; if (u ~ /^GB/) m=1e9; if (u ~ /^TB/) m=1e12; t+=v*m }
       END { printf "%d", t }')
   fi
-  j -n --argjson c "$containers" --argjson m "$missing" --argjson r "$(num "$reclaim")" --argjson a "$auto" \
-    '{containers:$c, missing:$m, reclaimable_bytes:$r, auto_update:$a}'
+  j -n --argjson c "$containers" --argjson m "$missing" --argjson r "$(num "$reclaim")" --argjson a "$auto" --argjson w "$allowed" \
+    '{containers:$c, missing:$m, reclaimable_bytes:$r, auto_update:$a, allowed:$w}'
 }
 
 # ---------- media apps (only where their config exists) ----------

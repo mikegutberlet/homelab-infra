@@ -165,7 +165,7 @@
     mode: "0644"
     content: |
       # Written by Ansible (role ops): stack/service pairs the ops door accepts. n8n itself,
-      # databases and autoheal are left out on purpose.
+      # databases and Tailscale are left out on purpose (ops_never); homelab-agent reports this list.
       {% for s in ops_allow %}
       {{ s }}
       {% endfor %}
