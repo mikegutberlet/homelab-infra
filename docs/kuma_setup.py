@@ -48,6 +48,7 @@ MONITORS = [
     ("Tautulli", "http://192.168.1.53:8181/status", False, None),
     ("Nextcloud", "http://192.168.1.53:8090/status.php", False, None),
     ("Paperless", "http://192.168.1.53:8000/", False, ["200-299", "300-399"]),
+    ("Tackle Box archive", "http://192.168.1.53:8787/health", False, ["200-299"]),
     ("Stirling PDF", "http://192.168.1.53:8070/", False, ["200-299", "300-399"]),
     ("n8n", "http://192.168.1.53:5678/healthz", False, None),
     ("Sysadmin chat", "http://192.168.1.53:3003/healthz", False, None),

@@ -96,6 +96,9 @@ grafana:
 prometheus:
   url: http://traefik:80
 
+fishing:
+  url: http://traefik:80
+
 chat:
   url: http://traefik:80
 

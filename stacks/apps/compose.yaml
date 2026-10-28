@@ -478,6 +478,32 @@ services:
     volumes:
       - ./prometheus/graphite-mapping.yml:/etc/graphite/mapping.yml:ro
 
+  # Tackle Box archive (2026-10-28): the fishing app's private water corpus. Builds it nightly into
+  # NAS/Documents/TackleBox (public-service facts plus Goobs's books and notes; nothing of it in the
+  # app's public repo) and serves it to the app with a bearer key. Image built by Compose from the
+  # app's repo (github.com/mikegutberlet/FishingApp, server/). Not behind Authentik: the app sends
+  # its own key, and a browser fetch can't follow a login redirect. Phones reach it over the tailnet.
+  tackle-box-archive:
+    <<: *common
+    build:
+      context: https://github.com/mikegutberlet/FishingApp.git#main
+      dockerfile: server/Dockerfile
+    user: ${PUID}:${PGID}
+    mem_limit: 1g
+    ports: ["8787:8787"]
+    environment:
+      CORPUS_TOKEN: ${TACKLEBOX_CORPUS_TOKEN}
+      ALLOW_ORIGIN: https://mikegutberlet.github.io
+      BUILD_HOUR: 1 # the public road/trail services take 30-90 s per water; a run is capped at 300 min
+      TZ: ${TZ}
+    volumes:
+      # NAS/Documents/TackleBox, 3000:3000, add-only: the archive, its catalogue, logs and the books.
+      - /mnt/nfs/Documents/TackleBox:/corpus
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"]
+      interval: 30s
+      retries: 3
+
   # Docker API for autoheal and Diun (2026-10-28, security plan step 11). They used to mount
   # /var/run/docker.sock, which is root on the VM (a read-only mount still allows every API call).
   # The proxy passes only what they use: reading containers, images, events and info, plus

@@ -47,7 +47,7 @@ flowchart TB
 | edge (201) | RicksGarage | 192.168.1.50 | 2 / 4 GB / 32 GB | Traefik, Authentik (server, worker, Postgres, Redis), TSDProxy, Tailscale subnet router, Docker socket proxy, autoheal. wg-easy defined but not started | no |
 | media (202) | RicksPortalGun | 192.168.1.51 | 4 / 12 GB fixed / 64 GB + 200 GB SABnzbd temp disk | Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd, gluetun + qBittorrent, Recyclarr, Jellyseerr, MeTube, Storyteller, Audiobookshelf, RomM + MariaDB, autoheal | yes |
 | gpu (203) | RicksShip | 192.168.1.52 | 6 / 16 GB / 96 GB + iGPU passthrough | Plex, Emby, ErsatzTV, Immich (server, ML, Postgres, Valkey), Tdarr, Unmanic, autoheal | yes |
-| apps (204) | RicksPortalGun | 192.168.1.53 | 4 / 16 GB / 96 GB | Postgres (pgvector), Redis, Nextcloud (+ nginx, cron), Paperless (+ Gotenberg, Tika), Stirling-PDF, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny (+ InfluxDB), Diun, OliveTin, autoheal | yes (Nextcloud, Paperless, backups) |
+| apps (204) | RicksPortalGun | 192.168.1.53 | 4 / 16 GB / 96 GB | Postgres (pgvector), Redis, Nextcloud (+ nginx, cron), Paperless (+ Gotenberg, Tika), Stirling-PDF, Tackle Box archive, n8n, Huginn, Tautulli, Homepage, Uptime Kuma, Scrutiny (+ InfluxDB), Diun, OliveTin, autoheal | yes (Nextcloud, Paperless, TackleBox, backups) |
 | ai (205) | RicksShip | 192.168.1.54 | 2 / 6 GB / 32 GB | Open WebUI, AnythingLLM, Piper TTS; LangChain/CrewAI worker defined but not started | no |
 | transcode (206) | RicksPortalGun | 192.168.1.55 | 4 / 4 GB / 48 GB + iGPU passthrough | Tdarr node (second worker for the gpu VM's Tdarr server), autoheal, Diun | yes |
 
@@ -78,6 +78,7 @@ All Tailscale names end in `.tail9af84.ts.net`. "SSO" means the Authentik login 
 | Nextcloud | cloud | own | apps | Files and sync |
 | Paperless-ngx | paperless | SSO + own (`goobs`) | apps | Scanned documents with OCR |
 | Stirling-PDF | pdf | SSO | apps | PDF tools |
+| Tackle Box archive | fishing | own key (bearer) | apps | The fishing app's private water corpus: nightly build into NAS/Documents/TackleBox, served to the app |
 | n8n | n8n | SSO + own | apps | Automation; sends the daily digest email |
 | Huginn | huginn | SSO + own (`admin`) | apps | Agents and scrapers |
 | Tautulli | tautulli | SSO | apps | Plex statistics (history migrated) |
