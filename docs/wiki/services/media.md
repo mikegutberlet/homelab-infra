@@ -151,6 +151,15 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Image | `python:3.12-alpine`, runs as 3000, script `stacks/media/stalled-cleaner/clean_stalled.py` (standard library only) |
 | Rules | Torrents only, never Usenet or anything with progress; at most 20 per app per pass. `STALL_HOURS`, `MAX_PER_RUN`, `DRY_RUN=true`, `ONCE=true` |
 
+## backlog-search
+
+| | |
+| --- | --- |
+| Purpose | Radarr and Sonarr only find new releases through RSS; a title that was missing when it was added, or whose first grab failed, is never searched again unless someone clicks Search (2026-10-28: 226 released movies and 79 open Jellyseerr requests sat like that). Once a day at 04:00 this searches the 20 missing, available movies and 30 missing, aired episodes that were searched longest ago (never first), so the backlog is cycled slowly and the indexers' daily limits are not touched |
+| Image | `python:3.12-alpine`, runs as 3000, script `stacks/media/backlog-search/search_backlog.py` (standard library only) |
+| Rules | Only monitored, missing titles; Radarr's minimum availability, the delay profile and the custom formats still decide what is grabbed. Skips titles tagged `no-auto-search` (use it for a film kept on purpose at a bad copy until its real release) and every daily-type series (talk shows and news, thousands of old episodes). `MOVIES_PER_DAY`, `EPISODES_PER_DAY`, `HOUR`, `DRY_RUN=true`, `ONCE=true` |
+| Usenet minimum age | Set to 15 min in both apps by `playbooks/media-fixups.yml` (2026-10-28): fresh posts grabbed at 0 min failed as "cannot be completed" before all articles had propagated |
+
 ## Jellyseerr ("Requests")
 
 | | |

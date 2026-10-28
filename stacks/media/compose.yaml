@@ -221,6 +221,25 @@ services:
       - ./stalled-cleaner:/app:ro
     depends_on: [sonarr, radarr]
 
+  # Once a day (04:00) searches the 20 missing movies and 30 missing episodes that were searched
+  # longest ago (never first): RSS only finds new posts, so a title missing when it was added was
+  # never looked for again (2026-10-28: 226 released movies, 79 open requests). Tag `no-auto-search`
+  # to exempt a title; daily series are skipped. DRY_RUN=true logs only; ONCE=true runs one pass.
+  backlog-search:
+    <<: *common
+    image: python:3.12-alpine
+    user: ${PUID}:${PGID}
+    command: ["python", "-u", "/app/search_backlog.py"]
+    environment:
+      TZ: ${TZ}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      MOVIES_PER_DAY: "20"
+      EPISODES_PER_DAY: "30"
+    volumes:
+      - ./backlog-search:/app:ro
+    depends_on: [sonarr, radarr]
+
   jellyseerr:
     <<: *common
     image: fallenbagel/jellyseerr:2

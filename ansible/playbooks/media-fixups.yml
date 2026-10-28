@@ -1,0 +1,22 @@
+# One-off repairs from the 2026-10-28 download-path audit (files/media_fixups.py has the list:
+# Usenet minimum age, Radarr's dead SMB root folder, stuck manual imports, Sonarr's duplicate
+# TVDB-deleted series). Run from the Mac:
+#
+#   ansible-playbook playbooks/media-fixups.yml --check   # report only
+#   ansible-playbook playbooks/media-fixups.yml           # apply; prints what is left for Goobs
+- name: Media download-path fixups
+  hosts: media
+  become: true
+  tasks:
+    - name: Apply (python3 on the VM; API keys read from the apps' config files)
+      ansible.builtin.script:
+        cmd: "files/media_fixups.py {{ '--dry-run' if ansible_check_mode else '' }}"
+        executable: /usr/bin/python3
+      register: fixups
+      check_mode: false
+      changed_when: "'changed: 0' not in fixups.stdout and 'would change: 0' not in fixups.stdout"
+      failed_when: fixups.rc != 0
+
+    - name: Result
+      ansible.builtin.debug:
+        msg: "{{ fixups.stdout_lines }}"
