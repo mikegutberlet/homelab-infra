@@ -56,16 +56,15 @@
 # KSM (2026-10-28): ksmtuned merges identical guest pages to fit more VMs in RAM. No host overcommits
 # any more (RicksGarage 9.9 GB free, RicksShip 9 GB, RicksPortalGun 32 GB), yet ksmd had burned
 # 8 h 51 min of CPU in six days on RicksGarage to share 1.7 GB, and every merged page costs a VM a
-# copy-on-write fault when it writes. Off on all three. Undo: systemctl enable --now ksmtuned ksm.
+# copy-on-write fault when it writes. Off on all three. Undo: systemctl enable --now ksmtuned.
 - name: KSM off
   hosts: proxmox
   tasks:
-    - name: ksmtuned and ksm stopped and disabled
+    - name: ksmtuned stopped and disabled (Proxmox has no separate ksm unit; run=0 is the boot default)
       ansible.builtin.systemd:
-        name: "{{ item }}"
+        name: ksmtuned
         state: stopped
         enabled: false
-      loop: [ksmtuned, ksm]
 
     - name: Shared pages unmerged (needs the RAM they saved, a few GB at most)
       ansible.builtin.shell: |
