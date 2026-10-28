@@ -5,7 +5,7 @@
 | | |
 | --- | --- |
 | Software | TrueNAS 25.10.7 (Goldeye), upgraded from 23.10.2 on 2026-10-26; rollback boot environment 25.04.2.6. Pool feature flags not upgraded on purpose. Hand-made changes and their undo: [`docs/truenas.md`](../../truenas.md) |
-| VM | 16 GB RAM fixed, ballooning off (was 32 GB on a 31 GiB host). vCPU count from the inventory: 6 `(unverified after the change)`. `onboot=1`, startup order 1 with a 120 s delay, so it comes up before every other guest on RicksGarage |
+| VM | 20 GB RAM fixed, ballooning off (32 GB until 2026-10-21, 16 GB until 2026-10-28), CPU type `host` since 2026-10-28, 6 vCPUs. `onboot=1`, startup order 1 with a 120 s delay, so it comes up before every other guest on RicksGarage |
 | Disks | The five DAS disks attached by-id as virtual disks (scsi4 to scsi8 on `virtio-scsi-single`, one I/O thread each since 2026-10-26); the VM's own boot disk on host storage |
 | Services | NFS (`/mnt/DeepData/NAS` and `ProxMox` exports to 192.168.1.0/24), SMB, SSH (turned on 2026-10-21 for the read-only inventory key). The built-in UPS service (NUT client) is part of the UPS plan |
 | Access | SSH as the user Goobs shared, with the Mac's `homelab_inventory_ed25519` key; the web UI with the credentials in the project's creds document. No service account exists yet; the design wants one scoped to the lab's datasets |
