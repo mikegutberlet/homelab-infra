@@ -267,6 +267,7 @@ services:
       RADARR_API_KEY: ${RADARR_API_KEY}
       MOVIES_PER_DAY: "20"
       EPISODES_PER_DAY: "30"
+      EPISODES_PER_SERIES: "3"
     volumes:
       - ./backlog-search:/app:ro
     depends_on: [sonarr, radarr]

@@ -9,7 +9,10 @@ the whole backlog is cycled slowly instead of hammering the indexers. The apps' 
 decide what is grabbed (profiles, custom formats, delay profile, minimum availability).
 
 Skipped: anything tagged `no-auto-search` (e.g. a film kept at a bad copy until its real release),
-episodes of daily series (talk shows, news; thousands of old episodes nobody wants searched).
+episodes of daily series (talk shows, news; thousands of old episodes nobody wants searched). At
+most EPISODES_PER_SERIES episodes of one series per pass, so a show with a thousand gaps (Watch
+What Happens Live is typed "standard", not daily, and took the whole first pass on 2026-10-28)
+cannot crowd out the rest.
 DRY_RUN=true logs only; ONCE=true runs a single pass now and exits.
 """
 
@@ -23,6 +26,7 @@ from datetime import datetime, timedelta, timezone
 RADARR, SONARR = "http://radarr:7878", "http://sonarr:8989"
 MOVIES_PER_DAY = int(os.environ.get("MOVIES_PER_DAY", "20"))
 EPISODES_PER_DAY = int(os.environ.get("EPISODES_PER_DAY", "30"))
+EPISODES_PER_SERIES = int(os.environ.get("EPISODES_PER_SERIES", "3"))
 HOUR = int(os.environ.get("HOUR", "4"))
 SKIP_TAG = "no-auto-search"
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
@@ -65,11 +69,17 @@ def episodes():
     now = datetime.now(timezone.utc).isoformat()
     # Newest 1000 missing episodes, then the ones searched longest ago among them.
     page = api(SONARR, key, "wanted/missing?pageSize=1000&sortKey=airDateUtc&sortDirection=descending&monitored=true")
-    todo = sorted((e for e in page.get("records", [])
-                   if (e.get("airDateUtc") or "9") < now
-                   and series.get(e["seriesId"], {}).get("seriesType") != "daily"
-                   and not skip.intersection(series.get(e["seriesId"], {}).get("tags", []))),
-                  key=never_first)[:EPISODES_PER_DAY]
+    todo, per_series = [], {}
+    for e in sorted((e for e in page.get("records", [])
+                     if (e.get("airDateUtc") or "9") < now
+                     and series.get(e["seriesId"], {}).get("seriesType") != "daily"
+                     and not skip.intersection(series.get(e["seriesId"], {}).get("tags", []))),
+                    key=never_first):
+        if per_series.get(e["seriesId"], 0) < EPISODES_PER_SERIES:
+            per_series[e["seriesId"]] = per_series.get(e["seriesId"], 0) + 1
+            todo.append(e)
+        if len(todo) == EPISODES_PER_DAY:
+            break
     for e in todo:
         s = series.get(e["seriesId"], {})
         print(f"sonarr: {s.get('title')} S{e['seasonNumber']:02}E{e['episodeNumber']:02} last searched {(e.get('lastSearchTime') or 'never')[:10]}", flush=True)
