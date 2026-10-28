@@ -229,7 +229,8 @@ least a week. The sabnzb/complete leftovers are never deleted without an explici
 **Decision (Goobs, card 2026-10-26 19:46 UTC, "Alerts + auto-update safe apps"; then "Can the alerts
 and updates following the alert come directly from and to my Sys Admin").** Diun runs on every VM and
 reports to the sysadmin. Internet-facing media apps (Plex, Emby, Jellyseerr, the *arr apps, SABnzbd,
-qBittorrent, FlareSolverr) are updated by the sysadmin between 03:00 and 05:00 Pacific. **Cost.** A bad
+qBittorrent, FlareSolverr; since 2026-10-28 also MeTube and the python helper scripts, which keep no
+database) are updated by the sysadmin between 03:00 and 05:00 Pacific. **Cost.** A bad
 upstream release can break one of them overnight until it is rolled back. **Consequence.** Authentik,
 Nextcloud, Immich, Paperless, databases and pinned images (ErsatzTV, Kometa) stay manual; they show as
 "update available (by hand)".
