@@ -149,7 +149,14 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | --- | --- |
 | Purpose | Every 6 h removes torrents that sat in the Radarr/Sonarr queue 48 h without downloading a byte (dead swarm): deleted from qBittorrent, release blocklisted, app searches again. Added 2026-10-27 after 62 dead torrents filled qBittorrent's slots |
 | Image | `python:3.12-alpine`, runs as 3000, script `stacks/media/stalled-cleaner/clean_stalled.py` (standard library only) |
-| Rules | Torrents only, never Usenet or anything with progress; at most 20 per app per pass. `STALL_HOURS`, `MAX_PER_RUN`, `DRY_RUN=true`, `ONCE=true` |
+| Rules | Torrents only, never Usenet. Zero bytes after 48 h, or still unfinished after 7 days (`MAX_HOURS`, added 2026-10-28 when eight one-seeder torrents had crawled for 127 h at 1-65 %); at most 20 per app per pass. `STALL_HOURS`, `MAX_PER_RUN`, `DRY_RUN=true`, `ONCE=true` |
+
+## unpackerr
+
+| | |
+| --- | --- |
+| Purpose | Radarr and Sonarr do not extract archives inside torrents ("Found archive file, might need to be extracted" sat 135 h on 2026-10-28). Unpackerr watches both queues, unpacks into the download folder, the app imports, and the extracted copies are removed 5 minutes later; the archive stays for seeding |
+| Image | `golift/unpackerr:0.16.1`, runs as 3000, env-only config (`UN_RADARR_0_*`, `UN_SONARR_0_*`, torrent protocol only; SABnzbd unpacks its own) in `stacks/media/compose.yaml` |
 
 ## backlog-search
 
@@ -157,7 +164,7 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | --- | --- |
 | Purpose | Radarr and Sonarr only find new releases through RSS; a title that was missing when it was added, or whose first grab failed, is never searched again unless someone clicks Search (2026-10-28: 226 released movies and 79 open Jellyseerr requests sat like that). Once a day at 04:00 this searches the 20 missing, available movies and 30 missing, aired episodes that were searched longest ago (never first), so the backlog is cycled slowly and the indexers' daily limits are not touched |
 | Image | `python:3.12-alpine`, runs as 3000, script `stacks/media/backlog-search/search_backlog.py` (standard library only) |
-| Rules | Only monitored, missing titles; Radarr's minimum availability, the delay profile and the custom formats still decide what is grabbed. Skips titles tagged `no-auto-search` (use it for a film kept on purpose at a bad copy until its real release) and every daily-type series (talk shows and news, thousands of old episodes). `MOVIES_PER_DAY`, `EPISODES_PER_DAY`, `HOUR`, `DRY_RUN=true`, `ONCE=true` |
+| Rules | Only monitored, missing titles; Radarr's minimum availability, the delay profile and the custom formats still decide what is grabbed. Skips titles tagged `no-auto-search` (use it for a film kept on purpose at a bad copy until its real release) and every daily-type series (talk shows and news, thousands of old episodes); at most 3 episodes of one series per pass (`EPISODES_PER_SERIES`, after Watch What Happens Live, typed standard with 3,185 gaps, took the whole first pass on 2026-10-28). `MOVIES_PER_DAY`, `EPISODES_PER_DAY`, `HOUR`, `DRY_RUN=true`, `ONCE=true` |
 | qBittorrent incomplete folder | `/incomplete/torrents` on the 200 GB scratch disk (compose volume `/srv/usenet-incomplete`, set by the same playbook, 2026-10-28): a 1 MB/s torrent landing on the NAS was about 70 small NFS sync writes a second, keeping all five disks 40-50 % busy at idle. Finished torrents move to `/mnt/nfs/sabnzb/torrents`, so imports stay hardlinks |
 | Usenet minimum age | Set to 15 min in both apps by `playbooks/media-fixups.yml` (2026-10-28): fresh posts grabbed at 0 min failed as "cannot be completed" before all articles had propagated |
 

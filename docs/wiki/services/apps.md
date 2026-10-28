@@ -90,12 +90,21 @@ flowchart TB
 
 ## Sysadmin investigator
 
-`homelab/sysadmin-investigator:1`, built from `stacks/apps/sysadmin-investigator/` (Python and the
+`homelab/sysadmin-investigator:2`, built from `stacks/apps/sysadmin-investigator/` (Python and the
 Claude Agent SDK), port 3006 on the stack's network only (n8n calls it; nothing is published).
 The sysadmin chat's `investigate` tool and the alert auto-investigation, on Claude Sonnet 5.5 with
 a $2 a day cap. Settings in `/opt/appdata/sysadmin-investigator/investigator.env` (written by
 `docs/sysadmin_deploy.py`), state in `data/`, a read-only copy of this repository in `repo/`.
 See [sysadmin: the investigator](../operations/sysadmin.md#the-investigator-hard-questions).
+
+## TrueNAS bridge
+
+`homelab/truenas-bridge:1`, built from `stacks/apps/truenas-bridge/`: the sysadmin workflow's
+15-minute NAS reads and the investigator's `truenas` tool ask `http://truenas-bridge:8080/<method>`
+(read-only JSON-RPC methods such as `pool.query`, `alert.list`), and it talks to the NAS over the
+WebSocket API with the same key Homepage uses. TrueNAS deprecated the REST API in 25.04 (removed
+in 26) and raises a RESTAPIUsage alert on every use; Homepage's widget uses `version: 2` for the
+same reason (2026-10-28).
 
 ## Huginn
 

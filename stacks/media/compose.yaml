@@ -209,9 +209,10 @@ services:
     depends_on: [sonarr, radarr]
 
   # Every 6 h removes torrents that have sat in the Radarr/Sonarr queue for 48 h without one byte
-  # (dead swarm), blocklists that release and lets the app search again (2026-10-27: 62 dead
-  # torrents had filled qBittorrent's download slots). Usenet items and torrents with progress are
-  # never touched. DRY_RUN=true logs only; ONCE=true exits after one pass.
+  # (dead swarm) or for 7 days without finishing (one-seeder crawlers), blocklists that release
+  # and lets the app search again (2026-10-27: 62 dead torrents had filled qBittorrent's download
+  # slots; 2026-10-28: eight week-old partial ones held the queue). Usenet items are never touched.
+  # DRY_RUN=true logs only; ONCE=true exits after one pass.
   stalled-cleaner:
     <<: *common
     image: python:3.12-alpine
@@ -222,8 +223,33 @@ services:
       SONARR_API_KEY: ${SONARR_API_KEY}
       RADARR_API_KEY: ${RADARR_API_KEY}
       STALL_HOURS: "48"
+      MAX_HOURS: "168"
     volumes:
       - ./stalled-cleaner:/app:ro
+    depends_on: [sonarr, radarr]
+
+  # Extracts archives inside finished downloads (2026-10-28: "Wisconsin Death Trip" sat 135 h as
+  # "Found archive file, might need to be extracted"; Radarr/Sonarr never unpack torrents). Watches
+  # both apps' queues, unpacks into the download folder as uid 3000, the app imports, and the
+  # extracted copies are deleted 5 min after the import (the archive stays for seeding). Env-only
+  # config, no /config volume needed.
+  unpackerr:
+    <<: *common
+    image: golift/unpackerr:0.16.1
+    user: ${PUID}:${PGID}
+    mem_limit: 512m
+    environment:
+      TZ: ${TZ}
+      UN_RADARR_0_URL: http://radarr:7878
+      UN_RADARR_0_API_KEY: ${RADARR_API_KEY}
+      UN_RADARR_0_PATHS_0: /mnt/nfs/sabnzb/torrents/movies
+      UN_RADARR_0_PROTOCOLS: torrent
+      UN_SONARR_0_URL: http://sonarr:8989
+      UN_SONARR_0_API_KEY: ${SONARR_API_KEY}
+      UN_SONARR_0_PATHS_0: /mnt/nfs/sabnzb/torrents/tv
+      UN_SONARR_0_PROTOCOLS: torrent
+    volumes:
+      - /mnt/nfs:/mnt/nfs
     depends_on: [sonarr, radarr]
 
   # Once a day (04:00) searches the 20 missing movies and 30 missing episodes that were searched
@@ -241,6 +267,7 @@ services:
       RADARR_API_KEY: ${RADARR_API_KEY}
       MOVIES_PER_DAY: "20"
       EPISODES_PER_DAY: "30"
+      EPISODES_PER_SERIES: "3"
     volumes:
       - ./backlog-search:/app:ro
     depends_on: [sonarr, radarr]
@@ -397,21 +424,20 @@ services:
     volumes:
       - /opt/appdata/diun:/data
 
-  # Docker API for autoheal and Diun (2026-10-28, security plan step 11). They used to mount
+  # Docker API for Diun (2026-10-28, security plan step 11). Diun used to mount
   # /var/run/docker.sock, which is root on the VM (a read-only mount still allows every API call).
-  # The proxy passes only what they use: reading containers, images, events and info, plus
-  # restart/stop/kill for autoheal. Everything else (create, exec, volumes, ...) gets 403.
+  # The proxy passes only reads of containers, images, events and info; everything else gets 403.
+  # Not read-only: the image writes haproxy.cfg at start. autoheal keeps the socket: 1.2.0 can't
+  # talk plain tcp:// (it rewrites it to https and requires the socket file), and the only image
+  # that can is the untagged :latest.
   socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     restart: unless-stopped
-    read_only: true
-    tmpfs: [/run]
     environment:
       CONTAINERS: 1
       IMAGES: 1
       INFO: 1
       EVENTS: 1
-      ALLOW_RESTARTS: 1
       POST: 0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -422,5 +448,5 @@ services:
     environment:
       AUTOHEAL_CONTAINER_LABEL: autoheal
       AUTOHEAL_INTERVAL: 30
-      DOCKER_SOCK: tcp://socket-proxy:2375
-    depends_on: [socket-proxy]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

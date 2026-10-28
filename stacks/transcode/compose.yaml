@@ -19,9 +19,9 @@ services:
   tdarr-node:
     <<: *common
     # A node must match the server's version exactly or it exits ("Node version 3.03.00 does not
-    # match Server version 3.01.00", 2026-10-27). The server runs :latest as pulled on the gpu VM;
-    # when it is updated, bump this tag to the same version.
-    image: ghcr.io/haveagitgat/tdarr_node:3.01.00
+    # match Server version 3.01.00", 2026-10-27). The server in stacks/gpu is pinned to the same
+    # version since 2026-10-28; bump both tags together.
+    image: ghcr.io/haveagitgat/tdarr_node:3.04.00
     mem_limit: 4g
     cpus: 4
     environment:
@@ -70,21 +70,20 @@ services:
     volumes:
       - /opt/appdata/diun:/data
 
-  # Docker API for autoheal and Diun (2026-10-28, security plan step 11). They used to mount
+  # Docker API for Diun (2026-10-28, security plan step 11). Diun used to mount
   # /var/run/docker.sock, which is root on the VM (a read-only mount still allows every API call).
-  # The proxy passes only what they use: reading containers, images, events and info, plus
-  # restart/stop/kill for autoheal. Everything else (create, exec, volumes, ...) gets 403.
+  # The proxy passes only reads of containers, images, events and info; everything else gets 403.
+  # Not read-only: the image writes haproxy.cfg at start. autoheal keeps the socket: 1.2.0 can't
+  # talk plain tcp:// (it rewrites it to https and requires the socket file), and the only image
+  # that can is the untagged :latest.
   socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     restart: unless-stopped
-    read_only: true
-    tmpfs: [/run]
     environment:
       CONTAINERS: 1
       IMAGES: 1
       INFO: 1
       EVENTS: 1
-      ALLOW_RESTARTS: 1
       POST: 0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -95,5 +94,5 @@ services:
     environment:
       AUTOHEAL_CONTAINER_LABEL: autoheal
       AUTOHEAL_INTERVAL: 30
-      DOCKER_SOCK: tcp://socket-proxy:2375
-    depends_on: [socket-proxy]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

@@ -208,7 +208,7 @@ services:
   sysadmin-investigator:
     <<: *common
     build: ./sysadmin-investigator
-    image: homelab/sysadmin-investigator:1
+    image: homelab/sysadmin-investigator:2
     mem_limit: 1g
     user: ${PUID}:${PGID}
     env_file:
@@ -217,7 +217,6 @@ services:
       TZ: ${TZ}
       PVE_TOKEN_ID: ${HOMEPAGE_PROXMOX_TOKEN_ID}
       PVE_TOKEN_SECRET: ${HOMEPAGE_PROXMOX_TOKEN_SECRET}
-      TRUENAS_KEY: ${HOMEPAGE_TRUENAS_KEY}
       MODEL: claude-sonnet-5-5
       EFFORT: medium
       DAILY_USD: "2.00"
@@ -229,6 +228,22 @@ services:
       - /opt/appdata/sysadmin-investigator/data:/data
       - /opt/appdata/sysadmin-investigator/repo:/repo:ro
     depends_on: [n8n]
+
+  # TrueNAS's REST API is deprecated (gone in 26) and the NAS warns on every use. n8n's 15-min reads
+  # and the investigator ask this instead; it speaks the WebSocket JSON-RPC API and answers plain
+  # HTTP on the stack network only (truenas-bridge:8080/<method>, see truenas-bridge/bridge.py).
+  truenas-bridge:
+    <<: *common
+    build: ./truenas-bridge
+    image: homelab/truenas-bridge:1
+    mem_limit: 128m
+    environment:
+      TRUENAS_URL: wss://192.168.1.209/api/current
+      TRUENAS_KEY: ${HOMEPAGE_TRUENAS_KEY}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 60s
+      retries: 3
 
   huginn:
     <<: *common
@@ -478,21 +493,20 @@ services:
     volumes:
       - ./prometheus/graphite-mapping.yml:/etc/graphite/mapping.yml:ro
 
-  # Docker API for autoheal and Diun (2026-10-28, security plan step 11). They used to mount
+  # Docker API for Diun (2026-10-28, security plan step 11). Diun used to mount
   # /var/run/docker.sock, which is root on the VM (a read-only mount still allows every API call).
-  # The proxy passes only what they use: reading containers, images, events and info, plus
-  # restart/stop/kill for autoheal. Everything else (create, exec, volumes, ...) gets 403.
+  # The proxy passes only reads of containers, images, events and info; everything else gets 403.
+  # Not read-only: the image writes haproxy.cfg at start. autoheal keeps the socket: 1.2.0 can't
+  # talk plain tcp:// (it rewrites it to https and requires the socket file), and the only image
+  # that can is the untagged :latest.
   socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     restart: unless-stopped
-    read_only: true
-    tmpfs: [/run]
     environment:
       CONTAINERS: 1
       IMAGES: 1
       INFO: 1
       EVENTS: 1
-      ALLOW_RESTARTS: 1
       POST: 0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -503,5 +517,5 @@ services:
     environment:
       AUTOHEAL_CONTAINER_LABEL: autoheal
       AUTOHEAL_INTERVAL: 30
-      DOCKER_SOCK: tcp://socket-proxy:2375
-    depends_on: [socket-proxy]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

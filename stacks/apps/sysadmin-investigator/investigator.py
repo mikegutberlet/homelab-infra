@@ -56,8 +56,7 @@ SSH_KEY = DATA / "ssh/inspect_ed25519"
 HOSTS = dict(x.split("=", 1) for x in E("HOSTS", "edge=192.168.1.50 media=192.168.1.51 gpu=192.168.1.52 apps=192.168.1.53 ai=192.168.1.54 transcode=192.168.1.55").split())
 PVE_HOSTS = E("PVE_HOSTS", "192.168.1.137 192.168.1.37 192.168.1.38").split()
 PVE_AUTH = f"PVEAPIToken={E('PVE_TOKEN_ID', '')}={E('PVE_TOKEN_SECRET', '')}"
-TRUENAS = E("TRUENAS_URL", "https://192.168.1.209")
-TRUENAS_KEY = E("TRUENAS_KEY", "")
+TRUENAS = E("TRUENAS_URL", "http://truenas-bridge:8080")  # stacks/apps/truenas-bridge, WebSocket API behind HTTP
 KUMA = E("KUMA_URL", "http://uptime-kuma:3001")
 TZ = ZoneInfo(E("TZ", "America/Los_Angeles"))
 OUT_MAX = 30000
@@ -173,15 +172,12 @@ def run_proxmox(path):
     return f"no Proxmox host answered: {last}", True
 
 
-def run_truenas(path):
-    path = path.lstrip("/")
-    if path.startswith("api/v2.0/"):
-        path = path[len("api/v2.0/"):]
-    if not PATH_RE.fullmatch(path) or ".." in path or re.search(r"(^|/)(api_key|keychaincredential|certificate|kmip|auth|cloudsync/credentials|truecommand|support|config/save|core/download)", path):
-        return "path not allowed (e.g. pool, pool/dataset/id/DeepData, alert/list, disk, system/info, reporting)", True
-    if not TRUENAS_KEY:
-        return "no TrueNAS key configured", True
-    code, body = http_get(f"{TRUENAS}/api/v2.0/{path}", {"Authorization": f"Bearer {TRUENAS_KEY}"})
+def run_truenas(method):
+    method = method.strip("/")
+    # The bridge allows read methods only (query, get_instance, list, info, ...) and never auth or keys.
+    if not re.fullmatch(r"[a-z0-9_.]+(\?params=.*)?", method):
+        return "give a TrueNAS API method, e.g. pool.query, alert.list, disk.query, system.info", True
+    code, body = http_get(f"{TRUENAS}/{method}", {})
     return mask(cut(f"HTTP {code}\n{body}")), code is None or code >= 400
 
 
@@ -264,11 +260,12 @@ def make_server(case):
     async def proxmox(args):
         return await wrap("proxmox", lambda: run_proxmox(str(args.get("path", ""))), args)
 
-    @tool("truenas", "GET one TrueNAS API v2.0 path (read only from here). Examples: pool, pool/dataset/id/DeepData, alert/list, "
-          "disk, system/info, smart/test/results, pool/scrub, sharing/nfs, reporting/netdata_graphs. Never ask for keys or credentials.",
-          {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]})
+    @tool("truenas", "Call one read-only TrueNAS API method (JSON-RPC names). Examples: pool.query, alert.list, disk.query, "
+          "system.info, smart.test.results, pool.scrub.query, sharing.nfs.query; arguments as ?params=<JSON list>, e.g. "
+          "pool.dataset.get_instance?params=[\"DeepData\"]. Never ask for keys or credentials.",
+          {"type": "object", "properties": {"method": {"type": "string"}}, "required": ["method"]})
     async def truenas(args):
-        return await wrap("truenas", lambda: run_truenas(str(args.get("path", ""))), args)
+        return await wrap("truenas", lambda: run_truenas(str(args.get("method", ""))), args)
 
     @tool("kuma", "Uptime Kuma's monitors (about 33): which are up or DOWN right now, with the last message. No input.", {"type": "object", "properties": {}})
     async def kuma(args):
