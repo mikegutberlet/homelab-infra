@@ -134,7 +134,9 @@ services:
 
   tdarr:
     <<: *common
-    image: ghcr.io/haveagitgat/tdarr:latest
+    # Pinned, because the node on the transcode VM (stacks/transcode) must run the same version:
+    # bump both tags together, server first (2026-10-28, was :latest).
+    image: ghcr.io/haveagitgat/tdarr:3.04.00
     mem_limit: 4g
     cpus: 4
     environment:
