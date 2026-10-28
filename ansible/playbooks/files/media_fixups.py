@@ -16,7 +16,8 @@ failed downloads (never from the library), and `--dry-run` lists each one first.
                  own grab record) and has no objection to the file; otherwise (no video file,
                  only archives, samples, multi-part, rejected) the download is removed from the
                  queue and the client with its files, the release is blocklisted and Radarr
-                 searches for another one; a download Radarr cannot match to a movie is listed
+                 searches for another one; a download Radarr lost the movie link for is matched
+                 again from its release name, or removed with its files when no library movie fits
   qBittorrent    incomplete torrents on the scratch disk (/incomplete/torrents, compose volume
                  /srv/usenet-incomplete) instead of the NAS: a 1 MB/s torrent was ~70 small NFS
                  sync writes a second that kept all five NAS disks busy around the clock; the
@@ -114,9 +115,18 @@ def radarr_blocked_imports(radarr):
         folder, movie_id = q.get("outputPath") or "", q.get("movieId")
         title, movie = q.get("title", ""), (q.get("movie") or {}).get("title", "?")
         why = "; ".join(m for sm in q.get("statusMessages", []) for m in sm.get("messages", [])) or q.get("errorMessage") or "?"
-        if not movie_id or (folder and not folder.startswith(DOWNLOADS)):
-            ask(f"radarr queue: {title}: no movie match or path outside downloads ({folder}); decide in Activity > Queue")
+        if folder and not folder.startswith(DOWNLOADS):
+            ask(f"radarr queue: {title}: path outside downloads ({folder}); decide in Activity > Queue")
             continue
+        if not movie_id:  # Radarr lost the link to the movie: find it again from the release name
+            movie_id = ((radarr(f"parse?title={urllib.parse.quote(title)}") or {}).get("movie") or {}).get("id")
+            if movie_id:
+                movie = radarr(f"movie/{movie_id}")["title"]
+            else:
+                note(f"radarr: remove {title} with its files (no movie in the library matches it)")
+                if not DRY:
+                    radarr(f"queue/{q['id']}?removeFromClient=true&blocklist=false&skipRedownload=true", "DELETE")
+                continue
         if movie_id in imported:
             continue
         files = walk(folder) if folder and os.path.exists(folder) else []
