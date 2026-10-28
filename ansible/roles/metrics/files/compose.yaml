@@ -26,20 +26,23 @@ services:
       - /:/host:ro,rslave
       - /run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
 
-  # Per-container CPU, memory, network and I/O. Docker-only and a 30 s housekeeping interval
-  # keep its own CPU use low; container labels are reduced to the compose names.
+  # Per-container CPU, memory, network and I/O. Container labels are reduced to the compose names.
+  # 2026-10-28: at 192 MB every cAdvisor sat at 88-97% of its cap and thrashed (0.1-0.3 cores each,
+  # 24 h average; the apps VM's read 1.3 TB from disk in a day) because the "disk" metric set walks
+  # every container's overlay filesystem each tick. Housekeeping now matches Prometheus's 60 s
+  # scrape, "disk" (container_fs_usage/limit, the du-style walk) is off, blkio counters stay.
   cadvisor:
     <<: *common
     image: ghcr.io/google/cadvisor:v0.60.6
-    mem_limit: 192m
+    mem_limit: 384m
     privileged: true
     devices: [/dev/kmsg]
     command:
       - --docker_only=true
-      - --housekeeping_interval=30s
+      - --housekeeping_interval=60s
       - --store_container_labels=false
       - --whitelisted_container_labels=com.docker.compose.project,com.docker.compose.service
-      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp
+      - --disable_metrics=advtcp,cpu_topology,cpuset,disk,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp
     ports: ["9101:8080"] # DOCKER-USER: lab VMs only
     volumes:
       - /:/rootfs:ro

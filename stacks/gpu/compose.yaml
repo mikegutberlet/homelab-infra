@@ -104,7 +104,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 3G # the gpu VM has 10 GB shared with Plex/Emby transcodes
+          memory: 3G # the gpu VM shares its RAM with Plex/Emby transcodes
     volumes:
       - /opt/appdata/immich/model-cache:/cache
 
