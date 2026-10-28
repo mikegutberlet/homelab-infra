@@ -28,7 +28,7 @@ services:
       PUID: "3000"
       PGID: "3000"
       TZ: America/Los_Angeles
-      serverIP: 192.168.1.52 # gpu VM; its lanfw allows this VM on 8266 (hosts.yml)
+      serverIP: 192.168.1.52 # gpu VM (lanfw lets the homelab VMs .50-.55 reach everything)
       serverPort: 8266
       inContainer: "true"
       nodeName: transcode-vm
