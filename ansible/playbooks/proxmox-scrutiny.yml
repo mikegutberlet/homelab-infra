@@ -37,5 +37,8 @@
         dest: /etc/cron.d/scrutiny-collector
         content: |
           # Scrutiny SMART collector (homelab-infra, playbooks/proxmox-scrutiny.yml)
+          # cron.d's default PATH has no /usr/sbin, where smartctl lives: every nightly run since
+          # 2026-10-22 died with "smartctl binary is missing" and Scrutiny kept one stale snapshot.
+          PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
           15 4 * * * root /usr/local/bin/scrutiny-collector-metrics run --config /etc/scrutiny/collector.yaml >/var/log/scrutiny-collector.log 2>&1
         mode: "0644"
