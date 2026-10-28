@@ -162,6 +162,10 @@ http:
       entryPoints: [web]
       service: prometheus
       middlewares: [authentik]
+    fishing:
+      rule: Host(`fishing.{{ env "TS_TAILNET" }}`)
+      entryPoints: [web]
+      service: fishing
     chat:
       rule: Host(`chat.{{ env "TS_TAILNET" }}`)
       entryPoints: [web]
@@ -310,6 +314,10 @@ http:
       loadBalancer:
         servers:
           - url: http://192.168.1.53:9090
+    fishing:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.53:8787
     chat:
       loadBalancer:
         servers:

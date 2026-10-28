@@ -197,6 +197,11 @@
           type: paperlessngx
           url: "http://192.168.1.53:8000"
           key: "{{HOMEPAGE_VAR_PAPERLESS_TOKEN}}"
+    - Tackle Box archive:
+        href: "https://fishing.{{HOMEPAGE_VAR_TAILNET}}/health"
+        description: Fishing app's private water corpus
+        icon: mdi-fish
+        siteMonitor: "http://192.168.1.53:8787/health"
     - Stirling PDF:
         href: "https://pdf.{{HOMEPAGE_VAR_TAILNET}}"
         description: PDF tools

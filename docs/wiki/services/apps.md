@@ -75,6 +75,17 @@ flowchart TB
 `stirlingtools/stirling-pdf:latest`, port 8070, https://pdf.tail9af84.ts.net (SSO),
 `DOCKER_ENABLE_SECURITY=false` because Authentik handles login. Config in `/opt/appdata/stirling-pdf`.
 
+## Tackle Box archive
+
+The fishing app's (github.com/mikegutberlet/FishingApp, a public GitHub Pages PWA) private water corpus:
+one JSON record per stocked water in CA, NV and OR, built from public services plus Goobs's own books,
+sites and notes, which is why it lives here and not in the app's public repo. `tackle-box-archive`
+(Compose builds it from the app repo's `server/Dockerfile`) runs `scripts/build-corpus.mjs` nightly at
+01:00 into `/mnt/nfs/Documents/TackleBox` (NAS, 3000:3000, add-only) and serves that folder on
+`:8787` with a bearer key (`TACKLEBOX_CORPUS_TOKEN`). `/health` needs no key. Route `fishing` is not
+behind Authentik: the app sends the key itself, and a browser fetch can't follow a login redirect; phones
+reach it over the tailnet. Logs: `<folder>/logs/<date>.log`.
+
 ## n8n
 
 | | |

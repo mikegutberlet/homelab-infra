@@ -25,6 +25,7 @@ APPS = {
     "olivetin": ("192.168.1.53", 1337, True),
     "tautulli": ("192.168.1.53", 8181, True), "sysadmin": ("192.168.1.53", 3003, True),
     "grafana": ("192.168.1.53", 3005, True), "prometheus": ("192.168.1.53", 9090, True),
+    "fishing": ("192.168.1.53", 8787, False), # Tackle Box archive: own bearer key, fetched by a browser app
     # ai VM
     "chat": ("192.168.1.54", 3010, True), "anythingllm": ("192.168.1.54", 3011, True),
     # edge VM
