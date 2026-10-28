@@ -29,11 +29,12 @@ ROOT = "/mnt/nfs/Media/Movies"
 PROFILE = "Anything Not terrible"
 TAG = "dcom"
 
-MOVIES = [  # (premiere year, title) in Disney Channel premiere order
+MOVIES = [  # (premiere year, title[, TMDB id]) in premiere order; an id pins titles TMDB lists twice or
+    # under a name Radarr's search misses (P.U.N.K.S. otherwise matched the 2000 film "Punks")
     (1997, "Northern Lights"), (1997, "Under Wraps"), (1998, "You Lucky Dog"), (1998, "Brink!"),
     (1998, "Halloweentown"), (1999, "Zenon: Girl of the 21st Century"), (1999, "Can of Worms"),
     (1999, "The Thirteenth Year"), (1999, "Smart House"), (1999, "Johnny Tsunami"), (1999, "Genius"),
-    (1999, "P.U.N.K.S."), (1999, "Don't Look Under the Bed"), (1999, "Horse Sense"),
+    (1999, "P.U.N.K.S.", 62410), (1999, "Don't Look Under the Bed"), (1999, "Horse Sense"),
     (2000, "Up, Up and Away"), (2000, "The Color of Friendship"), (2000, "Alley Cats Strike!"),
     (2000, "Rip Girls"), (2000, "Miracle in Lane 2"), (2000, "Stepsister from Planet Weird"),
     (2000, "Ready to Run"), (2000, "Quints"), (2000, "The Other Me"),
@@ -48,11 +49,11 @@ MOVIES = [  # (premiere year, title) in Disney Channel premiere order
     (2003, "The Cheetah Girls"), (2003, "Full-Court Miracle"), (2004, "Pixel Perfect"),
     (2004, "Going to the Mat"), (2004, "Zenon: Z3"), (2004, "Stuck in the Suburbs"), (2004, "Tiger Cruise"),
     (2004, "Halloweentown High"), (2005, "Now You See It"), (2005, "Buffalo Dreams"),
-    (2005, "Kim Possible: So the Drama"), (2005, "Go Figure"), (2005, "Life Is Ruff"),
+    (2005, "Kim Possible Movie: So the Drama"), (2005, "Go Figure"), (2005, "Life Is Ruff"),
     (2005, "The Proud Family Movie"), (2005, "Twitches"), (2006, "High School Musical"), (2006, "Cow Belles"),
     (2006, "Wendy Wu: Homecoming Warrior"), (2006, "Read It and Weep"), (2006, "The Cheetah Girls 2"),
     (2006, "Return to Halloweentown"), (2007, "Jump In!"), (2007, "Johnny Kapahala: Back on Board"),
-    (2007, "High School Musical 2"), (2007, "Twitches Too"), (2008, "Minutemen"), (2008, "Camp Rock"),
+    (2007, "High School Musical 2"), (2007, "Twitches Too"), (2008, "Minutemen", 22371), (2008, "Camp Rock"),
     (2008, "The Cheetah Girls: One World"), (2009, "Dadnapped"), (2009, "Hatching Pete"),
     (2009, "Princess Protection Program"), (2009, "Wizards of Waverly Place: The Movie"),
     (2010, "Starstruck"), (2010, "Den Brother"), (2010, "Camp Rock 2: The Final Jam"), (2010, "Avalon High"),
@@ -61,10 +62,10 @@ MOVIES = [  # (premiere year, title) in Disney Channel premiere order
     (2011, "Good Luck Charlie, It's Christmas"), (2012, "Frenemies"), (2012, "Radio Rebel"),
     (2012, "Let It Shine"), (2012, "Girl Vs. Monster"), (2013, "Teen Beach Movie"), (2014, "Cloud 9"),
     (2014, "Zapped"), (2014, "How to Build a Better Boy"), (2015, "Bad Hair Day"), (2015, "Teen Beach 2"),
-    (2015, "Descendants"), (2015, "Invisible Sister"), (2016, "Adventures in Babysitting"), (2016, "The Swap"),
+    (2015, "Descendants"), (2015, "Invisible Sister"), (2016, "Adventures in Babysitting"), (2016, "The Swap", 417028),
     (2017, "Tangled: Before Ever After"), (2017, "Descendants 2"), (2018, "Zombies"), (2018, "Freaky Friday"),
     (2019, "Descendants 3"), (2019, "Kim Possible"), (2020, "Zombies 2"), (2020, "Upside-Down Magic"),
-    (2021, "Spin"), (2021, "Under Wraps"), (2021, "Christmas Again"), (2022, "Zombies 3"), (2022, "Under Wraps 2"),
+    (2021, "Spin", 734858), (2021, "Under Wraps"), (2021, "Christmas Again"), (2022, "Zombies 3"), (2022, "Under Wraps 2"),
 ]
 
 KEY = re.search(r"<ApiKey>(.*?)</ApiKey>", open(CONFIG).read()).group(1)
@@ -87,8 +88,10 @@ def norm(title):
     return re.sub(r"[^a-z0-9]", "", title.lower().replace("&", "and"))
 
 
-def match(year, title):
+def match(year, title, tmdb=None):
     """One TMDB candidate for the title, or None plus the reason."""
+    if tmdb:
+        return api(f"movie/lookup/tmdb?tmdbId={tmdb}"), ""
     want = norm(title)
     cands = [c for c in api("movie/lookup?term=" + urllib.parse.quote(title)) if c.get("tmdbId")]
     names = lambda c: {norm(c.get("title", "")), norm(c.get("originalTitle", ""))}
@@ -119,10 +122,10 @@ def main():
     by_name = {}
     for m in library:
         by_name.setdefault((norm(m["title"]), m.get("year")), m)
-    for year, title in MOVIES:
+    for year, title, *tmdb in MOVIES:
         have = by_name.get((norm(title), year))
         if have is None:
-            cand, why = match(year, title)
+            cand, why = match(year, title, *tmdb)
             if cand is None:
                 todo.append(f"{title} ({year}): {why}")
                 print(f"for Goobs: {title} ({year}): {why}", flush=True)
