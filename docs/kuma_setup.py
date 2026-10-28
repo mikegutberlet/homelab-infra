@@ -27,6 +27,10 @@ MONITORS = [
     ("Emby", "http://192.168.1.52:8096/emby/System/Ping", True, None),
     # 200 while Kometa (Plex) and home-rows (Emby) both ran in the last 26 hours, else 503.
     ("Home rows (Kometa + Emby)", "http://192.168.1.52:8097/health", False, None),
+    ("ErsatzTV", "http://192.168.1.52:8409/", False, ["200-299", "300-399"]),
+    ("Immich", "http://192.168.1.52:2283/api/server/ping", False, None),
+    ("Tdarr", "http://192.168.1.52:8265/", False, ["200-299", "300-399"]),
+    ("Unmanic", "http://192.168.1.52:8888/", False, ["200-299", "300-399"]),
     ("Sonarr", "http://192.168.1.51:8989/ping", True, None),
     ("Radarr", "http://192.168.1.51:7878/ping", True, None),
     ("Prowlarr", "http://192.168.1.51:9696/ping", True, None),

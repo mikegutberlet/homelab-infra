@@ -1,9 +1,12 @@
-# "Lab is dark" alert. Everything that can email (Uptime Kuma, n8n) runs inside the lab, so a
-# power cut silences it. Each Proxmox host pings a healthchecks.io check every 5 minutes;
-# when the pings stop, healthchecks.io emails Goobs. Set heartbeat_url per host in hosts.yml
-# once the checks exist (one per host, so a single dead host is visible too).
-- name: Heartbeat pings from both Proxmox hosts
-  hosts: proxmox
+# "Lab is dark" alert. Everything that can email (Uptime Kuma, n8n) runs inside the lab, on the
+# apps VM, so a power cut silences it, and so does the apps VM going down on its own. Each Proxmox
+# host pings a healthchecks.io check every 5 minutes; the apps VM pings its own check only while
+# n8n answers on localhost:5678, so a dead VM, a stuck Docker or a crashed n8n all stop the pings.
+# When the pings stop, healthchecks.io emails Goobs. Set heartbeat_url per host in hosts.yml
+# (docs/heartbeat_setup.py creates the checks and writes the URLs; one per host, so a single dead
+# host is visible too).
+- name: Heartbeat pings from the Proxmox hosts and the apps VM
+  hosts: proxmox:apps
   tasks:
     - name: curl is present
       ansible.builtin.apt:
@@ -14,7 +17,7 @@
       ansible.builtin.cron:
         name: homelab heartbeat
         minute: "*/5"
-        job: "curl -fsS -m 10 --retry 3 -o /dev/null {{ heartbeat_url }} >/dev/null 2>&1"
+        job: "{% if 'docker_vms' in group_names %}curl -fsS -m 5 -o /dev/null http://localhost:5678/healthz >/dev/null 2>&1 && {% endif %}curl -fsS -m 10 --retry 3 -o /dev/null {{ heartbeat_url }} >/dev/null 2>&1"
       when: heartbeat_url is defined
 
     - name: No heartbeat URL for this host yet
