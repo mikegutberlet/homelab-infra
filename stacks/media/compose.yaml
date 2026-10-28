@@ -138,6 +138,11 @@ services:
     volumes:
       - /opt/appdata/qbittorrent:/config
       - /mnt/nfs:/mnt/nfs
+      # Incomplete torrents on the scratch disk, like SABnzbd's: a 1 MB/s torrent landing on NFS
+      # was ~70 small sync writes/s that kept all five NAS disks 40-50% busy around the clock
+      # (2026-10-28). Finished torrents move to /mnt/nfs/sabnzb/torrents (save path unchanged),
+      # so imports stay hardlinks. qBittorrent's "keep incomplete in" is set by media-fixups.yml.
+      - /srv/usenet-incomplete:/incomplete
     depends_on:
       gluetun: {condition: service_healthy}
     # Checks the internet through the tunnel, not just the WebUI: when gluetun restarts, this

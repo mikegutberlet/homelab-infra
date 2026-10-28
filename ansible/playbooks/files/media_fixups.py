@@ -13,6 +13,10 @@ when something differs, so a second run changes nothing. Nothing is deleted from
   Radarr         queue items stuck on "manual import required": import the one video file of the
                  download when Radarr itself knows the movie (movieId from its own grab record)
                  and has no objection to the file; anything else is listed for Goobs
+  qBittorrent    incomplete torrents on the scratch disk (/incomplete/torrents, compose volume
+                 /srv/usenet-incomplete) instead of the NAS: a 1 MB/s torrent was ~70 small NFS
+                 sync writes a second that kept all five NAS disks busy around the clock; the
+                 save path stays on /mnt/nfs so imports are still hardlinks
   Sonarr         the same series added eight times under "Faraway Downs" names, all TVDB-deleted:
                  remove the copies without files from Sonarr (library files untouched); the other
                  TVDB-deleted series are listed for Goobs
@@ -22,6 +26,7 @@ The API keys are read from the apps' config files and never printed.
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -114,6 +119,32 @@ def radarr_blocked_imports(radarr):
                 "languages": f.get("languages") or [], "downloadId": q["downloadId"]}]})
 
 
+QBIT = "http://127.0.0.1:8085/api/v2"  # inside gluetun's namespace (login skipped for localhost)
+QBIT_TEMP = "/incomplete/torrents"
+
+
+def qbit_temp_path():
+    gluetun = subprocess.run(["docker", "ps", "-q", "--filter", "label=com.docker.compose.service=gluetun"],
+                             capture_output=True, text=True).stdout.split()
+    if not gluetun:
+        sys.exit("gluetun is not running")
+
+    def wget(path, post=None):
+        cmd = ["docker", "exec", gluetun[0], "wget", "-qO-", "-T", "20"] + (["--post-data", post] if post else [])
+        r = subprocess.run(cmd + [QBIT + path], capture_output=True, text=True)
+        if r.returncode:
+            sys.exit(f"qBittorrent {path}: wget failed ({r.stderr.strip()[:200]})")
+        return r.stdout
+
+    if not os.path.isdir("/srv/usenet-incomplete"):
+        sys.exit("/srv/usenet-incomplete is not mounted")
+    prefs = json.loads(wget("/app/preferences"))
+    if not prefs.get("temp_path_enabled") or prefs.get("temp_path", "").rstrip("/") != QBIT_TEMP:
+        note(f"qbittorrent: incomplete torrents {prefs.get('temp_path')!r} (enabled={prefs.get('temp_path_enabled')}) -> {QBIT_TEMP}")
+        if not DRY:
+            wget("/app/setPreferences", "json=" + json.dumps({"temp_path_enabled": True, "temp_path": QBIT_TEMP}))
+
+
 def sonarr_deleted_series(sonarr):
     gone = [s for s in sonarr("series") if s.get("status") == "deleted"]
     faraway = sorted((s for s in gone if "faraway" in s["title"].lower() or s["title"].strip(": ") == "Australia"),
@@ -135,7 +166,7 @@ def main():
     radarr, sonarr = App("radarr", 7878), App("sonarr", 8989)
     for step in (lambda: min_age(radarr), lambda: min_age(sonarr),
                  lambda: radarr_dead_root(radarr), lambda: radarr_blocked_imports(radarr),
-                 lambda: sonarr_deleted_series(sonarr)):
+                 lambda: sonarr_deleted_series(sonarr), qbit_temp_path):
         step()
     print(f"{'would change' if DRY else 'changed'}: {len(changes)}; for Goobs: {len(todo)}")
 
