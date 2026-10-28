@@ -273,7 +273,7 @@ def check_chat_run_writes_nothing():
 
 
 def _build(ops_door_id=OPS_DOOR_ID, investigator_id=INVESTIGATOR_ID):
-    PVE, NAS = "Proxmox API token", "TrueNAS API key"
+    PVE = "Proxmox API token"
     DOOR = {"__rl": True, "mode": "id", "value": ops_door_id}
     INV = {"__rl": True, "mode": "id", "value": investigator_id}
 
@@ -293,9 +293,11 @@ def _build(ops_door_id=OPS_DOOR_ID, investigator_id=INVESTIGATOR_ID):
     chain = [
         http("PVE resources", "https://192.168.1.137:8006/api2/json/cluster/resources", (260, 300), auth=PVE, insecure=True, **once),
         http("PVE cluster status", "https://192.168.1.137:8006/api2/json/cluster/status", (480, 300), auth=PVE, insecure=True, **once),
-        http("NAS pools", "https://192.168.1.209/api/v2.0/pool", (700, 300), auth=NAS, insecure=True, **once),
-        http("NAS dataset", "https://192.168.1.209/api/v2.0/pool/dataset/id/DeepData", (920, 300), auth=NAS, insecure=True, **once),
-        http("NAS alerts", "https://192.168.1.209/api/v2.0/alert/list", (1140, 300), auth=NAS, insecure=True, **once),
+        # Through the stack's truenas-bridge (WebSocket API; the REST one is deprecated): same answers
+        # as the old /api/v2.0/pool, /pool/dataset/id/DeepData and /alert/list.
+        http("NAS pools", "http://truenas-bridge:8080/pool.query", (700, 300), **once),
+        http("NAS dataset", 'http://truenas-bridge:8080/pool.dataset.get_instance?params=["DeepData"]', (920, 300), **once),
+        http("NAS alerts", "http://truenas-bridge:8080/alert.list", (1140, 300), **once),
         http("Scrutiny", "http://scrutiny:8080/api/summary", (1360, 300), **once),
     ]
     link("Every 15 min", chain[0])

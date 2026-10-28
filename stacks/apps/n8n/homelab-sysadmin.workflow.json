@@ -108,13 +108,11 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "https://192.168.1.209/api/v2.0/pool",
+        "url": "http://truenas-bridge:8080/pool.query",
         "options": {
           "timeout": 15000,
-          "allowUnauthorizedCerts": true
-        },
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+          "allowUnauthorizedCerts": false
+        }
       },
       "onError": "continueRegularOutput",
       "executeOnce": true,
@@ -131,13 +129,11 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "https://192.168.1.209/api/v2.0/pool/dataset/id/DeepData",
+        "url": "http://truenas-bridge:8080/pool.dataset.get_instance?params=[\"DeepData\"]",
         "options": {
           "timeout": 15000,
-          "allowUnauthorizedCerts": true
-        },
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+          "allowUnauthorizedCerts": false
+        }
       },
       "onError": "continueRegularOutput",
       "executeOnce": true,
@@ -154,13 +150,11 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "https://192.168.1.209/api/v2.0/alert/list",
+        "url": "http://truenas-bridge:8080/alert.list",
         "options": {
           "timeout": 15000,
-          "allowUnauthorizedCerts": true
-        },
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+          "allowUnauthorizedCerts": false
+        }
       },
       "onError": "continueRegularOutput",
       "executeOnce": true,
