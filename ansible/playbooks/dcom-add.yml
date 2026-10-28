@@ -1,0 +1,22 @@
+# Add the 115 Disney Channel Original Movies to Radarr (files/dcom_add.py carries the list and
+# the matching rules). Run from the Mac:
+#
+#   ansible-playbook playbooks/dcom-add.yml --check                 # report only: present / would add / unmatched
+#   ansible-playbook playbooks/dcom-add.yml                         # add the missing ones, monitored, tag dcom
+#   ansible-playbook playbooks/dcom-add.yml -e search=true          # same, then queue one search for the tagged, missing ones
+- name: Disney Channel Original Movies into Radarr
+  hosts: media
+  become: true
+  tasks:
+    - name: Add (python3 on the VM; API key read from Radarr's config file)
+      ansible.builtin.script:
+        cmd: "files/dcom_add.py {{ '--dry-run' if ansible_check_mode else '' }} {{ '--search' if search | default(false) | bool else '' }}"
+        executable: /usr/bin/python3
+      register: dcom
+      check_mode: false
+      changed_when: "'added: 0;' not in dcom.stdout and 'would add: 0;' not in dcom.stdout"
+      failed_when: dcom.rc != 0
+
+    - name: Result
+      ansible.builtin.debug:
+        msg: "{{ dcom.stdout_lines }}"
