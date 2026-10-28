@@ -39,7 +39,10 @@ while IFS= read -r -d '' f; do
   head -c 16 "$f" 2>/dev/null | grep -q "SQLite format 3" || continue
   out="$DEST/db/sqlite${f}"
   mkdir -p "$(dirname "$out")"
-  if sqlite3 "$f" ".backup '$out'" 2>/dev/null; then gzip -f "$out"
+  if sqlite3 "$f" ".backup '$out'" 2>/dev/null; then
+    # The copy must pass SQLite's own check before it counts (a corrupt source copies cleanly).
+    [ "$(sqlite3 "$out" 'PRAGMA quick_check' 2>/dev/null | head -1)" = ok ] || { log "ERROR: quick_check failed on the copy of $f"; rc=1; }
+    gzip -f "$out"
   else log "WARN: sqlite backup failed for $f"; rc=1; fi
 done < <(find /opt/appdata -xdev -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) \
            -not -path '*/cache/*' -not -path '*/Cache/*' -not -name '*.db-20*' -size -4G -print0)
@@ -60,6 +63,10 @@ tar -C / --warning=no-file-changed --exclude-caches-all \
 tar_rc=$?
 [ $tar_rc -le 1 ] || { log "ERROR: tar exited $tar_rc"; rc=1; }
 
+# Read everything back from the NAS: a dump or tar that gzip cannot read is not a backup.
+while IFS= read -r -d '' g; do
+  gzip -t "$g" 2>/dev/null || { log "ERROR: $g is not readable (gzip -t)"; rc=1; }
+done < <(find "$DEST" -type f -name '*.gz' -print0)
 ( cd "$DEST" && find . -type f ! -name SHA256SUMS -exec sha256sum {} + > SHA256SUMS )
 chmod -R go-rwx "$DEST"
 log "backup $DEST: $(du -sh "$DEST" | cut -f1)"

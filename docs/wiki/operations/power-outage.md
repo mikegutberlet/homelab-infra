@@ -52,8 +52,9 @@ are entered in `ansible/inventory/hosts.yml` and `proxmox-heartbeat.yml` is run.
 
 - [ ] BIOS on both NUCs: F2 at power-on, Power > Secondary Power Settings > After Power Failure: **Power On**.
       Do it from a cold power-on (guests shut down cleanly first).
-- [ ] Free healthchecks.io account, two checks (RicksGarage, RicksShip; period 5 min, grace 10 min),
-      paste the ping URLs into `hosts.yml` (`heartbeat_url`) and run the heartbeat playbook.
+- [ ] Free healthchecks.io account and a read-write API key; `python3 docs/heartbeat_setup.py` creates
+      the four checks (three hosts and the apps VM; period 5 min, grace 10 min) and writes the ping URLs
+      into `hosts.yml` (`heartbeat_url`); then run `playbooks/proxmox-heartbeat.yml`.
 - [ ] Buy a UPS. 1500 VA / 900 W line-interactive with USB (CyberPower CP1500PFCLCD or APC BR1500MS2
       class, about $200 to $250) gives roughly 30 minutes at the lab's 150 W; 1000 VA gives about 15.
 - [ ] Put the router, modem and switch on the UPS as well.

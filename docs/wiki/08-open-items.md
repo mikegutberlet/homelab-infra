@@ -17,7 +17,7 @@ Everything that is pending, waiting on a decision, or known but not yet verified
 | Item | Why | Status |
 | --- | --- | --- |
 | Delete the vzdump backups of the removed old VMs 113 and 117 (183 GB on `DeepData_NFS`, `dump/`) | Kept 30 days as the undo for their removal on 2026-10-26 | Due about **2026-11-25** (Goobs chose 30 days) |
-| healthchecks.io ping URLs for both hosts | The host heartbeat (`playbooks/heartbeat.yml`, `heartbeat_url` in `inventory/hosts.yml`) is the only out-of-band "the house lost power" signal | URLs not created yet; the playbook has not been run |
+| healthchecks.io API key for `docs/heartbeat_setup.py` | The heartbeat (`playbooks/proxmox-heartbeat.yml`, `heartbeat_url` in `inventory/hosts.yml`; three hosts plus the apps VM, which carries every alert) is the only out-of-band "the house lost power" or "the alerting VM is down" signal | Checks not created yet; the playbook has not been run |
 | wg-easy as a backup VPN next to Tailscale | Covers the case where Tailscale's coordination is unreachable | Deferred by Goobs; a port forward would be needed, which conflicts with the Tailscale-only rule |
 | Rotate the passwords in the shared "IP's and Creds" document (Proxmox root, TrueNAS, old VMs) | The build is done and the design called for a rotation | Not done |
 | 2FA on Authentik and on Proxmox | Admin pages are tailnet-only, so the risk is moderate | Not configured `(unverified)` |

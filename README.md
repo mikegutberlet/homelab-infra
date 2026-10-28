@@ -85,8 +85,9 @@ Things learned the hard way:
 - Power cuts happen (first one 2026-10-21). Cold start order: TrueNAS first on RicksGarage, then the
   VMs; the media/gpu/apps VMs hold Docker until the NAS share is mounted and non-empty
   (`wait-nas.service`, role `nfs`), so an early boot never shows the apps an empty library.
-  Each Proxmox host pings healthchecks.io every 5 min (`playbooks/proxmox-heartbeat.yml`), which is
-  the only alert that works while the lab is dark. Set the NUC BIOS to "After Power Failure: Power On".
+  Each Proxmox host, and the apps VM while n8n answers, pings healthchecks.io every 5 min
+  (`playbooks/proxmox-heartbeat.yml`; `docs/heartbeat_setup.py` creates the checks), which is
+  the only alert that works while the lab is dark or the alerting VM itself is down. Set the NUC BIOS to "After Power Failure: Power On".
   A UPS with NUT for a clean shutdown is the plan; see the "Power outage plan" doc.
 - RAM per host (sized 2026-10-22 from live use): RicksGarage = TrueNAS 16 + edge 4 + media 8
   (fixed, no ballooning) = 28 of 31 GiB; RicksShip = gpu 10 + apps 10 + ai 4 = 24 of 31 GiB, the

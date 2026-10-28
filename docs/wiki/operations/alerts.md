@@ -22,7 +22,8 @@ Created by `docs/kuma_setup.py`. HTTP checks every 60 s with 2 retries unless no
 | --- | --- |
 | Critical (instant email) | Plex `/identity`, Emby `/emby/System/Ping`, Sonarr `/ping`, Radarr `/ping`, Prowlarr `/ping`, SABnzbd `/`, qBittorrent `/api/v2/app/version` (any 2xx to 4xx counts as up, since 403 means both gluetun and qBittorrent answered), Requests `/api/v1/status` |
 | Digest | Bazarr, Audiobookshelf `/healthcheck`, Storyteller, RomM, MeTube, Tautulli `/status`, Nextcloud `/status.php`, Paperless, Stirling PDF, n8n `/healthz`, Huginn `/users/sign_in`, Homepage, Scrutiny `/api/health`, Edge (TCP 192.168.1.50:80), Piper (TCP 10200), AnythingLLM `/api/ping`, TrueNAS (HTTPS UI), Proxmox RicksGarage and RicksShip (HTTPS 8006) |
-| Missing | ErsatzTV, Immich, Tdarr, Unmanic, wg-easy, Open WebUI (unreachable from the apps VM by design), the NFS mount itself, pool health |
+| Digest, added 2026-10-28 (re-run the script) | ErsatzTV `/`, Immich `/api/server/ping`, Tdarr `/`, Unmanic `/` |
+| Missing | wg-easy (off), Open WebUI (unreachable from the apps VM by design); the NFS mount and pool health are the sysadmin's checks, not Kuma's |
 
 To add monitors: append to `MONITORS` in `docs/kuma_setup.py` and have Goobs run
 `~/.local/share/homelab-ansible/bin/python docs/kuma_setup.py` on the Mac. It tunnels over SSH to the
@@ -67,4 +68,6 @@ report" or a grouped email within a minute.
 - Only the apps VM runs Diun; image updates on the other VMs are not reported.
 - No alert on pool capacity (about 80% full) or on a DEGRADED pool beyond what Scrutiny implies.
 - No alert if TSDProxy's names lose their certificate or the Tailscale key expires.
-- The heartbeat is the only out-of-band signal, and it is not live yet.
+- The heartbeat is the only out-of-band signal, and it is not live yet. Everything that alerts runs on
+  the apps VM, so once it is live the apps VM pings its own check too (only while n8n answers):
+  `docs/heartbeat_setup.py` creates the four checks and writes the URLs.

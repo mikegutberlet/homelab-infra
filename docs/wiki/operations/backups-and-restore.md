@@ -13,7 +13,7 @@ happens at the next boot). It mounts only `NAS/Backups/homelab` at `/mnt/backups
 | MariaDB (RomM) | `mariadb-dump --all-databases --single-transaction` | `db/<container>.mariadb.sql.gz` |
 | SQLite under `/opt/appdata` (Sonarr, Radarr, Prowlarr, Bazarr, Jellyseerr, Kuma, Tautulli, Plex, Emby, ...) | `sqlite3 .backup` online copy, gzipped, path preserved | `db/sqlite/opt/appdata/...` |
 | Everything else in `/opt/appdata` and `/opt/stacks` | `tar -czf`, excluding caches, logs, transcodes, Plex Metadata/Media, Emby metadata, `MediaCover`, raw DB files, `nextcloud/html`, `immich`, `scrutiny/influxdb` | `appdata.tar.gz` |
-| Integrity | `SHA256SUMS` over the folder; `chmod -R go-rwx` | |
+| Integrity | every SQLite copy passes `PRAGMA quick_check` before it is gzipped; every `.gz` is read back with `gzip -t` from the NAS (since 2026-10-28); `SHA256SUMS` over the folder; `chmod -R go-rwx` | |
 
 Retention: folders older than **14 days** matching `YYYY-MM-DD` under the host's own directory are
 removed by the script. Nothing else on the NAS is ever touched by it. On any error it POSTs a line to
