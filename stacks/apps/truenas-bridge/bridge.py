@@ -22,8 +22,19 @@ SSL.check_hostname = False
 SSL.verify_mode = ssl.CERT_NONE  # self-signed, LAN only
 
 
+def connect():
+    # TrueNAS's middleware now and then never answers the WebSocket upgrade on a fresh connection
+    # (about 1 in 15 at 2026-10-28, the next one succeeds), so one retry; n8n gives up at 15 s.
+    for attempt in (1, 2):
+        try:
+            return websockets.sync.client.connect(URL, ssl=SSL, open_timeout=6)
+        except TimeoutError:
+            if attempt == 2:
+                raise RuntimeError("TrueNAS did not answer the WebSocket handshake twice (6 s each)")
+
+
 def call(method, params):
-    with websockets.sync.client.connect(URL, ssl=SSL, open_timeout=15) as ws:
+    with connect() as ws:
         for i, (m, p) in enumerate([("auth.login_with_api_key", [KEY]), (method, params)]):
             ws.send(json.dumps({"jsonrpc": "2.0", "id": i, "method": m, "params": p}))
             while True:  # skip server-pushed notifications (no id)
