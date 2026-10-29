@@ -40,8 +40,10 @@ the token is in git's credential store). Read `docs/wiki/` first: `03-architectu
 2. Edit, then check: `python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" <file>` for YAML;
    `ansible-playbook --syntax-check` is not available here, so keep playbook edits small and say so.
 3. `git commit` and `git push -u origin hermes/<topic>`
-4. Open a draft PR with the GitHub API (no `gh` here):
-   `curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+4. Open a draft PR with the GitHub API (no `gh` here). `$GITHUB_TOKEN` is not passed to your shell; take
+   the token from git's credential store without printing it:
+   `TOK=$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill | sed -n 's/^password=//p')`
+   `curl -sS -H "Authorization: Bearer $TOK" -H "Accept: application/vnd.github+json" \
      https://api.github.com/repos/mikegutberlet/homelab-infra/pulls \
      -d '{"title":"...","head":"hermes/<topic>","base":"main","draft":true,"body":"..."}'`
    Report the PR URL and what Goobs must run to deploy, usually
@@ -59,8 +61,33 @@ the VM. Anything else is refused; say so and read the repo instead of guessing.
 Examples: `ssh media 'docker ps --format "{{.Names}} {{.Status}}"'`, `ssh gpu 'docker logs --tail 100 plex'`,
 `ssh apps 'df -h /'`.
 
+If every VM answers `Permission denied (publickey)`, the VMs don't have your public key: it comes from
+`~/.config/homelab/hermes_inspect_ed25519.pub` on Goobs's Mac and the ops role skips it silently when
+the file is missing. Ask Goobs to check it and re-run the ops role. Your ssh config is fine
+(`/opt/data/.ssh`, ssh's passwd home). Until then answer from the repo and say it is the repo view.
+
+## The HomeLab sysadmin (yours to improve, by PR)
+
+The n8n "Homelab sysadmin" workflow on apps: 15-minute reports from every VM, critical emails and
+Telegram pushes, the 08:00 digest, safe automatic fixes, the chat and the investigator. Read
+`docs/wiki/operations/sysadmin.md` first; it has the fix verbs, limits and the rules that keep runs
+from overwriting each other's state.
+
+- Live view: `ssh apps 'docker logs --tail 200 n8n'`, `ssh apps 'docker logs --tail 100 sysadmin-investigator'`,
+  `ssh <vm> 'journalctl -t homelab-ops --since today'` (fixes the ops door ran), `ssh <vm> 'journalctl -t homelab-agent --since -1h'`.
+- Change it by editing the sources: rules in `stacks/apps/n8n/sysadmin/*.js` (switches in `settings.js`),
+  wiring in `docs/build_sysadmin_workflow.py`, the VM side in `ansible/roles/ops/files/`, the investigator in
+  `stacks/apps/sysadmin-investigator/`. Then run `python3 docs/build_sysadmin_workflow.py` and
+  `python3 docs/test_investigator.py`, and commit the rebuilt `stacks/apps/n8n/*.workflow.json` with the sources.
+  Never edit the workflow JSON by hand.
+- Keep its limits unless Goobs asks: no reboots or power, `ops_never` services untouched, one fix per target
+  per hour and three a day, and no Wait or SSH node in a run that writes the static data.
+- Update `docs/wiki/operations/sysadmin.md` in the same PR. Deploy (Goobs, on the Mac):
+  `python3 docs/sysadmin_deploy.py`, plus `ansible-playbook playbooks/site.yml --tags ops` when
+  `ansible/roles/ops` changed, or `--tags stacks --limit apps` for the investigator.
+
 ## Not yours
 
-Deploying (Ansible, `docker compose`), restarting containers, editing files on a VM, the n8n
-sysadmin workflows (built by `docs/build_sysadmin_workflow.py`, never hand-edited), TrueNAS, and
-anything on the Proxmox hosts. Ask Goobs for those, with the exact command.
+Deploying (Ansible, `docker compose`, `sysadmin_deploy.py`), restarting containers, editing files on a VM,
+editing the live n8n workflows in n8n, TrueNAS, and anything on the Proxmox hosts. Ask Goobs for those, with
+the exact command.

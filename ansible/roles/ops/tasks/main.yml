@@ -209,7 +209,9 @@
 - name: inspect keys pinned to the door and to the apps VM
   ansible.posix.authorized_key:
     user: inspect
-    key: '{{ [inspect_pubkey, hermes_inspect_pubkey | default("")] | select | join("\n") }}'
+    # Double-quoted on purpose: YAML turns \n into a real newline before Jinja sees it. In single
+    # quotes Ansible wrote a literal "\n", so the second key ended up inside the first key's comment.
+    key: "{{ [inspect_pubkey, hermes_inspect_pubkey | default('')] | select | join('\n') }}"
     key_options: 'from="{{ inspect_from }}",command="/usr/local/sbin/homelab-inspect-door",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc'
     exclusive: true
   when: inspect_pubkey | default('') | length > 0
