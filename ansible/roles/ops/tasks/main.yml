@@ -204,10 +204,12 @@
     mode: "0755"
   when: inspect_pubkey | default('') | length > 0
 
-- name: inspect key pinned to the door and to the apps VM
+# Hermes (stacks/apps/hermes) reads through the same door with its own key (hermes_inspect_pubkey,
+# made by docs/hermes_setup.sh); an empty key is simply left out of the list.
+- name: inspect keys pinned to the door and to the apps VM
   ansible.posix.authorized_key:
     user: inspect
-    key: "{{ inspect_pubkey }}"
+    key: '{{ [inspect_pubkey, hermes_inspect_pubkey | default("")] | select | join("\n") }}'
     key_options: 'from="{{ inspect_from }}",command="/usr/local/sbin/homelab-inspect-door",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc'
     exclusive: true
   when: inspect_pubkey | default('') | length > 0

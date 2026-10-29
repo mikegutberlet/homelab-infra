@@ -46,3 +46,5 @@ ops_from: "192.168.1.53,172.16.0.0/12"
 # read from there at play time, so nothing to commit. Only the apps VM may use it.
 inspect_pubkey: "{{ lookup('file', lookup('env', 'HOME') ~ '/.config/homelab/inspect_ed25519.pub', errors='ignore') | default('', true) }}"
 inspect_from: 192.168.1.53
+# Hermes Agent (stacks/apps/hermes) uses the same door with its own key, made by docs/hermes_setup.sh.
+hermes_inspect_pubkey: "{{ lookup('file', lookup('env', 'HOME') ~ '/.config/homelab/hermes_inspect_ed25519.pub', errors='ignore') | default('', true) }}"

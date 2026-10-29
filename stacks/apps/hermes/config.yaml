@@ -1,0 +1,13 @@
+# Seed for /opt/appdata/hermes/config.yaml (copied once by hermes/init.sh; Hermes owns it after that,
+# so /model and `hermes config set` changes stick). Secrets never live here: they come from the
+# container environment (compose.yaml, apps secrets).
+model:
+  provider: anthropic
+  default: claude-sonnet-5-5
+terminal:
+  backend: local # inside the container; the lab VMs are reached read-only over ssh (skill homelab)
+  cwd: /opt/data
+skills:
+  auto_load: [homelab]
+memory:
+  memory_enabled: true

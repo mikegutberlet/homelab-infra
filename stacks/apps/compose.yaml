@@ -519,6 +519,48 @@ services:
       interval: 30s
       retries: 3
 
+  # Hermes Agent (2026-10-29): Goobs's always-on coding and lab assistant, reached from the Mac
+  # terminal (`ssh -t goobs@192.168.1.53 sudo docker exec -it hermes hermes`) and from Telegram
+  # (long polling, so nothing is published; only HERMES_TELEGRAM_USER_ID may talk to it). Runs as
+  # the storage user over /opt/appdata/hermes (config, memory, skills, sessions, repo checkout).
+  # It reads the VMs through the inspect door (role ops) and changes the lab only by pull request;
+  # no Docker socket, no sudo key. Secrets come from the apps secrets (docs/hermes_setup.sh).
+  # Pinned: the image moves daily; Diun reports new versions, Goobs bumps the tag by hand.
+  hermes-init:
+    image: nousresearch/hermes-agent:v0.22.5
+    entrypoint: ["/bin/bash", "/seed/init.sh"]
+    init: true
+    restart: "no"
+    user: ${PUID}:${PGID}
+    environment:
+      HOME: /opt/data
+      GITHUB_TOKEN: ${HERMES_GITHUB_TOKEN}
+      HERMES_INSPECT_KEY: ${HERMES_INSPECT_KEY}
+    volumes:
+      - /opt/appdata/hermes:/opt/data
+      - ./hermes:/seed:ro
+
+  hermes:
+    image: nousresearch/hermes-agent:v0.22.5
+    container_name: hermes # a fixed name for the Mac alias (docker exec)
+    restart: unless-stopped
+    command: gateway run
+    depends_on:
+      hermes-init:
+        condition: service_completed_successfully
+    mem_limit: 2g
+    environment:
+      PUID: ${PUID} # the image renumbers its hermes user to this uid at start
+      PGID: ${PGID}
+      TZ: ${TZ}
+      ANTHROPIC_API_KEY: ${HERMES_ANTHROPIC_API_KEY}
+      TELEGRAM_BOT_TOKEN: ${HERMES_TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALLOWED_USERS: ${HERMES_TELEGRAM_USER_ID}
+      TELEGRAM_HOME_CHANNEL: ${HERMES_TELEGRAM_USER_ID} # a private chat's id is the user's id; cron results land there
+      GITHUB_TOKEN: ${HERMES_GITHUB_TOKEN}
+    volumes:
+      - /opt/appdata/hermes:/opt/data
+
   # Docker API for Diun (2026-10-28, security plan step 11). Diun used to mount
   # /var/run/docker.sock, which is root on the VM (a read-only mount still allows every API call).
   # The proxy passes only reads of containers, images, events and info; everything else gets 403.
