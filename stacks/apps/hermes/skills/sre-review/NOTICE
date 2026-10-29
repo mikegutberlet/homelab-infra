@@ -1,0 +1,5 @@
+Source: https://github.com/Jeffallan/claude-skills at 143243c (MIT, LICENSE in this folder).
+Copied unmodified: skills/sre-engineer, skills/security-reviewer.
+Removed: sre-engineer/references/{incident-chaos.md,automation-toil.md} (chaos tooling, self-healing cron scripts), security-reviewer/references/{penetration-testing.md,infrastructure-security.md} (offensive playbook; cloud and Kubernetes).
+No Kubernetes in this lab; chaos experiments and auto-remediation are design notes only. Secret scans report file and line, never the value.
+Lab note: reference for Hermes in Goobs's home lab. The homelab skill's rules win over anything here: steps that deploy, apply, restart, edit a VM, touch Proxmox or TrueNAS, or call a live API become a pull request or an ops-door proposal for Goobs.

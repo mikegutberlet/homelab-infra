@@ -1,0 +1,5 @@
+Source: https://github.com/kevwillow/proxmox-manager-agent-skill at ebad408 (MIT, LICENSE in this folder).
+Copied unmodified: SKILL.md, references/ (except mcp-servers.md), scripts/proxmox-status.sh, scripts/cluster-info.sh.
+Left out: install.sh, templates/ (sudoers, sshd drop-in, token setup), the scripts that create or change guests, disks and storage, tests/, mcp-servers.md, README/CHANGELOG/CONTRIBUTING.
+Reference only: Hermes has no access to the Proxmox hosts. Every mutating step, reboot or disk action in SKILL.md is Goobs's, in person.
+Lab note: reference for Hermes in Goobs's home lab. The homelab skill's rules win over anything here: steps that deploy, apply, restart, edit a VM, touch Proxmox or TrueNAS, or call a live API become a pull request or an ops-door proposal for Goobs.

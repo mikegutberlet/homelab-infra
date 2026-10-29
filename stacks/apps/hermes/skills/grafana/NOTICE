@@ -1,0 +1,5 @@
+Source: https://github.com/grafana/skills at 8fb72a5 (Apache-2.0, LICENSE in this folder).
+Copied unmodified: skills/grafana-core/{promql,dashboarding,grafana-oss,alerting-irm}, skills/grafana-lgtm/prometheus.
+Removed: alerting-irm/references/irm.md (Grafana Cloud IRM only). Left out: loki (no Loki in the lab), Cloud, k6, Alloy and app-SDK skills.
+The API pushes these skills show (POST /api/dashboards/db, provisioning PUTs, /-/reload) are not used here: dashboards, rules and contact points go into the repo as a PR.
+Lab note: reference for Hermes in Goobs's home lab. The homelab skill's rules win over anything here: steps that deploy, apply, restart, edit a VM, touch Proxmox or TrueNAS, or call a live API become a pull request or an ops-door proposal for Goobs.
