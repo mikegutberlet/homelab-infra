@@ -6,8 +6,8 @@ description: Goobs's home lab (three Proxmox NUCs, six Docker VMs, TrueNAS). Use
 # Working in Goobs's home lab
 
 You run as a container on the apps VM (192.168.1.53). You can read the lab and change the
-repository, and run ops-door fixes once Goobs says go; you cannot deploy. Goobs deploys from their Mac
-with Ansible after merging a PR.
+repository, and run ops-door fixes once Goobs says go. Goobs deploys from their Mac with Ansible after
+merging a PR; away from the Mac, he can have you deploy a merged stack through the ops door (`deploy`, below).
 
 ## Rules (from the repo's CLAUDE.md)
 
@@ -91,7 +91,7 @@ from overwriting each other's state.
 
 `ssh ops-<vm> '<verb> <args>'` reaches the same door n8n's fixes use (`ansible/roles/ops/files/homelab-ops.sh`):
 `status`, `logs`, `restart`, `stop`, `arr-retry`, `arr-blocklist`, `prowlarr-test`, `docker-prune`,
-`remount-nas`, `plex-remote-on`, `update`, `run-approved`. Only services in `/etc/homelab-ops.allow`
+`remount-nas`, `plex-remote-on`, `update`, `run-approved`, `deploy`. Only services in `/etc/homelab-ops.allow`
 (never `ops_never`); every call is in `journalctl -t homelab-ops`. `status` and `logs` are read-only and free to use.
 
 - Every other verb: name the exact command and why, then wait for Goobs to say go in the chat. Never on your
@@ -99,6 +99,12 @@ from overwriting each other's state.
 - n8n's fix counters do not see your calls. Before proposing, read `ssh <vm> 'journalctl -t homelab-ops --since -24h'`
   and keep the sysadmin's limits counting both: one fix per target per hour, three a day.
 - `run-approved` takes a base64url script: show Goobs the plain script and run only that exact text.
+- `deploy <stack>` (`ssh ops-media 'deploy media'`): the stacks role's steps for that VM's stack, always from GitHub's
+  `main` (merged code only). Only when Goobs asks for that deploy in the chat; first confirm `git log origin/main`
+  holds his merge. It runs detached; read the result with `ssh <vm> 'journalctl -t homelab-ops --since -15m'`
+  (`deploy-run <stack> ok <sha>` or `failed: ...`). Not covered, so Goobs runs them on the Mac: `ansible/` changes
+  (roles, inventory), new `/opt/appdata` folders (the verb refuses), `sysadmin_deploy.py`. Deploying `apps` can
+  restart `hermes`; say so first.
 - Afterwards verify (`ssh <vm> 'docker ps -a --format "{{.Names}} {{.Status}}"'`, logs) and report the door's JSON answer.
 - Restarting `hermes` on apps ends this session; say so first.
 
@@ -112,6 +118,6 @@ TrueNAS steps are Goobs's, in person. n8n-mcp tools named in the n8n skills do n
 
 ## Not yours
 
-Deploying (Ansible, `docker compose`, `sysadmin_deploy.py`), ops-door fixes without Goobs's go, editing files
+Deploying (Ansible, `docker compose`, `sysadmin_deploy.py`; the `deploy` verb only on Goobs's go), ops-door fixes without Goobs's go, editing files
 on a VM, editing the live n8n workflows in n8n, TrueNAS, and anything on the Proxmox hosts. Ask Goobs for those,
 with the exact command.
