@@ -40,8 +40,10 @@ the token is in git's credential store). Read `docs/wiki/` first: `03-architectu
 2. Edit, then check: `python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" <file>` for YAML;
    `ansible-playbook --syntax-check` is not available here, so keep playbook edits small and say so.
 3. `git commit` and `git push -u origin hermes/<topic>`
-4. Open a draft PR with the GitHub API (no `gh` here):
-   `curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+4. Open a draft PR with the GitHub API (no `gh` here). `$GITHUB_TOKEN` is not passed to your shell; take
+   the token from git's credential store without printing it:
+   `TOK=$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill | sed -n 's/^password=//p')`
+   `curl -sS -H "Authorization: Bearer $TOK" -H "Accept: application/vnd.github+json" \
      https://api.github.com/repos/mikegutberlet/homelab-infra/pulls \
      -d '{"title":"...","head":"hermes/<topic>","base":"main","draft":true,"body":"..."}'`
    Report the PR URL and what Goobs must run to deploy, usually
