@@ -1,7 +1,7 @@
 #!/bin/bash
 # One-shot setup for the Hermes data folder (/opt/appdata/hermes, mounted at /opt/data), run by the
 # hermes-init service before the gateway starts, as the storage user. Seeds config.yaml once (Hermes
-# edits it later, e.g. /model), refreshes the homelab skill from the repo every time, and writes the
+# edits it later, e.g. /model), refreshes the skills in stacks/apps/hermes/skills (homelab, superpowers) from the repo every time, and writes the
 # git and ssh credentials from the container environment so nothing is pasted by hand.
 # Where each looks: ssh takes its home from passwd (/opt/data), git takes $HOME, which Hermes sets
 # to $D/home for the shells it runs. So .ssh stays in D and .gitconfig goes in H.
@@ -11,7 +11,7 @@ H="$D/home"
 umask 077
 mkdir -p "$D/skills" "$D/.ssh" "$H"
 [ -f "$D/config.yaml" ] || cp /seed/config.yaml "$D/config.yaml"
-rm -rf "$D/skills/homelab" && cp -r /seed/skills/homelab "$D/skills/homelab" && chmod -R u+w "$D/skills/homelab"
+for s in /seed/skills/*/; do n=$(basename "$s"); rm -rf "$D/skills/$n" && cp -r "$s" "$D/skills/$n" && chmod -R u+w "$D/skills/$n"; done
 rm -f "$D/.gitconfig" # the first version wrote it here, where Hermes's git never reads it
 cat > "$H/.gitconfig" <<GIT
 [user]
