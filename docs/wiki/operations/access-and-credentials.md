@@ -35,6 +35,7 @@ This page says **where** each credential lives and how it is used. It never cont
 | Plex claim token | Was used once during the move (`PLEX_CLAIM` in gpu secrets); the server is claimed | |
 | Emby Premiere key | Inside Emby | |
 | App logins Goobs set (Sonarr, Radarr, Prowlarr, SABnzbd, Nextcloud, n8n owner, Kuma, Emby admin, Immich admin, AnythingLLM) | Goobs's password manager | |
+| Hermes Agent: Anthropic key `hermes`, GitHub fine-grained token (this repo only), Telegram bot token and user id, inspect SSH key `~/.config/homelab/hermes_inspect_ed25519` | apps secrets as `HERMES_*` (written by `docs/hermes_setup.sh`); the key pair on the Mac | Hermes container on apps |
 | healthchecks.io ping URLs | To be placed in `ansible/inventory/hosts.yml` (`heartbeat_url`); they are secrets in practice | heartbeat cron |
 
 ## How access works for operations

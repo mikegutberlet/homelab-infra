@@ -108,6 +108,22 @@ a $2 a day cap. Settings in `/opt/appdata/sysadmin-investigator/investigator.env
 `docs/sysadmin_deploy.py`), state in `data/`, a read-only copy of this repository in `repo/`.
 See [sysadmin: the investigator](../operations/sysadmin.md#the-investigator-hard-questions).
 
+## Hermes Agent
+
+`nousresearch/hermes-agent:v0.22.5` (pinned; Diun reports new tags), container `hermes`, built on
+`stacks/apps/hermes/` (seed `config.yaml`, the `homelab` skill, `init.sh`). Goobs's always-on coding
+and lab assistant, added 2026-10-29. It is Nous Research's open-source agent with its own memory,
+skills and cron, on Claude Sonnet through a dedicated Anthropic key (`HERMES_ANTHROPIC_API_KEY`,
+a monthly limit set in the Anthropic console).
+
+| | |
+| --- | --- |
+| Reach it | Mac terminal: alias `hermes` = `ssh -t goobs@192.168.1.53 sudo docker exec -it hermes hermes` (the full Hermes TUI; `hermes -c` resumes). Phone: the Telegram bot (long polling, only `HERMES_TELEGRAM_USER_ID` is allowed). Nothing is published; the dashboard is off |
+| Data | `/opt/appdata/hermes` (storage user): `config.yaml`, `.env`-free (secrets arrive as container environment), `memories/`, `sessions/`, `skills/`, its clone of this repository |
+| Lab access | Read-only: the `inspect` user on every VM through `~/.ssh/config` (`ssh media 'docker ps'`), with its own key (`hermes_inspect_pubkey`, role ops). Changes only as pull requests on `hermes/<topic>` branches with a fine-grained GitHub token scoped to this repository. No Docker socket, no sudo, no deploys |
+| Setup | `bash docs/hermes_setup.sh` on the Mac (keys and tokens into the apps secrets, inspect key pair), then the ops play for `docker_vms` and the stacks play for `apps`. `hermes-init` seeds the data folder before every start |
+| Skills | `stacks/apps/hermes/skills/homelab/SKILL.md` is copied in on every start, so the repo is the source of truth for the lab rules it follows |
+
 ## TrueNAS bridge
 
 `homelab/truenas-bridge:2`, built from `stacks/apps/truenas-bridge/`: the sysadmin workflow's
