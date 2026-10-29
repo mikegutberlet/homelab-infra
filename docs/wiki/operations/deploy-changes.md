@@ -22,6 +22,12 @@ python3 docs/homelab_merge.py 115 --dry-run   # the plan: what it merges and whi
 python3 docs/homelab_merge.py 115             # asks, marks a draft ready, merges, pulls, runs the plays
 ```
 
+From any directory, with an alias in `~/.zshrc` (then `hmerge 115 --dry-run`, `hmerge 115`):
+
+```sh
+echo "alias hmerge='python3 ~/HomeLab/homelab-infra/docs/homelab_merge.py'" >> ~/.zshrc && source ~/.zshrc
+```
+
 It runs only `--tags stacks --limit <vm>` (one VM at a time) and `--tags ops`, picked from the files
 the PR changes. Other roles, `site.yml`, inventory and OpenTofu are listed, not run; so are
 `sysadmin_deploy.py` and the bind-mounted config restarts below. It checks the PR's merge commit is in
