@@ -3,13 +3,17 @@
 # hermes-init service before the gateway starts, as the storage user. Seeds config.yaml once (Hermes
 # edits it later, e.g. /model), refreshes the homelab skill from the repo every time, and writes the
 # git and ssh credentials from the container environment so nothing is pasted by hand.
+# Where each looks: ssh takes its home from passwd (/opt/data), git takes $HOME, which Hermes sets
+# to $D/home for the shells it runs. So .ssh stays in D and .gitconfig goes in H.
 set -euo pipefail
 D=/opt/data
+H="$D/home"
 umask 077
-mkdir -p "$D/skills" "$D/.ssh"
+mkdir -p "$D/skills" "$D/.ssh" "$H"
 [ -f "$D/config.yaml" ] || cp /seed/config.yaml "$D/config.yaml"
 rm -rf "$D/skills/homelab" && cp -r /seed/skills/homelab "$D/skills/homelab" && chmod -R u+w "$D/skills/homelab"
-cat > "$D/.gitconfig" <<GIT
+rm -f "$D/.gitconfig" # the first version wrote it here, where Hermes's git never reads it
+cat > "$H/.gitconfig" <<GIT
 [user]
 	name = Hermes Agent
 	email = hermes@homelab.invalid
