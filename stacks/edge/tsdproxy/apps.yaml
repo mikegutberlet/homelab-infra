@@ -99,6 +99,9 @@ prometheus:
 fishing:
   url: http://traefik:80
 
+hermes:
+  url: http://traefik:80
+
 chat:
   url: http://traefik:80
 

@@ -118,7 +118,7 @@ a monthly limit set in the Anthropic console).
 
 | | |
 | --- | --- |
-| Reach it | Mac terminal: alias `hermes` = `ssh -t goobs@192.168.1.53 sudo docker exec -it hermes hermes` (the full Hermes TUI; `hermes -c` resumes). Phone: the Telegram bot (long polling, only `HERMES_TELEGRAM_USER_ID` is allowed). Nothing is published; the dashboard is off |
+| Reach it | Mac terminal: alias `hermes` = `ssh -t goobs@192.168.1.53 sudo docker exec -it hermes hermes` (the full Hermes TUI; `hermes -c` resumes). Phone: the Telegram bot (long polling, only `HERMES_TELEGRAM_USER_ID` is allowed). Browser: https://hermes.tail9af84.ts.net (Authentik, then the dashboard's own user `goobs`, password in `~/.config/homelab/hermes-dashboard` on the Mac; port 9119 is edge-only) |
 | Data | `/opt/appdata/hermes` (storage user): `config.yaml`, `.env`-free (secrets arrive as container environment), `memories/`, `sessions/`, `skills/`, its clone of this repository |
 | Lab access | Read-only: the `inspect` user on every VM through `~/.ssh/config` (`ssh media 'docker ps'`), with its own key (`hermes_inspect_pubkey`, role ops). Changes only as pull requests on `hermes/<topic>` branches with a fine-grained GitHub token scoped to this repository. No Docker socket, no sudo, no deploys |
 | Setup | `bash docs/hermes_setup.sh` on the Mac (keys and tokens into the apps secrets, inspect key pair), then the ops play for `docker_vms` and the stacks play for `apps`. `hermes-init` seeds the data folder before every start |
