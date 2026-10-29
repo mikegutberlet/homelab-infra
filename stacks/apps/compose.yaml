@@ -558,6 +558,16 @@ services:
       TELEGRAM_ALLOWED_USERS: ${HERMES_TELEGRAM_USER_ID}
       TELEGRAM_HOME_CHANNEL: ${HERMES_TELEGRAM_USER_ID} # a private chat's id is the user's id; cron results land there
       GITHUB_TOKEN: ${HERMES_GITHUB_TOKEN}
+      # Dashboard (2026-10-29): https://hermes.<tailnet> through Traefik + Authentik; the port accepts
+      # the edge VM only (edge_only_ports). Hermes refuses a non-loopback bind without its own sign-in,
+      # so its username/password sits behind Authentik (one more login, sessions last 30 days).
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_PUBLIC_URL: https://hermes.${TS_TAILNET}
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: goobs
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_PASSWORD}
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_SECRET}
+      HERMES_DASHBOARD_BASIC_AUTH_TTL_SECONDS: "2592000"
+    ports: ["9119:9119"]
     volumes:
       - /opt/appdata/hermes:/opt/data
 

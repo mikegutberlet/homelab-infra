@@ -48,6 +48,17 @@ printf 'Your numeric Telegram user id (ask @userinfobot; blank keeps current): '
 read -r v; set_var HERMES_TELEGRAM_USER_ID "$v"
 set_var HERMES_INSPECT_KEY "$(base64 < "$KEY" | tr -d '\n')"
 
+# Dashboard sign-in (user goobs, behind Authentik): a random password, kept in a file for Goobs, and
+# the session signing secret. Both are generated once and kept on later runs.
+PW=~/.config/homelab/hermes-dashboard
+if ! grep -q '^HERMES_DASHBOARD_PASSWORD=.\+' "$tmp/plain.env"; then
+  pw=$(openssl rand -base64 18 | tr -d '/+=')
+  set_var HERMES_DASHBOARD_PASSWORD "$pw"
+  (umask 077; printf '%s\n' "$pw" > "$PW")
+  echo "Dashboard password for user goobs saved in $PW (not shown here)."
+fi
+grep -q '^HERMES_DASHBOARD_SECRET=.\+' "$tmp/plain.env" || set_var HERMES_DASHBOARD_SECRET "$(openssl rand -hex 32)"
+
 # --filename-override: the temp file is outside stacks/, so .sops.yaml would match no rule.
 "$SOPS" --encrypt --filename-override "$FILE" --input-type dotenv --output-type dotenv "$tmp/plain.env" > "$tmp/enc.env"
 mv "$tmp/enc.env" "$FILE"
