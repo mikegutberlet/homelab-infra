@@ -141,10 +141,13 @@
     mode: "0755"
   when: ops_pubkey is defined
 
+# Hermes (stacks/apps/hermes) may use the same door with its inspect key (hermes_inspect_pubkey), but
+# only after Goobs says go in the chat (homelab skill); an empty key is simply left out of the list.
 - name: ops key pinned to the door and to the apps VM (no pty, no forwarding)
   ansible.posix.authorized_key:
     user: ops
-    key: "{{ ops_pubkey }}"
+    # Double-quoted for the same reason as the inspect keys below: \n must reach Jinja as a newline.
+    key: "{{ [ops_pubkey, hermes_inspect_pubkey | default('')] | select | join('\n') }}"
     key_options: 'from="{{ ops_from }}",command="/usr/local/sbin/homelab-ops-door",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-user-rc'
     exclusive: true
   when: ops_pubkey is defined
