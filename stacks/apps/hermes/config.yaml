@@ -8,6 +8,6 @@ terminal:
   backend: local # inside the container; the lab VMs are reached read-only over ssh (skill homelab)
   cwd: /opt/data
 skills:
-  auto_load: [homelab]
+  auto_load: [homelab, caveman]
 memory:
   memory_enabled: true
