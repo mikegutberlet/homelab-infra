@@ -15,6 +15,18 @@ source ~/.local/share/homelab-ansible/bin/activate   # or call the venv's ansibl
 cd ansible
 ```
 
+Merge, pull and deploy (the end of step 1, 2 and 3) from the terminal (needs `brew install gh` and `gh auth login` once):
+
+```sh
+python3 docs/homelab_merge.py 115 --dry-run   # the plan: what it merges and which play it would run
+python3 docs/homelab_merge.py 115             # asks, marks a draft ready, merges, pulls, runs the plays
+```
+
+It runs only `--tags stacks --limit <vm>` (one VM at a time) and `--tags ops`, picked from the files
+the PR changes. Other roles, `site.yml`, inventory and OpenTofu are listed, not run; so are
+`sysadmin_deploy.py` and the bind-mounted config restarts below. It checks the PR's merge commit is in
+your checkout before any play, so a play never runs on old code. Checks: `python3 docs/test_homelab_merge.py`.
+
 ## Compose or stack config change (most common)
 
 ```sh
