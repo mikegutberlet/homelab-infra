@@ -113,7 +113,7 @@ See [sysadmin: the investigator](../operations/sysadmin.md#the-investigator-hard
 `nousresearch/hermes-agent:v0.22.5` (pinned; Diun reports new tags), container `hermes`, built on
 `stacks/apps/hermes/` (seed `config.yaml`, the `homelab` skill, `init.sh`). Goobs's always-on coding
 and lab assistant, added 2026-10-29. It is Nous Research's open-source agent with its own memory,
-skills and cron, on Claude Sonnet through a dedicated Anthropic key (`HERMES_ANTHROPIC_API_KEY`,
+skills and cron, on Claude Opus 5.5 through a dedicated Anthropic key (`HERMES_ANTHROPIC_API_KEY`,
 a monthly limit set in the Anthropic console).
 
 | | |

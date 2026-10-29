@@ -3,7 +3,7 @@
 # container environment (compose.yaml, apps secrets).
 model:
   provider: anthropic
-  default: claude-sonnet-5-5
+  default: claude-opus-5-5
 terminal:
   backend: local # inside the container; the lab VMs are reached read-only over ssh (skill homelab)
   cwd: /opt/data
