@@ -1,0 +1,5 @@
+Source: https://github.com/drewid74/ai_skills at 52ab679. The repository has no LICENSE file; its README states: "MIT — use these skills however you want, commercially or otherwise."
+Copied unmodified: docker-selfhost, service-integration, infrastructure-as-code.
+Left out: truenas-ops (TrueNAS is Goobs's; it suggests zfs rollback and dataset changes), the rest of the set.
+Not for this lab as written: public Traefik dashboards or published admin ports (admin UIs are tailnet-only behind Authentik), apply/destroy/state rm (plan only, in a PR), and decrypting SOPS files to disk.
+Lab note: reference for Hermes in Goobs's home lab. The homelab skill's rules win over anything here: steps that deploy, apply, restart, edit a VM, touch Proxmox or TrueNAS, or call a live API become a pull request or an ops-door proposal for Goobs.

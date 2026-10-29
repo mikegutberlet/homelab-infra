@@ -1,0 +1,4 @@
+Source: https://github.com/czlonkowski/n8n-skills at e037563 (MIT, LICENSE in this folder).
+Copied unmodified: skills/n8n-code-javascript, skills/n8n-expression-syntax.
+Left out: n8n-validation-expert (built on the n8n-mcp server and live-workflow edits; this lab has neither) and the other n8n-mcp skills. Mentions of n8n-mcp tools in the copied skills do not apply here: the lab edits stacks/apps/n8n/sysadmin/*.js and rebuilds with docs/build_sysadmin_workflow.py.
+Lab note: reference for Hermes in Goobs's home lab. The homelab skill's rules win over anything here: steps that deploy, apply, restart, edit a VM, touch Proxmox or TrueNAS, or call a live API become a pull request or an ops-door proposal for Goobs.

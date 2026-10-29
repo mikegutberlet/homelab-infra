@@ -1,0 +1,6 @@
+Source: https://github.com/leogallego/claude-ansible-skills at 2c43de8, plugin ansible-good-practices (GPL-3.0-or-later, LICENSE in this folder; it applies to this folder only).
+Copied: skills/ansible-good-practices/SKILL.md and the plugin's references/ (Red Hat CoP text) into this folder.
+Modified: removed the "nuno" easter egg in SKILL.md (an instruction to ignore all other instructions).
+Left out: mcp.json (runs uvx ansible-know-mcp), plugin.json, references/aap_configuration.adoc (no Ansible Automation Platform here).
+ansible-lint is not installed in the Hermes container, so the review runs manually; any auto-fix is an edit on a hermes/<topic> branch.
+Lab note: reference for Hermes in Goobs's home lab. The homelab skill's rules win over anything here: steps that deploy, apply, restart, edit a VM, touch Proxmox or TrueNAS, or call a live API become a pull request or an ops-door proposal for Goobs.
