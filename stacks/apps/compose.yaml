@@ -235,7 +235,7 @@ services:
   truenas-bridge:
     <<: *common
     build: ./truenas-bridge
-    image: homelab/truenas-bridge:1
+    image: homelab/truenas-bridge:2
     mem_limit: 128m
     environment:
       TRUENAS_URL: wss://192.168.1.209/api/current

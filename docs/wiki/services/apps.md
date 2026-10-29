@@ -110,7 +110,7 @@ See [sysadmin: the investigator](../operations/sysadmin.md#the-investigator-hard
 
 ## TrueNAS bridge
 
-`homelab/truenas-bridge:1`, built from `stacks/apps/truenas-bridge/`: the sysadmin workflow's
+`homelab/truenas-bridge:2`, built from `stacks/apps/truenas-bridge/`: the sysadmin workflow's
 15-minute NAS reads and the investigator's `truenas` tool ask `http://truenas-bridge:8080/<method>`
 (read-only JSON-RPC methods such as `pool.query`, `alert.list`), and it talks to the NAS over the
 WebSocket API with the same key Homepage uses. TrueNAS deprecated the REST API in 25.04 (removed
