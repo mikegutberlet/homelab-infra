@@ -31,6 +31,7 @@ download clients see one filesystem, so an import is a hardlink or rename, insta
 | `Photos` | Immich as a **read-only** external library | existing | Existing photo collection; Immich indexes but cannot change it |
 | `Photos/Immich-uploads` | Immich uploads (phone backups) | storage 3000:3000 | Created 2026-10-21 |
 | `Documents/Paperless/{consume,media,export}` | Paperless-ngx | storage 3000:3000 | Created 2026-10-21, add-only |
+| `Documents/TackleBox` | Tackle Box archive (fishing app corpus, books, logs) | storage 3000:3000 | Created 2026-10-29, add-only |
 | `sabnzb/complete`, `sabnzb/incomplete` | SABnzbd, qBittorrent, then the Arr apps import from here | storage | 9 leftover folders (about 28 GB) from the old failed-import backlog must not be deleted without Goobs's OK |
 | `Backups/homelab/<vm>/<YYYY-MM-DD>/` | `homelab-backup` on every VM | root only (go-rwx) | 14-day retention, pruned only by the script that wrote them |
 | `to-delete/2026-10-21/` | Tdarr project holding folder | storage | Junk files, weaker duplicate copies, Radarr's recycling bin (`radarr-recycle`), first-day Tdarr originals. Emptied only after Goobs confirms, about 2026-11-04 |
