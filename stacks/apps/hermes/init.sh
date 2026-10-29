@@ -44,5 +44,25 @@ Host ai
 	HostName 192.168.1.54
 Host transcode
 	HostName 192.168.1.55
+# The ops door (fixed verbs, journal tag homelab-ops), same key. Only after Goobs says go in the chat.
+# Usage: ssh ops-media restart sonarr
+Host ops-edge ops-media ops-gpu ops-apps ops-ai ops-transcode
+	User ops
+	IdentityFile $D/.ssh/inspect_ed25519
+	IdentitiesOnly yes
+	StrictHostKeyChecking accept-new
+	ConnectTimeout 8
+Host ops-edge
+	HostName 192.168.1.50
+Host ops-media
+	HostName 192.168.1.51
+Host ops-gpu
+	HostName 192.168.1.52
+Host ops-apps
+	HostName 192.168.1.53
+Host ops-ai
+	HostName 192.168.1.54
+Host ops-transcode
+	HostName 192.168.1.55
 SSH
 echo "hermes-init: config, skill, git and ssh credentials in place"
