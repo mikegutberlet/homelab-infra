@@ -4,7 +4,7 @@
     - { role: base, tags: [base] }
     - { role: docker, tags: [docker] }
     - { role: nfs, tags: [nfs] }
-    - { role: scratch, tags: [scratch], when: scratch_disk is defined } # media's SABnzbd temp disk
+    - { role: scratch, tags: [scratch], when: scratch_disk is defined } # media's SABnzbd temp disk, gpu's transcode disk
     - { role: backup, tags: [backup] }
     - { role: lanfw, tags: [lanfw] }
     - { role: ops, tags: [ops] }
