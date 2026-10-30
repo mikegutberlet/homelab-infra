@@ -165,9 +165,12 @@ docker_json() {
         name:.Name|ltrimstr("/"), id:.Id[0:12], state:.State.Status, health:(.State.Health.Status // "none"),
         restarts:.RestartCount, started_at:.State.StartedAt, exit_code:.State.ExitCode,
         image:.Config.Image, image_id:.Image[7:19], stack:(.Config.Labels["com.docker.compose.project"] // null),
-        service:(.Config.Labels["com.docker.compose.service"] // null)}'
+        service:(.Config.Labels["com.docker.compose.service"] // null),
+        restart:(.HostConfig.RestartPolicy.Name // null)}'
     done | jq -s '.')
     # Expected services (from hosts.yml stack_services, or the whole compose file) that are not running.
+    # A one-shot service (restart "no") that exited 0 has done its job: apps' hermes-init was restarted
+    # every hour as "missing" on 2026-10-29 until the day's three fixes were spent.
     local exp_list=()
     for s in $STACKS; do
       local lst
@@ -180,7 +183,8 @@ docker_json() {
     done
     missing=$(printf '%s\n' "${exp_list[@]:-}" | grep -v '^$' | jq -R -s --argjson c "$containers" '
       split("\n") | map(select(length>0)) | map(. as $e | select(
-        ($c | map(select((.stack+"/"+.service)==$e and .state=="running")) | length) == 0))')
+        ($c | map(select((.stack+"/"+.service)==$e and (.state=="running"
+          or (.state=="exited" and .exit_code==0 and .restart=="no")))) | length) == 0))')
     reclaim=$(docker system df --format '{{.Reclaimable}}' 2>/dev/null | head -2 | awk '
       { v=$1; sub(/[^0-9.].*/,"",v); u=$1; sub(/^[0-9.]+/,"",u);
         m=1; if (u ~ /^kB/) m=1e3; if (u ~ /^MB/) m=1e6; if (u ~ /^GB/) m=1e9; if (u ~ /^TB/) m=1e12; t+=v*m }
@@ -319,16 +323,32 @@ plex_json() {
       END { for (ip in n) printf "%s\t%d\n", ip, n[ip] }' \
       | jq -R -s -c 'split("\n") | map(select(length>0) | split("\t") | {ip:.[0], n:(.[1]|tonumber)}) | sort_by(-.n) | .[0:5]')
   fi
+  # Transcode sessions: size and age of each folder under Transcode/Sessions (the five largest).
+  # 2026-10-29: a Live TV channel left playing for 4 h kept every segment, 36 GB, and took the
+  # system disk to 97%. The folder is wherever Plex's /transcode is mounted.
+  local tdir sessions='[]'
+  tdir=$(docker ps -q --filter label=com.docker.compose.service=plex | head -1 | xargs -r docker inspect \
+    --format '{{range .Mounts}}{{if eq .Destination "/transcode"}}{{.Source}}{{end}}{{end}}' 2>/dev/null)
+  if [ -n "$tdir" ] && [ -d "$tdir/Transcode/Sessions" ]; then
+    sessions=$(for d in "$tdir"/Transcode/Sessions/*/; do
+        [ -d "$d" ] || continue
+        kb=$(timeout 20 du -sk "$d" 2>/dev/null | cut -f1)
+        old=$(timeout 20 find "$d" -type f -printf '%T@\n' 2>/dev/null | sort -n | head -1)
+        printf '%s\t%s\t%s\n' "$(basename "$d" | sed 's/^plex-transcode-//' | cut -c1-12)" "$(num "$kb")" "$(num "${old%.*}")"
+      done | jq -R -s -c --argjson now "$now" 'split("\n") | map(select(length>0) | split("\t")
+        | {id:.[0], mb:((.[1]|tonumber)/1024|floor), age_min:(if (.[2]|tonumber) > 0 then (($now - (.[2]|tonumber))/60|floor) else 0 end)})
+        | sort_by(-.mb) | .[0:5]')
+  fi
   # listed: plex.tv has this server (by machine id) as one that provides "server"; null when
   # plex.tv or Plex did not answer.
-  printf '%s\n%s\n%s\n%s\n' "$ident" "$acct" "$pset" "$res" | jq -c -s --argjson tok "$([ -n "$tok" ] && echo true || echo false)" --argjson refused "${refused:-[]}" '
+  printf '%s\n%s\n%s\n%s\n' "$ident" "$acct" "$pset" "$res" | jq -c -s --argjson tok "$([ -n "$tok" ] && echo true || echo false)" --argjson refused "${refused:-[]}" --argjson sessions "${sessions:-[]}" '
     .[0].MediaContainer.machineIdentifier as $id | (.[1].MyPlex // {}) as $a
     | ((.[2].MediaContainer.Setting // []) | map(select(.id == "PublishServerOnPlexOnlineKey")) | .[0].value) as $pub
     | {answering:($id != null), token:$tok,
        publish:(if $pub == null then null else ($pub == true or $pub == "1" or $pub == 1) end),
        sign_in:($a.signInState // null), mapping:($a.mappingState // null),
        mapping_error:(if ($a.mappingError // "") == "" then null else $a.mappingError end),
-       public_port:($a.publicPort // null), refused:$refused,
+       public_port:($a.publicPort // null), refused:$refused, transcode_sessions:$sessions,
        listed:(if (.[3] | type) == "array" and $id != null
                then (.[3] | map(select(.clientIdentifier == $id and ((.provides // "") | split(",") | index("server")))) | length > 0)
                else null end)}'

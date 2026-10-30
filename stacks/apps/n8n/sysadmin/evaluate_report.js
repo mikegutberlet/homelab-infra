@@ -283,6 +283,12 @@ if (px && px.answering) {
   for (const x of (px.refused || []).filter((y) => y.n >= 3 && wasRefused.has(y.ip)))
     add(`plex-refused:${x.ip}`, 'warning', `Plex keeps refusing ${x.ip === '127.0.0.1' ? 'a remote app (through the relay)' : `the device at ${x.ip}`} (${x.n} times in 15 min)`, 'It holds a Plex sign-in that plex.tv no longer issues. In that device\'s Plex app: Settings > Sign out, then sign in again with the code at plex.tv/link');
   // No router forward can help behind carrier NAT (Starlink: router WAN 100.82.x).
+  // A transcode session that keeps growing (Live TV left playing keeps every segment: 36 GB in 4 h
+  // on 2026-10-29, gpu's system disk at 97%). Ending the stream deletes its folder.
+  for (const t of px.transcode_sessions || []) {
+    if (t.mb >= S.TRANSCODE_SESSION_WARN_GB * 1024 || (t.age_min >= S.TRANSCODE_SESSION_WARN_H * 60 && t.mb >= 5 * 1024))
+      add(`plex-transcode:${t.id}`, 'warning', `A Plex transcode session holds ${(t.mb / 1024).toFixed(1)} GB after ${Math.round(t.age_min / 60)} h`, 'Usually Live TV left playing on a TV: stop it in Plex > Dashboard and the folder is deleted. A Plex restart (ask the chat) ends every stream');
+  }
   if (S.PLEX_REMOTE && px.publish && px.mapping_error) add('plex-nat', 'info', `Plex is not reachable directly from outside the house (${px.mapping_error})`, px.mapping_error === 'doublenat' ? 'The router itself sits behind another NAT (carrier NAT or a second router), so no port forward can work; remote apps fall back to the slow Plex relay. At home and over Tailscale it is fine' : 'Remote apps fall back to the slow Plex relay');
 }
 

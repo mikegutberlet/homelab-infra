@@ -303,12 +303,21 @@ def _build(ops_door_id=OPS_DOOR_ID, investigator_id=INVESTIGATOR_ID):
     link("Every 15 min", chain[0])
     for a, b in zip(chain, chain[1:]):
         link(a, b)
+    # SMART attributes of each disk Scrutiny flags (evaluate_infra.js decodes Seagate's packed 188).
+    # No flagged disk = one empty item, whose read fails quietly.
+    node("Scrutiny flagged", "n8n-nodes-base.code", 2, (1360, 480), {"jsCode": (
+        "let s = {};\ntry { s = $('Scrutiny').first().json.data.summary || {}; } catch (e) {}\n"
+        "const ids = Object.entries(s).filter(([, v]) => ((v.device || {}).device_status || 0) !== 0).map(([k]) => k);\n"
+        "return ids.length ? ids.map(id => ({ json: { id } })) : [{ json: { id: 'none' } }];")})
+    link(chain[-1], "Scrutiny flagged")
+    http("Scrutiny details", "=http://scrutiny:8080/api/device/{{ $json.id }}/details", (1360, 660), alwaysOutputData=True)
+    link("Scrutiny flagged", "Scrutiny details")
     # One item per Proxmox node (name + ip from cluster status), then its status for swap.
     node("PVE node list", "n8n-nodes-base.code", 2, (1580, 300), {"jsCode": (
         "let nodes = [];\ntry { nodes = ($('PVE cluster status').first().json.data || []).filter(n => n.type === 'node' && n.online); } catch (e) {}\n"
         "if (!nodes.length) return [{ json: { node: null } }];\n"
         "return nodes.map(n => ({ json: { node: n.name, ip: n.ip } }));")})
-    link(chain[-1], "PVE node list")
+    link("Scrutiny details", "PVE node list")
     node("PVE node status", "n8n-nodes-base.httpRequest", 4.2, (1800, 300), {
         "method": "GET", "url": "=https://{{ $json.ip }}:8006/api2/json/nodes/{{ $json.node }}/status",
         "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",

@@ -94,11 +94,29 @@ if (al && al.length && !failed(al[0])) {
 
 // ---- Scrutiny (SMART) ----
 const sc = grab('Scrutiny');
+// Latest SMART attributes of the flagged disks ("Scrutiny details", one read per flagged disk).
+const smartOf = {};
+for (const j of grabAll('Scrutiny details') || []) {
+  const r0 = j && j.data && (j.data.smart_results || [])[0];
+  if (r0) { smartOf[r0.scrutiny_uuid] = r0.attrs || {}; smartOf[(j.data.device || {}).wwn] = r0.attrs || {}; }
+}
+// Seagate's 188 is three 16-bit counters; Scrutiny fails it on the raw number (sdd, 2026-10-29: 1/1/1).
+// A disk whose only failed attribute is a small packed 188 is information, not a warning.
+const onlyTimeouts = (d, attrs) => {
+  if (!attrs || !/^ST/.test(d.model_name || '')) return null;
+  const bad = Object.entries(attrs).filter(([, a]) => (a.status || 0) & 5); // 1 SMART failed, 4 Scrutiny failed
+  if (bad.length !== 1 || bad[0][0] !== '188') return null;
+  const raw = Number(bad[0][1].raw_value) || 0;
+  const n = Math.max(raw % 65536, Math.floor(raw / 65536) % 65536, Math.floor(raw / 4294967296) % 65536);
+  return n < S.SMART_TIMEOUTS_WARN ? n : null;
+};
 if (!failed(sc) && sc.data && sc.data.summary) {
   for (const [wwn, s] of Object.entries(sc.data.summary)) {
     const d = s.device || {}; const st = d.device_status || 0;
     const label = `${d.device_name || wwn} ${d.serial_number || ''} (${d.host_id || ''})`.trim();
-    if (st & 1) add(`smart:${d.serial_number || wwn}`, 'critical', `Disk ${label}: SMART reports failure`, 'Plan a replacement; the pool is RAIDZ1');
+    const timeouts = st === 2 ? onlyTimeouts(d, smartOf[wwn] || smartOf[d.wwn]) : null;
+    if (timeouts !== null) add(`smart:${d.serial_number || wwn}`, 'info', `Disk ${label}: ${timeouts} command timeout(s) (SMART 188)`, 'Scrutiny reads Seagate\'s packed 188 as a failure; no other attribute failed. A warning from ' + S.SMART_TIMEOUTS_WARN + ' on; reseat the cable if it rises');
+    else if (st & 1) add(`smart:${d.serial_number || wwn}`, 'critical', `Disk ${label}: SMART reports failure`, 'Plan a replacement; the pool is RAIDZ1');
     else if (st & 2) add(`smart:${d.serial_number || wwn}`, 'warning', `Disk ${label}: Scrutiny thresholds exceeded`, 'Rising reallocated/pending sectors or command timeouts; keep watching');
     const temp = s.smart && s.smart.temp;
     if (temp && temp >= 55) add(`temp:${d.serial_number || wwn}`, 'warning', `Disk ${label} at ${temp} C`, 'DAS airflow');
