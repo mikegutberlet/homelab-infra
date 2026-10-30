@@ -42,7 +42,7 @@ flowchart LR
 | Image | `lscr.io/linuxserver/plex:latest`, `VERSION=docker`, `network_mode: host` (port 32400 plus discovery) |
 | Address | https://plex.tail9af84.ts.net/web (no Authentik), LAN http://192.168.1.52:32400, remote apps via the plex.tv relay (no router forward) |
 | Remote Access | Must stay **on** (Settings > Remote Access; its manual port 6996 is a leftover and harmless). When it is off, plex.tv refuses the server's check-ins and after a few days stops listing it, and then the Roku and other apps cannot find Plex at all, at home too. That happened 2026-10-25: it went off during the 2026-10-21 power cut. The internet is Starlink, whose IPv4 is carrier NAT (the router's WAN address is 100.82.x), so no router forward can be reached from outside (the 6996 one was removed on 2026-10-26) and remote apps use the slow Plex relay; see [Open items](../08-open-items.md) |
-| Data | `/opt/appdata/plex` (about 40 GB copied from the snap on the old VM on 2026-10-21, old copy left in place for rollback), transcodes in `/opt/appdata/transcode/plex` |
+| Data | `/opt/appdata/plex` (about 40 GB copied from the snap on the old VM on 2026-10-21, old copy left in place for rollback), transcodes in `/srv/transcode/plex` (its own 64 GB disk since 2026-10-29) |
 | Libraries | Movies (3,368), TV Shows (522), plus two smaller ones (XRated, Other Videos); 4 libraries total, all under `/mnt/nfs/Media`, mounted read-only |
 | Hardware transcoding | Quick Sync through VA-API, verified (`h264_vaapi`) on 2026-10-21 |
 | Settings changed | "Empty trash automatically after every scan" turned **off** on 2026-10-22, because a scan during a window where the NAS is unmounted would have emptied the library |
@@ -61,7 +61,7 @@ Curated home rows come from the Home Screen Companion plugin, fed by the home-ro
 | Purpose | Second media server, Goobs's preferred one |
 | Image / port | `lscr.io/linuxserver/emby:latest`, 8096, **open to the whole LAN** |
 | Address | https://emby.tail9af84.ts.net (no Authentik), LAN http://192.168.1.52:8096 |
-| Data | `/opt/appdata/emby` (fresh install 2026-10-21; admin and libraries Movies + TVShows set up by Goobs), transcodes in `/opt/appdata/transcode/emby` |
+| Data | `/opt/appdata/emby` (fresh install 2026-10-21; admin and libraries Movies + TVShows set up by Goobs), transcodes in `/srv/transcode/emby` (same disk) |
 | Premiere | Key added by Goobs 2026-10-21; hardware transcoding (`h264_qsv`, decode and encode for H.264 and HEVC) verified from a 720p/2 Mbps test play |
 | Health | `GET /emby/System/Ping`; critical Kuma monitor |
 
