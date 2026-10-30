@@ -58,6 +58,12 @@ const SETTINGS = {
   TDARR_IDLE_H: 6,                           // hours of scheduled time; the library schedule pauses 17:00-23:00 PT
   TDARR_PAUSE_HOURS: [17, 23],
   LOGIN_FAILS_CRIT: 3,                       // failed arr web logins per 15 min that email at once
+  // One Plex transcode session this big, or this old and over 5 GB: usually Live TV left playing,
+  // which keeps every segment (36 GB in 4 h on 2026-10-29). Warning only; nothing is fixed from here.
+  TRANSCODE_SESSION_WARN_GB: 15, TRANSCODE_SESSION_WARN_H: 4,
+  // Seagate packs three 16-bit counters into SMART 188 (command timeouts), and Scrutiny reads the
+  // raw number (4295032833 = 1/1/1) as a failure. Below this many timeouts it is only information.
+  SMART_TIMEOUTS_WARN: 5,
   KEY_WARN_DAYS: 14, CERT_WARN_DAYS: 14,
   SCRUB_WARN_DAYS: 45,
   PVE_EXPECT_RUNNING: [110, 201, 202, 203, 204, 205, 206],
