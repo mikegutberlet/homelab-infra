@@ -115,3 +115,10 @@ TrueNAS steps are Goobs's, in person. n8n-mcp tools named in the n8n skills do n
 Deploying (Ansible, `docker compose`, `sysadmin_deploy.py`), ops-door fixes without Goobs's go, editing files
 on a VM, editing the live n8n workflows in n8n, TrueNAS, and anything on the Proxmox hosts. Ask Goobs for those,
 with the exact command.
+
+## Commands Goobs runs on the Mac
+
+Your `media`/`gpu`/`ops-<vm>` ssh aliases exist only in your container; they don't resolve on Goobs's Mac.
+Write VM commands for him as `ssh goobs@192.168.1.<n>` (IPs from the VM list above) and `sudo docker ...`,
+the form the repo docs use. Repo commands run from `~/HomeLab/homelab-infra`. Keep secrets in shell variables
+so nothing prints.
