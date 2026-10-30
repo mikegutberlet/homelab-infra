@@ -25,12 +25,17 @@ Read-only through `ssh gpu`. Report the cause plus client-side fixes; change not
 5. Compare with a title that just played on the same client (`timeline ... state=playing ... timeToFirstFrame`)
    and diff its transcoder command. The difference is the cause.
 
-## Known cause (diagnosed from logs 2026-10-29; the client fix is not yet confirmed)
+## Likely cause (from logs 2026-10-29; not yet confirmed by a fix)
 
-- Roku + "Boost voices" (`boostDialog=1`) + 5.1 source: Plex re-encodes audio to 5.1 E-AC3 via
-  EasyAudioEncoder (`eac3_eae`, `ochl='5.1(side)'`) despite the Roku's 2-channel limit; the Roku stops at 0.
-  Stereo sources get stereo AAC and play. Fix on the client: Boost voices off, or re-enable Direct Play in
-  the Roku Plex app (it was off, forcing every title to transcode), or set Roku audio output to stereo.
+- Roku + AAC 5.1 source: the Roku advertises `aac{channels:2},ac3{channels:6},eac3{channels:8}` (Dolby
+  passthrough on), so Plex re-encodes the audio to 5.1 E-AC3 via EasyAudioEncoder (`eac3_eae`,
+  `ochl='5.1(side)'`); the Roku stops at 0. Stereo sources get stereo AAC and play. Read the client's
+  `audioDecoders=` from the decision request's `X-Plex-Client-Capabilities`.
+- "Boost voices" (`boostDialog=1`, adds `speechnorm`) is NOT the cause: with `boostDialog=0` the same title still
+  got `eac3_eae` and failed. Don't recommend turning it off as the fix.
+- Fix options, cheapest first: test another client; Roku audio to Stereo/PCM-Stereo (Roku then advertises
+  only stereo AAC); Direct Play on in the Roku Plex app (it was off); a release with AC3/E-AC3 audio via Radarr;
+  a stereo AAC track via Tdarr/Unmanic (changes the file under /mnt/nfs, so Goobs's).
 
 ## Side checks worth a line in the answer
 
