@@ -26,7 +26,7 @@ services:
     devices: [/dev/dri:/dev/dri]
     volumes:
       - /opt/appdata/plex:/config
-      - /opt/appdata/transcode/plex:/transcode
+      - /srv/transcode/plex:/transcode # its own 64 GB disk (role scratch): a runaway session cannot fill /
       - /mnt/nfs/Media:/mnt/nfs/Media:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:32400/identity"]
@@ -42,7 +42,7 @@ services:
     devices: [/dev/dri:/dev/dri]
     volumes:
       - /opt/appdata/emby:/config
-      - /opt/appdata/transcode/emby:/transcode
+      - /srv/transcode/emby:/transcode # its own 64 GB disk (role scratch)
       - /mnt/nfs/Media:/mnt/nfs/Media:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8096/emby/System/Ping"]
