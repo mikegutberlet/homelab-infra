@@ -59,8 +59,16 @@ one command, optionally piped into grep/head/tail/wc/sort/uniq/cut, from a read-
 on allowed paths (compose files, `/etc`, `/var/log`, `/proc`). Secrets are masked before they leave
 the VM. Anything else is refused; say so and read the repo instead of guessing.
 
-Examples: `ssh media 'docker ps --format "{{.Names}} {{.Status}}"'`, `ssh gpu 'docker logs --tail 100 plex'`,
+Examples: `ssh media 'docker ps --format "{{.Names}} {{.Status}}"'`, `ssh gpu 'docker logs --tail 100 gpu-plex-1'`,
 `ssh apps 'df -h /'`.
+
+- Container names are compose-prefixed (`gpu-plex-1`, `media-radarr-1`, `gpu-autoheal-1`), not the bare service
+  name; a wrong name returns empty output, not an error. Run `docker ps --format "{{.Names}}"` first.
+- The door refuses shell redirections (`2>&1` fails with `'>&' is not allowed`). Pipe the ssh output through
+  grep on your side instead: `ssh gpu 'docker logs --since 1h gpu-plex-1' | grep -i error`.
+- App log files under `/opt/appdata/<app>/` are readable through `grep/tail/ls`; quote paths with spaces
+  inside double quotes in the remote command. Often richer than `docker logs` (Plex logs nothing useful there).
+- Playback problems in Plex/Emby: follow `references/media-playback-debugging.md`.
 
 If every VM answers `Permission denied (publickey)`, the VMs don't have your public key: it comes from
 `~/.config/homelab/hermes_inspect_ed25519.pub` on Goobs's Mac and the ops role skips it silently when
@@ -115,3 +123,15 @@ TrueNAS steps are Goobs's, in person. n8n-mcp tools named in the n8n skills do n
 Deploying (Ansible, `docker compose`, `sysadmin_deploy.py`), ops-door fixes without Goobs's go, editing files
 on a VM, editing the live n8n workflows in n8n, TrueNAS, and anything on the Proxmox hosts. Ask Goobs for those,
 with the exact command.
+
+- Moving, renaming or deleting anything under `/mnt/nfs` (media library tidy-ups included) is Goobs's. The
+  ops door's never-list refuses it, and a `run-approved` script that makes Radarr/Sonarr do the move for you
+  still routes around that rule: don't propose it. Hand Goobs the commands instead, and do library moves through
+  the *arr app (not `mv`) so its database keeps the right path.
+
+## Commands Goobs runs on the Mac
+
+Your `media`/`gpu`/`ops-<vm>` ssh aliases exist only in your container; they don't resolve on Goobs's Mac.
+Write VM commands for him as `ssh goobs@192.168.1.<n>` (IPs from the VM list above) and `sudo docker ...`,
+the form the repo docs use. Repo commands run from `~/HomeLab/homelab-infra`. Keep secrets in shell variables
+so nothing prints.
