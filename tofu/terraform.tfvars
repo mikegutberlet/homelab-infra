@@ -52,6 +52,10 @@ vms = {
     # VM afterwards: sudo growpart /dev/sda 1 && sudo resize2fs /dev/sda1 (or the next reboot does it).
     disk_gb   = 128
     datastore = "RicksShipXFS"
+    # Plex/Emby transcode scratch (2026-10-29): a Plex Live TV session left playing for 4 h wrote
+    # 36 GB to the system disk and took it to 97%. A disk of its own caps that at this size.
+    scratch_gb        = 64
+    scratch_datastore = "RicksShipXFS"
     # The iGPU (00:02.0, vfio-pci on RicksShip since 2026-10-21) is attached by root with
     # `qm set 203 --hostpci0 0000:00:02.0,pcie=1`: the tofu@pve token can't set raw PCI devices,
     # and vms.tf ignores hostpci so tofu leaves it alone. Keep igpu = false here.

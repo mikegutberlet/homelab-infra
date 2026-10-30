@@ -78,8 +78,8 @@ resource "proxmox_virtual_environment_vm" "vm" {
     ssd          = true
   }
 
-  # Scratch disk (scsi1), raw (it lives on LVM-thin, which has no qcow2). The media VM's was added
-  # live by root (`qm set 202 --scsi1 xfstest:200,...`, a one-off playbook removed 2026-10-27), converted
+  # Scratch disk (scsi1), raw (LVM-thin has no qcow2; on directory storage raw is a sparse file).
+  # The media VM's was added live by root (`qm set 202 --scsi1 xfstest:200,...`, a one-off playbook removed 2026-10-27), converted
   # to raw and moved to PortalGunSpare on 2026-10-27, and is recorded here so a plan stays clean;
   # if a plan ever wants to ADD scsi1, stop: refresh first.
   dynamic "disk" {

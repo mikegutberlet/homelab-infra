@@ -83,9 +83,10 @@ like, not for whether writes succeed. Tightening the export is a later step that
 | --- | --- | --- |
 | `/opt/stacks/<vm>/` | The Compose project synced from the repo, plus the decrypted `.env` | yes, in the tar (the `.env` with plaintext secrets is included, which is why the backup folder is root-only) |
 | `/opt/appdata/<app>/` | Each app's config and database | yes: SQLite via online copy, Postgres/MariaDB via dump, the rest via tar |
-| `/opt/appdata/transcode/{plex,emby,tdarr,unmanic}` | Transcode scratch | no |
+| `/opt/appdata/transcode/{tdarr,unmanic,ersatztv}` | Transcode scratch (Plex and Emby moved to `/srv/transcode`) | no |
 | `/opt/appdata/postgres`, `/opt/appdata/*/db`, `/opt/appdata/immich` | Raw database files (dumped separately) and Immich's large data | raw files no; Immich no (see open items) |
 | Plex Metadata/Media, Emby metadata, `MediaCover`, caches, logs | Regenerable bloat | no |
+| `/srv/transcode/{plex,emby}` (gpu only) | Plex and Emby transcode scratch, a 64 GB disk of its own (scsi1 on RicksShipXFS, label `transcode-tmp`, Ansible role `scratch`, 2026-10-29): a Plex Live TV session left playing for 4 h wrote 36 GB and took the system disk to 97%. A full scratch disk fails transcodes, never the databases | no |
 | `/srv/usenet-incomplete` (media only) | SABnzbd's temp downloads, a 200 GB disk of its own (scsi1 on the host's `xfstest` SSD, label `usenet-tmp`, Ansible role `scratch`) | no (`backup=0` on the host too) |
 
 Databases are never placed on NFS: SQLite and Postgres corrupt under NFS locking semantics, and the

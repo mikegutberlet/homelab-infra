@@ -7,6 +7,7 @@
 #   device: /dev/sdb              the raw disk; formatted ONLY when blkid sees nothing on it
 #   label: usenet-tmp             filesystem label, also how fstab finds it
 #   mount: /srv/usenet-incomplete
+#   dirs: [plex, emby]            optional folders under the mount, owned by the app user
 # Safety: a disk that already carries any filesystem or partition table and is not ours by label
 # stops the play. Nothing here ever touches /dev/sda or the NFS mounts.
 # The disk was hot-added seconds ago; give the guest kernel a moment to notice it.
@@ -61,3 +62,12 @@
     owner: "{{ app_uid }}"
     group: "{{ app_gid }}"
     mode: "0750"
+
+- name: Folders under the mount, owned by the app user
+  ansible.builtin.file:
+    path: "{{ scratch_disk.mount }}/{{ item }}"
+    state: directory
+    owner: "{{ app_uid }}"
+    group: "{{ app_gid }}"
+    mode: "0750"
+  loop: "{{ scratch_disk.dirs | default([]) }}"
