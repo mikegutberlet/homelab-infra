@@ -49,14 +49,19 @@ def call(url, headers, body=None, method=None):
     return json.loads(data) if data else None
 
 
-def norm(text):
-    text = re.sub(r"\([^)]*\)", " ", (text or "").lower()).split(":")[0]  # "(Sprawl, #1)", subtitles
+def norm(text, main=False):
+    text = re.sub(r"\([^)]*\)", " ", (text or "").lower())  # "(Sprawl, #1)", "(Unabridged)"
+    if main:
+        text = text.split(":")[0]  # main title only, without the subtitle
     text = re.sub(r"[^a-z0-9 ]+", " ", text.replace("&", " and "))
     return re.sub(r"^(the|a|an) ", "", " ".join(text.split()))
 
 
 def matches(want, title, authors):
-    if norm(title) != norm(want["title"]):
+    # The app's title must be the whole wanted title, or its main part ("2001" for "2001: A Space
+    # Odyssey"); never the other way round, or "The Lord of the Rings" matches "The Lord of the
+    # Rings: The Return of the King" (first dry run, 2026-11-02).
+    if norm(title) not in (norm(want["title"]), norm(want["title"], main=True)):
         return False
     names = " ".join(a.lower() for a in authors if a)
     return any(a.split()[-1].lower() in names for a in want["authors"] if a.split())
@@ -97,7 +102,9 @@ class Chaptarr:
 
     def add(self, book):
         term = urllib.parse.quote(f"{book['title']} {' '.join(book['authors'][:1])}")
-        found = call(f"{CHAPTARR}/search?term={term}&provider=hardcover", self.h) or []
+        # goodreads, as its Add New page searches here: the hardcover provider needs a Hardcover token
+        # in Chaptarr's own settings and otherwise answers 503 "Hardcover search failed".
+        found = call(f"{CHAPTARR}/search?term={term}&provider=goodreads", self.h) or []
         hit = None
         for r in found:
             b = r.get("book")
@@ -145,7 +152,9 @@ class Listenarr:
     def add(self, book):
         q = urllib.parse.quote(f"{book['title']} {' '.join(book['authors'][:1])}")
         found = (call(f"{LISTENARR}/search/audible?query={q}&region=us", self.h) or {}).get("results") or []
-        hit = next((r for r in found if matches(book, r.get("title"), [a.get("name") for a in r.get("authors") or []])), None)
+        # "Virtual Voice" is Audible's synthetic narration; take a human reading or nothing.
+        hit = next((r for r in found if matches(book, r.get("title"), [a.get("name") for a in r.get("authors") or []])
+                    and not any("virtual voice" in (n.get("name") or "").lower() for n in r.get("narrators") or [])), None)
         if hit is None:
             return "no match"
         try:
