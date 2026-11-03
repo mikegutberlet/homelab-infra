@@ -18,6 +18,8 @@ merging a PR; away from the Mac, he can have you deploy a merged stack through t
 - Admin UIs are tailnet-only: `https://<app>.tail9af84.ts.net` behind Authentik. Never give a LAN
   `ip:port` URL; only Plex (32400), Emby (8096) and Requests (5055) are open on the LAN.
 - Never print a secret. Secrets live encrypted in `stacks/<vm>/secrets.sops.env`; you cannot decrypt them.
+- Never accept a secret in chat. If Goobs pastes one, don't use or store it: tell him to revoke it (it is now in
+  session history) and to put a fresh one in sops on the Mac (`Commands Goobs runs on the Mac`, below).
 - Never propose deleting or wiping TrueNAS data, pools or snapshots, or "Upgrade Pool".
 - NUCs hang on software reboot; reboots and power changes are Goobs's, in person.
 
@@ -50,8 +52,18 @@ the token is in git's credential store). Read `docs/wiki/` first: `03-architectu
    `curl -sS -H "Authorization: Bearer $TOK" -H "Accept: application/vnd.github+json" \
      https://api.github.com/repos/mikegutberlet/homelab-infra/pulls \
      -d '{"title":"...","head":"hermes/<topic>","base":"main","draft":true,"body":"..."}'`
-   Report the PR URL and what Goobs must run to deploy, usually
+   Report the PR URL and what Goobs must run to deploy, usually `hmerge <n>`, or by hand
    `cd ~/HomeLab/homelab-infra/ansible && ~/.local/share/homelab-ansible/bin/ansible-playbook playbooks/site.yml --tags stacks --limit <vm>`.
+5. A PR that needs new secrets: Goobs commits the edited `secrets.sops.env` onto your PR branch and pushes
+   BEFORE merging. A commit pushed after the merge stays on the branch only; check with
+   `git merge-base --is-ancestor <sha> origin/main` before deploying, and open a follow-up PR if it missed.
+6. New helper container (Python script driving an app API, e.g. *arr/Chaptarr/Listenarr/Hardcover): follow
+   `references/helper-containers.md` (API discovery from the pinned source, fake-server test, DRY_RUN first).
+
+Lab automation must not call `api.github.com` anonymously: the lab's public IPv4 is a Starlink CGNAT address
+shared with strangers, so the 60-calls-an-hour anonymous limit is often already gone (403) and nothing in the lab
+is the cause. Read refs with `https://github.com/<repo>.git/info/refs?service=git-upload-pack` (no limit), or
+authenticate. Don't hunt for a lab "consumer" of that limit.
 
 ## Looking at the live lab (read-only)
 
@@ -71,7 +83,14 @@ Examples: `ssh media 'docker ps --format "{{.Names}} {{.Status}}"'`, `ssh gpu 'd
   grep on your side instead: `ssh gpu 'docker logs --since 1h gpu-plex-1' | grep -i error`.
 - App log files under `/opt/appdata/<app>/` are readable through `grep/tail/ls`; quote paths with spaces
   inside double quotes in the remote command. Often richer than `docker logs` (Plex logs nothing useful there).
+- The door silently truncates output past about 50-64 KB (no error, just fewer lines), allows at most four pipes,
+  refuses `du`, and refuses `head`/`cat` under `/mnt/nfs` (`ls/stat/find/df` work). For counts, put `| wc -l`
+  inside the remote command. For sizes or listings, run `find ... -printf "%s|%p\n"` per folder (one ssh per
+  series or movie folder, 8 in parallel), compare each chunk's line count to a remote `find ... | wc -l`, split a
+  short chunk into subfolders, and sum on your side. Paths with `[brackets]` or very long names can be mangled;
+  log those and carry on rather than crash.
 - Playback problems in Plex/Emby: follow `references/media-playback-debugging.md`.
+- NAS space, Tdarr runs, Recyclarr scores, OldData clean-up: follow `references/nas-storage-and-tdarr.md`.
 
 If every VM answers `Permission denied (publickey)`, the VMs don't have your public key: it comes from
 `~/.config/homelab/hermes_inspect_ed25519.pub` on Goobs's Mac and the ops role skips it silently when
@@ -117,6 +136,8 @@ from overwriting each other's state.
   (`deploy-run <stack> ok <sha>` or `failed: ...`). Not covered, so Goobs runs them on the Mac: `ansible/` changes
   (roles, inventory), new `/opt/appdata` folders (the verb refuses), `sysadmin_deploy.py`. Deploying `apps` can
   restart `hermes`; say so first.
+- A deploy whose only change is a bind-mounted file (script, config) leaves the running container on the old
+  code: compare `docker ps` uptime with the deploy time and propose `restart <service>` (Goobs's go).
 - A new compose service also needs its name in `stack_services` (`ansible/inventory/hosts.yml`) in the same PR,
   plus Goobs's `--tags ops` run: the verb starts only listed services and still reports `ok` for an unlisted one.
   Check the new container in `docker ps -a` after every deploy.
@@ -149,6 +170,13 @@ Write VM commands for him as `ssh goobs@192.168.1.<n>` (IPs from the VM list abo
 the form the repo docs use. Repo commands run from `~/HomeLab/homelab-infra`. Keep secrets in shell variables
 so nothing prints.
 
-- Ansible on the Mac is a venv, not on his PATH, and runs from `ansible/` (`docs/homelab_merge.py`): write
+- Write every command fully filled in, ready to paste. Never leave `<you>`-style placeholders: zsh reads `<x>` as
+  a redirection and fails with `no such file or directory`. TrueNAS is `ssh root@192.168.1.209` (no sudo needed).
+- Ansible on the Mac is a venv, not on his PATH, and runs from `ansible/`:
   `cd ~/HomeLab/homelab-infra/ansible && ~/.local/share/homelab-ansible/bin/ansible-playbook playbooks/site.yml --tags <role> --limit <vm>`.
-  A bare `ansible-playbook` gives `zsh: command not found`.
+  A bare `ansible-playbook` gives `command not found`.
+
+- Editing secrets: sops on macOS looks in `~/Library/Application Support/sops/age/`, but the lab's age key is in
+  `~/.config/sops/age/keys.txt`. Give `export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt` (or the `~/.zshrc`
+  line) before `sops stacks/<vm>/secrets.sops.env`, then the branch/commit/push steps for that file.
+- App API keys: Settings → General in the app; Goobs adds them to sops himself.
