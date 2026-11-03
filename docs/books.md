@@ -132,7 +132,7 @@ Goodreads library was imported into Hardcover once and books are now marked ther
 | Listenarr | `GET /api/v1/search/audible`, `GET /api/v1/library/by-asin/<asin>` (already there?), then `POST /api/v1/library/add` with `monitored` and `autoSearch` |
 | State | None: the apps are the state. A book already in an app is skipped, so the first pass takes the whole list and later passes only books added since. A book deleted from an app while still on Want to Read comes back; take it off the list in Hardcover |
 | Matching | Title before any subtitle must match (case, punctuation and a leading "The/A/An" ignored) and one author's last name must appear. Anything else logs `no match` and is retried after 24 h (`RETRY_HOURS`); nothing is guessed. Add those by hand in the app |
-| Switches | `DRY_RUN=true` logs `would add` and adds nothing (the first deploy runs this way); `ONCE=true` runs one pass and exits |
+| Switches | `DRY_RUN=true` logs `would add` and adds nothing (the first three deploys ran this way; live since 2026-11-02); `LISTENARR_SKIP_ASINS` lists Audible editions never added (now the BBC Foundation Trilogy dramatization and the Theo Solomon 1984; add another reading by hand); `ONCE=true` runs one pass and exits |
 
 Check it with `sudo docker logs media-hardcover-sync-1`. Not `book/lookup?mediaType=ebook`: in 0.9.965
 Chaptarr still tags every remote lookup result as audiobook, so that filter returns nothing (issue #67;

@@ -310,7 +310,9 @@ services:
       HARDCOVER_TOKEN: ${HARDCOVER_TOKEN}
       CHAPTARR_API_KEY: ${CHAPTARR_API_KEY}
       LISTENARR_API_KEY: ${LISTENARR_API_KEY}
-      DRY_RUN: "true" # first deploy logs only; set "false" once the dry-run matches look right
+      DRY_RUN: "false" # live since 2026-11-02 after three dry runs
+      # Audible editions Goobs skipped: The Foundation Trilogy (BBC dramatization), 1984 (Theo Solomon).
+      LISTENARR_SKIP_ASINS: "B004NTZ1A8,B0D63FJ2ZK"
     volumes:
       - ./hardcover-sync:/app:ro
     depends_on: [chaptarr, listenarr]
