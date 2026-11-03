@@ -128,15 +128,16 @@ Goodreads library was imported into Hardcover once and books are now marked ther
 | Container | `hardcover-sync` on media, `python:3.12-alpine` as 3000, script `stacks/media/hardcover-sync/sync_hardcover.py` (standard library only) |
 | Secrets | `HARDCOVER_TOKEN` (Hardcover → Settings → API, read-only scope), `CHAPTARR_API_KEY`, `LISTENARR_API_KEY` in `stacks/media/secrets.sops.env` |
 | Schedule | One pass at start, then every 60 min (`INTERVAL_MIN`) |
-| Chaptarr | `GET /api/v1/book/lookup?term=<title author>&mediaType=ebook`, then `POST /api/v1/book` into `/mnt/nfs/Media/Books` with the root folder's default profiles, `searchForNewBook`; the author is added with `monitor: none`, so only that book is wanted |
+| Chaptarr | `GET /api/v1/search?term=<title author>&provider=hardcover` (what its Add New page uses), then `POST /api/v1/book` with `mediaType: ebook`, the `/mnt/nfs/Media/Books` root folder's ebook quality and metadata profiles, `searchForNewBook`, and the author on "only this book" (`monitor: specificBook`, new items none), so the author's other books stay unwanted. Only ebook rows count as "already there" |
 | Listenarr | `GET /api/v1/search/audible`, `GET /api/v1/library/by-asin/<asin>` (already there?), then `POST /api/v1/library/add` with `monitored` and `autoSearch` |
 | State | None: the apps are the state. A book already in an app is skipped, so the first pass takes the whole list and later passes only books added since. A book deleted from an app while still on Want to Read comes back; take it off the list in Hardcover |
 | Matching | Title before any subtitle must match (case, punctuation and a leading "The/A/An" ignored) and one author's last name must appear. Anything else logs `no match` and is retried after 24 h (`RETRY_HOURS`); nothing is guessed. Add those by hand in the app |
 | Switches | `DRY_RUN=true` logs `would add` and adds nothing (the first deploy runs this way); `ONCE=true` runs one pass and exits |
 
-Check it with `sudo docker logs media-hardcover-sync-1`. Chaptarr issue #67 (0.9.911) returned only
-audiobook editions from lookup, so `mediaType=ebook` found nothing; if every Chaptarr line is
-`no match` in the dry run, that bug is still there in the pinned version.
+Check it with `sudo docker logs media-hardcover-sync-1`. Not `book/lookup?mediaType=ebook`: in 0.9.965
+Chaptarr still tags every remote lookup result as audiobook, so that filter returns nothing (issue #67;
+the first dry run on 2026-11-02 matched 0 of 20). Titles match with "(…)" parts removed, so "Neuromancer
+(Sprawl, #1)" or "(Unabridged)" still match.
 
 ## Not done / open
 
