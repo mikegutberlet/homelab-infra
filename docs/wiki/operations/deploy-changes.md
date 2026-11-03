@@ -39,6 +39,10 @@ which does the stacks role's steps on the VM from GitHub's `main` only, detached
 journal line (`deploy-run media ok <sha>`). It covers `stacks/<vm>/` changes, secrets included (the
 age key is already on each VM). Still on the Mac: anything under `ansible/` (roles, inventory,
 `stack_services`), a new `/opt/appdata` folder (the verb refuses), and `sysadmin_deploy.py`.
+A new compose service starts only once it is in `stack_services` and the ops play has carried that
+list to the VM (`STACK_SERVICES`); before that the verb reports `ok` and leaves it unstarted. The verb
+reads main's sha from `github.com/<repo>.git/info/refs` (git's ref list), not `api.github.com`: the
+lab's Starlink CGNAT address shares the anonymous 60-calls-an-hour API limit with strangers.
 
 ## Compose or stack config change (most common)
 

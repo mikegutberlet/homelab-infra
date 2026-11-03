@@ -38,6 +38,9 @@ the token is in git's credential store). Read `docs/wiki/` first: `03-architectu
 ## Changing something
 
 1. `cd ~/homelab-infra && git fetch origin && git checkout -B hermes/<topic> origin/main`
+   If `git status` shows files you did not make, another Hermes session is using the clone: work in your own
+   worktree instead (`git worktree add /opt/data/cache/scratch/wt-<topic> -b hermes/<topic> origin/main`), or its
+   checkout can move your commit onto its branch.
 2. Edit, then check: `python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" <file>` for YAML;
    `ansible-playbook --syntax-check` is not available here, so keep playbook edits small and say so.
 3. `git commit` and `git push -u origin hermes/<topic>`
@@ -113,6 +116,9 @@ from overwriting each other's state.
   (`deploy-run <stack> ok <sha>` or `failed: ...`). Not covered, so Goobs runs them on the Mac: `ansible/` changes
   (roles, inventory), new `/opt/appdata` folders (the verb refuses), `sysadmin_deploy.py`. Deploying `apps` can
   restart `hermes`; say so first.
+- A new compose service also needs its name in `stack_services` (`ansible/inventory/hosts.yml`) in the same PR,
+  plus Goobs's `--tags ops` run: the verb starts only listed services and still reports `ok` for an unlisted one.
+  Check the new container in `docker ps -a` after every deploy.
 - Afterwards verify (`ssh <vm> 'docker ps -a --format "{{.Names}} {{.Status}}"'`, logs) and report the door's JSON answer.
 - Restarting `hermes` on apps ends this session; say so first.
 
