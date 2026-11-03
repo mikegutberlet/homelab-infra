@@ -220,7 +220,10 @@ case "$verb" in
     fail() { log "$s failed: $1"; exit 1; }
     repo=mikegutberlet/homelab-infra
     work=$(mktemp -d /root/homelab-deploy.XXXXXX); trap 'rm -rf "$work"' EXIT
-    sha=$(curl -fsS -m 20 -H 'Accept: application/vnd.github.sha' "https://api.github.com/repos/$repo/commits/main") \
+    # main's sha from git's own ref list, not api.github.com: the lab sits behind Starlink CGNAT,
+    # whose shared IPv4 often has the anonymous 60 API calls an hour used up (2026-11-02: 403).
+    sha=$(curl -fsS -m 20 "https://github.com/$repo.git/info/refs?service=git-upload-pack" \
+      | grep -a -o -E '[0-9a-f]{40} refs/heads/main$' | cut -c1-40) \
       || fail "could not read main from GitHub"
     [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "unexpected answer from GitHub for main"
     log "$s start ${sha:0:7}"

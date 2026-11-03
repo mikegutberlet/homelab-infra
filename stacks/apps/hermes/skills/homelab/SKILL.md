@@ -113,6 +113,9 @@ from overwriting each other's state.
   (`deploy-run <stack> ok <sha>` or `failed: ...`). Not covered, so Goobs runs them on the Mac: `ansible/` changes
   (roles, inventory), new `/opt/appdata` folders (the verb refuses), `sysadmin_deploy.py`. Deploying `apps` can
   restart `hermes`; say so first.
+- A new compose service also needs its name in `stack_services` (`ansible/inventory/hosts.yml`) in the same PR,
+  plus Goobs's `--tags ops` run: the verb starts only listed services and still reports `ok` for an unlisted one.
+  Check the new container in `docker ps -a` after every deploy.
 - Afterwards verify (`ssh <vm> 'docker ps -a --format "{{.Names}} {{.Status}}"'`, logs) and report the door's JSON answer.
 - Restarting `hermes` on apps ends this session; say so first.
 
