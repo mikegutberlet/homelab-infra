@@ -29,6 +29,9 @@ INTERVAL_MIN = int(os.environ.get("INTERVAL_MIN", "60"))
 RETRY_HOURS = int(os.environ.get("RETRY_HOURS", "24"))
 BOOKS_ROOT = os.environ.get("BOOKS_ROOT", "/mnt/nfs/Media/Books")
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
+# Audible editions Goobs does not want (e.g. a dramatization); a book whose match is one of these is
+# left out of Listenarr, to be added by hand if wanted.
+SKIP_ASINS = {x.strip() for x in os.environ.get("LISTENARR_SKIP_ASINS", "").split(",") if x.strip()}
 UA = "homelab hardcover-sync (github.com/mikegutberlet/homelab-infra)"
 
 WANT_TO_READ = """
@@ -157,6 +160,8 @@ class Listenarr:
                     and not any("virtual voice" in (n.get("name") or "").lower() for n in r.get("narrators") or [])), None)
         if hit is None:
             return "no match"
+        if hit.get("asin") in SKIP_ASINS:
+            return "skipped"
         try:
             call(f"{LISTENARR}/library/by-asin/{urllib.parse.quote(hit.get('asin') or '-')}", self.h)
             return "already there"
@@ -207,11 +212,13 @@ def run_pass():
                 misses[(app.name, book["id"])] = time.time()
             else:
                 misses.pop((app.name, book["id"]), None)
-            if result != "already there":
+            if result not in ("already there", "skipped"):  # both quiet; the skip list prints at start
                 print(f"{app.name}: {label(book)}: {result}{' (dry run)' if DRY_RUN else ''}", flush=True)
 
 
 def main():
+    if SKIP_ASINS:
+        print(f"listenarr: skipping ASINs {', '.join(sorted(SKIP_ASINS))}", flush=True)
     once = os.environ.get("ONCE", "false").lower() == "true"
     while True:
         try:
