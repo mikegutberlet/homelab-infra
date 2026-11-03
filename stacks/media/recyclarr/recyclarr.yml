@@ -146,11 +146,15 @@ sonarr:
           - name: *sonarr_foreign
       # Smaller files (2026-10-23): x265 is welcome (the guide's Golden Rule group would score it -10000),
       # 10-bit is not (the target is 8-bit HEVC; the iGPU can't decode 10-bit when a client transcodes).
+      # 2026-11-02 (Goobs): +2000 in the main profile, above the best H.264 WEB-DL (WEB Tier 01 1700
+      # + service 75 + HD Streaming Boost 75), so an 8-bit x265 release wins; at +500, 80% of grabs
+      # since 10-24 were still H.264 and waited for Tdarr. The foreign profile stays at 500: its
+      # upgrades end at 2000 (a dub), so +2000 would make a subtitles-only x265 release final.
       - trash_ids:
           - 47435ece6b99a0b477caf360e79ba0bb # x265 (HD)
         assign_scores_to:
           - name: *sonarr_main
-            score: 500
+            score: 2000
           - name: *sonarr_foreign
             score: 500
       - trash_ids:
@@ -335,11 +339,14 @@ radarr:
       # Tdarr re-encodes H.264 movies to HEVC (2026-10-21), so the TRaSH "x265 (HD)" penalty
       # (-10000) would make Radarr try to replace those files. Since 2026-10-23 it is a bonus:
       # an x265 release is grabbed already small and spares Tdarr the work.
+      # 2026-11-02 (Goobs): +2000 in the main profile, above the best H.264 release (WEB Tier 01 1700
+      # + streaming bonuses), so 8-bit x265 wins; the foreign profile stays at 500 (its upgrades end
+      # at 2000, a dub).
       - trash_ids:
           - dc98083864ea246d05a42df0d05f81cc # x265 (HD)
         assign_scores_to:
           - name: *radarr_main
-            score: 500
+            score: 2000
           - name: *radarr_foreign
             score: 500
       # Not for new grabs: the target is 8-bit HEVC (the iGPU can't decode 10-bit when a client
