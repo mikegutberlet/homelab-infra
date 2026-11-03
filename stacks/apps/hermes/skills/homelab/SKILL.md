@@ -51,7 +51,7 @@ the token is in git's credential store). Read `docs/wiki/` first: `03-architectu
      https://api.github.com/repos/mikegutberlet/homelab-infra/pulls \
      -d '{"title":"...","head":"hermes/<topic>","base":"main","draft":true,"body":"..."}'`
    Report the PR URL and what Goobs must run to deploy, usually
-   `cd ~/HomeLab/homelab-infra/ansible && ansible-playbook playbooks/site.yml --tags stacks --limit <vm>`.
+   `cd ~/HomeLab/homelab-infra/ansible && ~/.local/share/homelab-ansible/bin/ansible-playbook playbooks/site.yml --tags stacks --limit <vm>`.
 
 ## Looking at the live lab (read-only)
 
@@ -95,8 +95,9 @@ from overwriting each other's state.
 - Keep its limits unless Goobs asks: no reboots or power, `ops_never` services untouched, one fix per target
   per hour and three a day, and no Wait or SSH node in a run that writes the static data.
 - Update `docs/wiki/operations/sysadmin.md` in the same PR. Deploy (Goobs, on the Mac):
-  `python3 docs/sysadmin_deploy.py`, plus `ansible-playbook playbooks/site.yml --tags ops` when
-  `ansible/roles/ops` changed, or `--tags stacks --limit apps` for the investigator.
+  `python3 docs/sysadmin_deploy.py`, plus the ops play when `ansible/roles/ops` changed
+  (`~/.local/share/homelab-ansible/bin/ansible-playbook playbooks/site.yml --tags ops`, from `ansible/`),
+  or `--tags stacks --limit apps` for the investigator.
 
 ## Fixing through the ops door (only after Goobs says go)
 
@@ -147,3 +148,7 @@ Your `media`/`gpu`/`ops-<vm>` ssh aliases exist only in your container; they don
 Write VM commands for him as `ssh goobs@192.168.1.<n>` (IPs from the VM list above) and `sudo docker ...`,
 the form the repo docs use. Repo commands run from `~/HomeLab/homelab-infra`. Keep secrets in shell variables
 so nothing prints.
+
+- Ansible on the Mac is a venv, not on his PATH, and runs from `ansible/` (`docs/homelab_merge.py`): write
+  `cd ~/HomeLab/homelab-infra/ansible && ~/.local/share/homelab-ansible/bin/ansible-playbook playbooks/site.yml --tags <role> --limit <vm>`.
+  A bare `ansible-playbook` gives `zsh: command not found`.
