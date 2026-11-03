@@ -1,7 +1,8 @@
 // Tdarr flow logic (Custom JS Function): movie or episode -> 8-bit HEVC (Quick Sync) in MKV.
 // Lives at /app/configs/hevc/flow.js on the gpu VM; the flow's custom function just requires it.
 // Rules agreed with Goobs 2026-10-21 (movies), extended to TV 2026-10-23:
-//   - only Radarr's / Sonarr's current file (radarr_map.json / sonarr_map.json, see media_map.py),
+//   - only Radarr's / Sonarr's current file (radarr_map.json / sonarr_map.json, written daily to
+//     Media/.tdarr-staging/maps by the tdarr-upkeep service on the media VM since 2026-11-02),
 //     not the review/multi-video folders
 //   - 8-bit H.264 above ~5.5 Mbps; any other codec (10-bit HEVC, AV1, VC-1, ...) only when it is over
 //     the grab caps from PR #45 (movies 70 MB/min, episodes 65 MB/min); 4K and HDR are left alone
@@ -12,7 +13,8 @@
 //   - replace only if the result is at least 20% smaller and passes a full decode check
 //   - same file name (extension becomes .mkv), copied to Media/.tdarr-staging and renamed into place;
 //     every original is moved to the NAS holding folder
-//     (to-delete/tdarr-originals/<date>/...), never deleted here: Goobs empties it after checking
+//     (to-delete/tdarr-originals/<date>/...), never deleted here; tdarr-upkeep deletes a day's
+//     originals after 14 days, only where the replacement made it into place (Goobs, 2026-11-02)
 //   - stops encoding while the NAS has less than 3 TB free (originals pile up until emptied)
 //   - Radarr rescans the movie / Sonarr rescans the series afterwards
 const fs = require('fs');
@@ -27,6 +29,8 @@ const HOLD_ROOT = '/mnt/nfs/to-delete/tdarr-originals';
 // mounts fails). 2026-10-23: a copy next to the original hung in a kernel NFS bug, and Plex's
 // scanner froze on it for two days.
 const STAGING = '/mnt/nfs/Media/.tdarr-staging';
+// Fresh maps from tdarr-upkeep (both nodes see this folder); the copies in CFG are the fallback.
+const MAPS = `${STAGING}/maps`;
 const MIN_FREE = 3e12;
 const MIN_BPS = 5.5e6;
 const LOG = '/app/logs/hevc-run.tsv';
@@ -76,7 +80,7 @@ module.exports = async (args) => {
   const kind = Object.keys(LIBS).find((k) => src.startsWith(`${LIBS[k].root}/`));
   if (!kind) return skip('not under Movies or TVShows');
   const lib = LIBS[kind];
-  const map = readJson(`${CFG}/${lib.map}`, {});
+  const map = readJson(`${MAPS}/${lib.map}`, null) || readJson(`${CFG}/${lib.map}`, {});
   const excluded = readJson(`${CFG}/excluded_folders.json`, []);
   const item = map[src]; // {id, lang, title}: the movie, or the episode's series
   if (!item) return skip(`not ${kind === 'tv' ? 'Sonarr' : 'Radarr'}'s current file`);

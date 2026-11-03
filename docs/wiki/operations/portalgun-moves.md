@@ -108,7 +108,8 @@ In Tdarr (https://tdarr.tail9af84.ts.net), the node `transcode-vm` appears under
 workers like `gpu-vm`'s: Transcode GPU 1, every other worker type 0. The library schedule (17:00-23:00
 PT pause) and the 3 TB guard apply to both nodes.
 
-Repeat the tar copy whenever `media_map.py` refreshes the maps or `flow.js` changes. This node's run
+Repeat the tar copy whenever `flow.js` changes. The maps no longer need copying: since 2026-11-02 both
+nodes read them from `Media/.tdarr-staging/maps`, written daily by `tdarr-upkeep` on media. This node's run
 log is `/opt/appdata/tdarr-node/logs/hevc-run.tsv` on the transcode VM; progress checks read both.
 
 Undo: pause or delete the node in Tdarr, `qm stop 206`, remove `transcode` from tfvars and hosts.yml.
