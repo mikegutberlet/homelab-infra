@@ -104,7 +104,9 @@ The gpu VM's 96 GB holds about 40 GB of Plex library data copied from the old se
 These come from Goobs directly and from the design doc's "Protecting your existing data" section:
 
 1. **Never delete, wipe, reformat or recreate** existing data or the pool. Automation does not delete
-   on the NAS at all. Removals go to a dated holding folder with a manifest and an undo script.
+   on the NAS, with one exception (Goobs, 2026-11-02): `tdarr-upkeep` deletes Tdarr originals in
+   `to-delete/tdarr-originals/` after 14 days, only where the replacement is in place. Every other
+   removal goes to a dated holding folder with a manifest and an undo script.
 2. **Add, don't change.** New folders go beside the existing ones. No existing folder is renamed,
    moved or re-permissioned without Goobs's explicit OK (the two exceptions so far, `Media/NextCloud`
    and the Paperless folder, had it).

@@ -143,6 +143,12 @@ to a dated holding folder with a manifest, old VMs are powered off not deleted, 
 change needs Goobs's explicit OK. **Why this is a decision record.** It overrides the design doc's
 "snapshot first" rule and shapes every runbook.
 
+**Amended (Goobs, 2026-11-02).** One automatic deletion is allowed so the HEVC run needs no hands:
+the `tdarr-upkeep` service on media deletes Tdarr originals in `to-delete/tdarr-originals/<day>/`
+once the day is 14 days old, only files the day's manifest lists with the same size and whose
+replacement made it into place. Each deletion is listed in `tdarr-originals/PURGED.tsv`. Nothing
+else on the NAS is deleted automatically.
+
 ### D19: Config-only backups, nightly, 14 days, on the NAS
 
 **Decision (Goobs: "back up all my configs, not my media"; implemented 2026-10-21 evening).**

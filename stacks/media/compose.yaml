@@ -272,6 +272,29 @@ services:
       - ./backlog-search:/app:ro
     depends_on: [sonarr, radarr]
 
+  # Tdarr upkeep, so the HEVC run needs no hands (Goobs, 2026-11-02). At start and daily at 05:00:
+  # writes the Radarr/Sonarr file maps the flow reads to Media/.tdarr-staging/maps (both Tdarr nodes
+  # see it; the hand-copied maps were 11 days old), and deletes Tdarr originals held in
+  # to-delete/tdarr-originals/<day> once the day is 14 days old, only where the replacement made it
+  # into place. Every deletion is listed in tdarr-originals/PURGED.tsv. Media is read-only here
+  # except the staging folder. DRY_RUN=true logs the purge without deleting.
+  tdarr-upkeep:
+    <<: *common
+    image: python:3.12-alpine
+    user: ${PUID}:${PGID}
+    command: ["python", "-u", "/app/tdarr_upkeep.py"]
+    environment:
+      TZ: ${TZ}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      KEEP_DAYS: "14"
+    volumes:
+      - ./tdarr-upkeep:/app:ro
+      - /mnt/nfs/Media:/mnt/nfs/Media:ro
+      - /mnt/nfs/Media/.tdarr-staging:/mnt/nfs/Media/.tdarr-staging
+      - /mnt/nfs/to-delete:/mnt/nfs/to-delete
+    depends_on: [sonarr, radarr]
+
   # Every hour adds each book on Goobs's Hardcover "Want to Read" list to Chaptarr (ebook) and
   # Listenarr (audiobook), monitored with a search (2026-11-02; Goodreads has no feed or API left,
   # the Goodreads library was imported into Hardcover). Books already in an app are skipped, so the

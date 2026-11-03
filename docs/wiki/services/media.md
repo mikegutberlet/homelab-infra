@@ -169,6 +169,16 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | Usenet minimum age | Set to 15 min in both apps by `playbooks/media-fixups.yml` (2026-10-28): fresh posts grabbed at 0 min failed as "cannot be completed" before all articles had propagated |
 | Stuck downloads | `playbooks/media-fixups.yml` (run `--check` first; it lists every item with its files) imports a Radarr download stuck on "manual import required" when it holds exactly one video Radarr accepts; anything else (archives SABnzbd could not extract, samples, two-part releases, rejected files, a folder that is gone) is removed from the queue and the client with its files, blocklisted, and searched again. The same play removes TVDB-deleted series from Sonarr with their files kept and import-list exclusions set, and deletes torrents in the `audiobooks` category that carry no audio file (Listenarr grabs EPUB and PDF releases it can never import). A download Radarr cannot match to a movie is only listed |
 
+## tdarr-upkeep
+
+| | |
+| --- | --- |
+| Purpose | Keeps the Tdarr HEVC run hands-off (Goobs, 2026-11-02). At start and daily at 05:00: (1) writes `radarr_map.json` and `sonarr_map.json`, every current Radarr/Sonarr file with its id and original language, to `Media/.tdarr-staging/maps`, where the flow on both Tdarr nodes reads them; (2) deletes Tdarr originals in `to-delete/tdarr-originals/<day>/` once the day is 14 days old |
+| Image | `python:3.12-alpine`, runs as 3000, script `stacks/media/tdarr-upkeep/tdarr_upkeep.py` (standard library only). Mounts: `Media` read-only except `Media/.tdarr-staging`, and `to-delete` |
+| Map guard | A map that shrinks by more than 20 % against the one on disk is not written: the flow skips files missing from the map, and Tdarr never looks at a skipped file again |
+| Purge rules | Only `YYYY-MM-DD` folders under `tdarr-originals` (never the other `to-delete` folders, never symlinks). A file is deleted only if the day's `MANIFEST.tsv` lists it with the same size and its replacement is not stuck in `.tdarr-staging` (a failed final rename leaves it there as `<kind>-<id>-<name>`, and then the held original is the only whole copy). Deleted files are appended to `tdarr-originals/PURGED.tsv`; kept ones are named in the log. `KEEP_DAYS`, `HOUR`, `DRY_RUN=true` |
+| Amends | [D18](../07-decisions.md#d18-never-delete-on-truenas-no-snapshots): the one automatic deletion on the NAS |
+
 ## Seerr ("Requests", was Jellyseerr)
 
 Since 2026-10-28 the container runs `ghcr.io/seerr-team/seerr:v3.5.1`: Jellyseerr and Overseerr were
