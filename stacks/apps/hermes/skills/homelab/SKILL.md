@@ -59,6 +59,11 @@ the token is in git's credential store). Read `docs/wiki/` first: `03-architectu
    `git merge-base --is-ancestor <sha> origin/main` before deploying, and open a follow-up PR if it missed.
 6. New helper container (Python script driving an app API, e.g. *arr/Chaptarr/Listenarr/Hardcover): follow
    `references/helper-containers.md` (API discovery from the pinned source, fake-server test, DRY_RUN first).
+7. Changing this skill: edit `stacks/apps/hermes/skills/homelab/` starting from the live copy
+   (`cp /opt/data/skills/homelab/...` into the branch, then make your edit), not from `origin/main`. Other
+   sessions add lessons to the live copy that the repo lacks, and `hermes-init` overwrites the live copy from the
+   repo on every start, so a PR built from main silently drops them. Diff live against main first, and re-diff
+   just before committing: another session may have edited it meanwhile. Scan the copied files for secrets.
 
 Lab automation must not call `api.github.com` anonymously: the lab's public IPv4 is a Starlink CGNAT address
 shared with strangers, so the 60-calls-an-hour anonymous limit is often already gone (403) and nothing in the lab
@@ -132,12 +137,18 @@ from overwriting each other's state.
 - `run-approved` takes a base64url script: show Goobs the plain script and run only that exact text.
 - `deploy <stack>` (`ssh ops-media 'deploy media'`): the stacks role's steps for that VM's stack, always from GitHub's
   `main` (merged code only). Only when Goobs asks for that deploy in the chat; first confirm `git log origin/main`
-  holds his merge. It runs detached; read the result with `ssh <vm> 'journalctl -t homelab-ops --since -15m'`
+  holds his merge. After he ran `hmerge`, check whether it already deployed before running anything: the
+  `deploy-run` sha in `journalctl -t homelab-ops` and the new containers' uptime in `docker ps -a`; `hmerge`
+  runs the stacks play itself, so "deploy if needed" often means only the Mac-side leftovers remain (ops play
+  for inventory changes, files copied outside `/opt/stacks`). It runs detached; read the result with `ssh <vm> 'journalctl -t homelab-ops --since -15m'`
   (`deploy-run <stack> ok <sha>` or `failed: ...`). Not covered, so Goobs runs them on the Mac: `ansible/` changes
   (roles, inventory), new `/opt/appdata` folders (the verb refuses), `sysadmin_deploy.py`. Deploying `apps` can
   restart `hermes`; say so first.
 - A deploy whose only change is a bind-mounted file (script, config) leaves the running container on the old
   code: compare `docker ps` uptime with the deploy time and propose `restart <service>` (Goobs's go).
+- When a proposed fix would break the one-per-hour limit, offer the time it becomes allowed. If Goobs picks the
+  time, schedule it in-session as one background terminal job (`sleep` until then, the verb, `sleep 120`, read the
+  logs) with notify on, then report from the completion notice; don't use cron for ops verbs.
 - A new compose service also needs its name in `stack_services` (`ansible/inventory/hosts.yml`) in the same PR,
   plus Goobs's `--tags ops` run: the verb starts only listed services and still reports `ok` for an unlisted one.
   Check the new container in `docker ps -a` after every deploy.

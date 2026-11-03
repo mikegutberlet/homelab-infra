@@ -54,6 +54,21 @@ lz4 compression and recordsize 1M, and dedup is off.
 4. Recyclarr applies changes at its 00:00 PT run; its debug log under `/opt/appdata/recyclarr/logs/cli/`
    shows "up to date" or what it changed.
 
+## Scripts that delete on the NAS
+
+The pool has no snapshots, so write every deletion as if it cannot be undone (it can't):
+
+- Dry run by default; deleting needs an explicit flag (`--delete`, `DRY_RUN=false`).
+- Delete only cases proven safe (byte-identical twin kept elsewhere; a manifest entry with the same size and
+  a replacement in place). Anything ambiguous is kept and named in the log, never guessed.
+- Re-check each file just before removing it (still the same size, kept copy still there) and append every
+  deletion to a TSV next to the data (time, bytes, path, kept path).
+- A helper container that deletes mounts `Media` read-only and only the folder it must change read-write.
+- Before the PR, test on a fake tree under the scratch dir with one case per keep/delete rule (symlink,
+  hardlink, size mismatch, non-date folder, stuck replacement, ...) and assert what is left, dry run first.
+- Deleting under `/mnt/nfs` by hand stays Goobs's: hand him the script and the dry-run command; an automatic
+  deletion needs his explicit yes and a D18 amendment in the wiki in the same PR.
+
 ## OldData
 
 Goobs keeps everything in OldData except byte-identical duplicates of something kept elsewhere.

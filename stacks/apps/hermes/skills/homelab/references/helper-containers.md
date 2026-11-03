@@ -52,7 +52,9 @@ parenthesised parts like `(Sprawl, #1)` / `(Unabridged)`, punctuation, leading T
 author's last name. The candidate's title must equal the wanted title or the wanted title's part before
 `:`; never cut the subtitle from the candidate too, or a series title matches one volume ("The Lord of the
 Rings" = "…: The Return of the King"). Skip Audible "Virtual Voice" (synthetic) narrations. Keep a small
-table of want/candidate/expected cases and run it with every matcher change. Make dry-run lines name the matched title plus author or narrator, not only an ID,
+table of want/candidate/expected cases and run it with every matcher change. When Goobs rejects a specific
+match (a dramatization, a reader he dislikes), don't widen the matcher: add an env skip list in compose
+(`<APP>_SKIP_<IDS>: "id1,id2"`, with a comment naming each title), skip quietly, and print the list at start. Make dry-run lines name the matched title plus author or narrator, not only an ID,
 so Goobs can spot a wrong edition.
 
 ## Test before the PR
@@ -73,3 +75,8 @@ the old code keeps running. Check the container's uptime against the deploy time
 read `docker logs <vm>-<name>-1` and summarise per app: would add / already there / no match / failed
 counts. Surprises in the input (list bigger than expected, 0 matches in one app) stop the flip to
 `DRY_RUN=false` until Goobs confirms.
+
+Going live: before the flip PR, tell Goobs how many adds and searches the first pass fires at once (each add
+with a search hits every indexer; a burst draws 429s from public trackers) and how each app recovers (RSS,
+periodic auto-search). The flip changes the environment, so compose recreates the container on deploy; no
+separate restart is needed. After it, report the adds and check the apps' queues for grabs.
