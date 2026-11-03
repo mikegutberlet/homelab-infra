@@ -10,7 +10,7 @@
   tasks:
     - name: curl is present
       ansible.builtin.apt:
-        name: [curl]
+        name: [curl, cron] # the Debian cloud image on the VMs ships without cron
       when: heartbeat_url is defined
 
     - name: Heartbeat cron
