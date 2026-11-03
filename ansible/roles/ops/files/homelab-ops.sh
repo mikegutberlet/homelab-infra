@@ -19,6 +19,9 @@
 #   run-approved <base64url script> a short fix script the investigator wrote and Goobs confirmed in
 #                                   the chat (n8n sends it only after Confirm); never-list checked again
 #                                   here (homelab-script-check), run as root, 120 s, every line logged
+#   deploy <stack>                  Hermes only, after Goobs says go in its chat: the stacks role's steps
+#                                   (rsync, sops to .env, compose up --wait) for this VM's stack, from
+#                                   the merged main branch on GitHub; detached, result in the journal
 #
 # Never: reboot, poweroff, anything under /mnt/nfs, pulls beyond the auto-update list, settings
 # changes (the one exception: Plex Remote Access back on, which Goobs keeps on; D05 in the wiki).
@@ -191,6 +194,65 @@ case "$verb" in
     st=$(docker inspect -f '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || echo absent)
     docker image prune -f >/dev/null 2>&1 # the old image, now dangling; tagged images stay
     out ok "$1 updated: image ${before:-none} -> ${after:-?}, now $st"
+    ;;
+
+  deploy)
+    # Goobs, 2026-10-29: deploy from Hermes's chat when the Mac is out of reach. The caller names a
+    # stack, never a branch, commit or file: the code is always GitHub's main, which only Goobs merges.
+    # It runs detached (systemd-run), so the door's 150 s cut and a restart of Hermes (apps) do not
+    # stop it halfway. The result lands in this journal as "deploy-run <stack> ok|failed ...".
+    s=${1:-}
+    [[ "$s" =~ ^[a-z0-9-]+$ ]] && [[ " ${STACKS:-} " == *" $s "* ]] || die "stack must be one of: ${STACKS:-none}"
+    unit="homelab-deploy-$s"
+    systemctl is-active -q "$unit" && die "a deploy of $s is already running"
+    log "$s"
+    systemd-run --unit "$unit" --collect --quiet -p RuntimeMaxSec=900 --setenv=HOME=/root \
+      /usr/local/sbin/homelab-ops deploy-run "$s" >/dev/null 2>&1 || { out failed "could not start $unit"; exit 1; }
+    out ok "deploy of $s from main started; result: journalctl -t homelab-ops --since -15m"
+    ;;
+
+  deploy-run)
+    # The detached half of deploy (above), the same steps as ansible/roles/stacks. Only systemd-run
+    # starts it (INVOCATION_ID); sudo drops that variable, so the door cannot.
+    [ -n "${INVOCATION_ID:-}" ] || die "deploy-run runs only under systemd; use deploy"
+    s=${1:-}
+    [[ "$s" =~ ^[a-z0-9-]+$ ]] && [[ " ${STACKS:-} " == *" $s "* ]] || die "unknown stack $s"
+    fail() { log "$s failed: $1"; exit 1; }
+    repo=mikegutberlet/homelab-infra
+    work=$(mktemp -d /root/homelab-deploy.XXXXXX); trap 'rm -rf "$work"' EXIT
+    sha=$(curl -fsS -m 20 -H 'Accept: application/vnd.github.sha' "https://api.github.com/repos/$repo/commits/main") \
+      || fail "could not read main from GitHub"
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "unexpected answer from GitHub for main"
+    log "$s start ${sha:0:7}"
+    curl -fsSL -m 120 "https://codeload.github.com/$repo/tar.gz/$sha" \
+      | tar -xz -C "$work" --no-same-owner --strip-components=1 --wildcards "*/stacks/$s/*" \
+      || fail "could not download stacks/$s at ${sha:0:7}"
+    src="$work/stacks/$s"
+    [ -f "$src/compose.yaml" ] || fail "no stacks/$s/compose.yaml at ${sha:0:7}"
+    # Same decrypt and $-quoting as the stacks role. A stack without secrets.sops.env keeps its .env.
+    if [ -f "$src/secrets.sops.env" ]; then
+      SOPS_AGE_KEY_FILE=/root/.config/sops/age/keys.txt \
+        sops --decrypt --input-type dotenv --output-type dotenv "$src/secrets.sops.env" \
+        | awk -v q="'" '/^[A-Za-z_][A-Za-z0-9_]*=/ { k = $0; sub(/=.*/, "", k); v = substr($0, length(k) + 2); c = substr(v, 1, 1); if (index(v, "$") && c != q && c != "\"" && !index(v, q)) v = q v q; print k "=" v; next } { print }' \
+        >"$src/.env" || fail "sops could not decrypt stacks/$s/secrets.sops.env"
+      chmod 600 "$src/.env"
+    elif [ -f "/opt/stacks/$s/.env" ]; then
+      install -m 600 "/opt/stacks/$s/.env" "$src/.env"
+    fi
+    # The stacks role also makes appdata folders with their owners (hosts.yml). That stays on the
+    # Mac: a bind mount whose /opt/appdata folder does not exist yet stops the deploy before any change.
+    cfg=$(cd "$src" && docker compose config --format json 2>&1) || fail "compose config: $(printf '%s' "$cfg" | tail -c 400 | tr '\n' ' ')"
+    missing=$(jq -r '[.services[].volumes[]? | select(.type == "bind") | .source | select(startswith("/opt/appdata/"))] | unique[]' <<<"$cfg" \
+      | while read -r p; do [ -e "$p" ] || printf '%s ' "$p"; done)
+    [ -z "$missing" ] || fail "new appdata folders, run the stacks play from the Mac: $missing"
+    rsync -rlptD --exclude='*.sops.env' --exclude=.env "$src/" "/opt/stacks/$s/" || fail "rsync to /opt/stacks/$s failed"
+    [ -f "$src/secrets.sops.env" ] && install -m 600 "$src/.env" "/opt/stacks/$s/.env"
+    # stack_services (hosts.yml, via STACK_SERVICES): only those, as the stacks role does.
+    svcs=(); for p in ${STACK_SERVICES:-}; do [ "${p%%/*}" = "$s" ] && svcs+=("${p#*/}"); done
+    if [ "${#svcs[@]}" -gt 0 ]; then extra=(); else extra=(--remove-orphans); fi
+    res=$(cd "/opt/stacks/$s" && docker compose up -d --wait --wait-timeout 300 "${extra[@]}" "${svcs[@]}" 2>&1) \
+      || fail "compose up at ${sha:0:7}: $(printf '%s' "$res" | tail -c 600 | tr '\n' ' ')"
+    log "$s ok ${sha:0:7}"
     ;;
 
   run-approved)

@@ -62,6 +62,8 @@
       # Only VMs with nfs_mounts in hosts.yml have /mnt/nfs; the rest skip that check.
       NFS_EXPECTED={{ (nfs_mounts | default([]) | length > 0) | lower }}
       NFS_SERVICES="{{ ops_nfs_services | join(' ') }}"
+      # hosts.yml stack_services as stack/service: the deploy verb starts only these, as the stacks role does.
+      STACK_SERVICES="{% for s, v in (stack_services | default({})).items() %}{% for x in v %}{{ s }}/{{ x }} {% endfor %}{% endfor %}"
       # ts.net names the edge agent does not probe: their service is off on purpose (hosts.yml).
       CERT_SKIP="{{ ops_cert_skip | default([]) | join(' ') }}"
       EXTRA_DISKS="{{ ops_extra_disks | default([]) | join(' ') }}"

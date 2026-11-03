@@ -33,6 +33,13 @@ the PR changes. Other roles, `site.yml`, inventory and OpenTofu are listed, not 
 `sysadmin_deploy.py` and the bind-mounted config restarts below. It checks the PR's merge commit is in
 your checkout before any play, so a play never runs on old code. Checks: `python3 docs/test_homelab_merge.py`.
 
+Away from the Mac: merge in the GitHub app, then ask Hermes in Telegram to deploy (for example
+"deploy media"). Hermes runs the ops door's `deploy <stack>` verb (`ssh ops-media 'deploy media'`),
+which does the stacks role's steps on the VM from GitHub's `main` only, detached, and reports the
+journal line (`deploy-run media ok <sha>`). It covers `stacks/<vm>/` changes, secrets included (the
+age key is already on each VM). Still on the Mac: anything under `ansible/` (roles, inventory,
+`stack_services`), a new `/opt/appdata` folder (the verb refuses), and `sysadmin_deploy.py`.
+
 ## Compose or stack config change (most common)
 
 ```sh
