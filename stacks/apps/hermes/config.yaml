@@ -11,3 +11,11 @@ skills:
   auto_load: [homelab, caveman]
 memory:
   memory_enabled: true
+# REA (github.com/morluto/rea, MIT): reverse-engineering MCP server, added by `npx rea-agents@6.8.0 setup
+# --client hermes`, which also installs the reverse-engineer-anything skill into the data folder.
+# A refresh (`npx rea-agents@latest setup --client hermes`) re-pins the version in the live config.
+mcp_servers:
+  rea:
+    command: npx
+    args: [-y, rea-agents@6.8.0, mcp]
+    enabled: true
