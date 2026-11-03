@@ -272,6 +272,26 @@ services:
       - ./backlog-search:/app:ro
     depends_on: [sonarr, radarr]
 
+  # Every hour adds each book on Goobs's Hardcover "Want to Read" list to Chaptarr (ebook) and
+  # Listenarr (audiobook), monitored with a search (2026-11-02; Goodreads has no feed or API left,
+  # the Goodreads library was imported into Hardcover). Books already in an app are skipped, so the
+  # first pass takes the whole list and later passes only new books. docs/books.md has the rules.
+  # DRY_RUN=true logs only; ONCE=true runs one pass.
+  hardcover-sync:
+    <<: *common
+    image: python:3.12-alpine
+    user: ${PUID}:${PGID}
+    command: ["python", "-u", "/app/sync_hardcover.py"]
+    environment:
+      TZ: ${TZ}
+      HARDCOVER_TOKEN: ${HARDCOVER_TOKEN}
+      CHAPTARR_API_KEY: ${CHAPTARR_API_KEY}
+      LISTENARR_API_KEY: ${LISTENARR_API_KEY}
+      DRY_RUN: "true" # first deploy logs only; set "false" once the dry-run matches look right
+    volumes:
+      - ./hardcover-sync:/app:ro
+    depends_on: [chaptarr, listenarr]
+
   # Seerr since 2026-10-28: Jellyseerr and Overseerr merged into it and the fallenbagel/jellyseerr
   # image reports itself deprecated. Same data (/opt/appdata/jellyseerr, migrated on first start),
   # same port and name, so routes, Homepage, Kuma and the sysadmin keep working; the service keeps

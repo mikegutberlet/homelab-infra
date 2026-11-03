@@ -116,6 +116,28 @@ First run (done over SSH/API from the Mac on 2026-10-22, see the change log):
 4. Audiobookshelf rescans its library on its own schedule; a Listenarr → Audiobookshelf
    notification is on Listenarr's roadmap, not there yet.
 
+## Want to Read sync (hardcover-sync)
+
+Added 2026-11-02. Every book on Goobs's Hardcover **Want to Read** list goes to both apps: Chaptarr
+for the ebook, Listenarr for the audiobook, each added monitored with a search so it is grabbed.
+Goodreads was the list first, but its shelf RSS feeds answer 404 and its API closed in 2020, so the
+Goodreads library was imported into Hardcover once and books are now marked there.
+
+| | |
+| --- | --- |
+| Container | `hardcover-sync` on media, `python:3.12-alpine` as 3000, script `stacks/media/hardcover-sync/sync_hardcover.py` (standard library only) |
+| Secrets | `HARDCOVER_TOKEN` (Hardcover → Settings → API, read-only scope), `CHAPTARR_API_KEY`, `LISTENARR_API_KEY` in `stacks/media/secrets.sops.env` |
+| Schedule | One pass at start, then every 60 min (`INTERVAL_MIN`) |
+| Chaptarr | `GET /api/v1/book/lookup?term=<title author>&mediaType=ebook`, then `POST /api/v1/book` into `/mnt/nfs/Media/Books` with the root folder's default profiles, `searchForNewBook`; the author is added with `monitor: none`, so only that book is wanted |
+| Listenarr | `GET /api/v1/search/audible`, `GET /api/v1/library/by-asin/<asin>` (already there?), then `POST /api/v1/library/add` with `monitored` and `autoSearch` |
+| State | None: the apps are the state. A book already in an app is skipped, so the first pass takes the whole list and later passes only books added since. A book deleted from an app while still on Want to Read comes back; take it off the list in Hardcover |
+| Matching | Title before any subtitle must match (case, punctuation and a leading "The/A/An" ignored) and one author's last name must appear. Anything else logs `no match` and is retried after 24 h (`RETRY_HOURS`); nothing is guessed. Add those by hand in the app |
+| Switches | `DRY_RUN=true` logs `would add` and adds nothing (the first deploy runs this way); `ONCE=true` runs one pass and exits |
+
+Check it with `sudo docker logs media-hardcover-sync-1`. Chaptarr issue #67 (0.9.911) returned only
+audiobook editions from lookup, so `mediaType=ebook` found nothing; if every Chaptarr line is
+`no match` in the dry run, that bug is still there in the pinned version.
+
 ## Not done / open
 
 - Readarr-era databases: none existed in this lab, so nothing to migrate.
