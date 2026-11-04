@@ -1,0 +1,21 @@
+# Removes Chaptarr's duplicate library rows (one work listed once per edition and metadata
+# source, Chaptarr 0.9.965 bugs #111/#323; files/chaptarr_dedupe.py has the keep rule). Only
+# database rows go, never files. Run from the Mac:
+#   ansible-playbook playbooks/chaptarr-dedupe.yml --check   # counts only
+#   ansible-playbook playbooks/chaptarr-dedupe.yml           # delete the duplicate rows
+- name: Chaptarr duplicate rows
+  hosts: media
+  become: true
+  tasks:
+    - name: Dedupe (python3 on the VM; API key read from Chaptarr's config file)
+      ansible.builtin.script:
+        cmd: "files/chaptarr_dedupe.py {{ '--dry-run' if ansible_check_mode else '' }}"
+        executable: /usr/bin/python3
+      register: dedupe
+      check_mode: false
+      changed_when: "'changed: 0 rows' not in dedupe.stdout and 'would change: 0 rows' not in dedupe.stdout"
+      failed_when: dedupe.rc != 0
+
+    - name: Result
+      ansible.builtin.debug:
+        msg: "{{ dedupe.stdout_lines }}"

@@ -100,8 +100,12 @@ class Chaptarr:
 
     def __init__(self):
         self.h = {"X-Api-Key": os.environ["CHAPTARR_API_KEY"]}
-        self.have = {str(b.get("foreignBookId") or b.get("foreignId")) for b in call(f"{CHAPTARR}/book", self.h)
-                     if str(b.get("mediaType", "")).lower() == "ebook"}
+        rows = [b for b in call(f"{CHAPTARR}/book", self.h) if str(b.get("mediaType", "")).lower() == "ebook"]
+        self.have = {str(b.get("foreignBookId") or b.get("foreignId")) for b in rows}
+        # Also by title: Chaptarr 0.9.965 keeps a book under a different work id (hc:/gr:/az:) than
+        # the one its search returns, so Snow Crash and Starship Troopers were "added" every hour
+        # (2026-11-03, 10 passes each) although the file was already there.
+        self.titles = {norm(b.get("title")) for b in rows}
 
     def add(self, book):
         term = urllib.parse.quote(f"{book['title']} {' '.join(book['authors'][:1])}")
@@ -117,7 +121,7 @@ class Chaptarr:
         if hit is None:
             return "no match"
         fid = hit.get("foreignId") or hit.get("foreignBookId") or hit.get("hardcoverBookId")
-        if str(hit.get("foreignBookId") or fid) in self.have:
+        if str(hit.get("foreignBookId") or fid) in self.have or norm(hit.get("title")) in self.titles:
             return "already there"
         if DRY_RUN:
             return f"would add \"{hit.get('title')}\" by {hit['author'].get('authorName')} ({fid})"
@@ -143,6 +147,7 @@ class Chaptarr:
         hit["editions"] = editions
         call(f"{CHAPTARR}/book", self.h, hit)
         self.have.add(str(hit.get("foreignBookId") or fid))
+        self.titles.add(norm(hit.get("title")))
         return "added, search started"
 
 

@@ -141,6 +141,18 @@ the first dry run on 2026-11-02 matched 0 of 20). Titles match with "(…)" part
 before a colon, never longer (a bare "The Lord of the Rings" once matched "The Return of the King").
 Listenarr skips Audible "Virtual Voice" (synthetic) narrations.
 
+## Duplicate library rows (2026-11-03)
+
+Chaptarr 0.9.965 adds one book row per edition and metadata source (`hc:`, `gr:`, `az:` ids) when
+it refreshes an author, so the library showed one work many times ("1984" x42, 13,327 rows in all);
+upstream bugs [#111](https://github.com/Chaptarr/chaptarr/issues/111) and
+[#323](https://github.com/Chaptarr/chaptarr/issues/323), no fixed release yet. Only rows: one file
+per book on disk, one grab per book in history. `playbooks/chaptarr-dedupe.yml` (`--check` first)
+keeps every row with files, else one row per author and title, and deletes the rest from the
+database only. Run it again if a later author refresh brings them back. The sync also matches
+"already there" by title now, after Snow Crash and Starship Troopers were re-added every hour
+because Chaptarr stored them under another work id than its search returns.
+
 ## Not done / open
 
 - Readarr-era databases: none existed in this lab, so nothing to migrate.
