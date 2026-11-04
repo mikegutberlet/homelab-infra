@@ -1,4 +1,5 @@
-# Removes Chaptarr's duplicate library rows (one work listed once per edition and metadata
+# Does NOT stick on 0.9.965 (rows came back within two minutes on 2026-11-04, docs/books.md);
+# keep for a fixed release. Removes Chaptarr's duplicate library rows (one work listed once per edition and metadata
 # source, Chaptarr 0.9.965 bugs #111/#323; files/chaptarr_dedupe.py has the keep rule). Only
 # database rows go, never files. Run from the Mac:
 #   ansible-playbook playbooks/chaptarr-dedupe.yml --check   # counts only
