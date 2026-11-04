@@ -6,7 +6,8 @@ it refreshes an author, so one work shows up many times ("1984" x42 on 2026-11-0
 in all). Upstream bugs Chaptarr/chaptarr#111 and #323, no fixed release yet, so this may need
 running again after a later refresh brings them back.
 
-Rows are grouped by author and title. In each group every row with files stays; if none has
+Rows are grouped by author and title (titles with no Latin letters, e.g. Japanese or bare
+numbers, are compared as written so they cannot merge). In each group every row with files stays; if none has
 files, one row stays (a monitored ebook row first, then the lowest id). The rest are deleted
 from Chaptarr's database only: DELETE /api/v1/book/{id}?deleteFiles=false, nothing on disk is
 touched. `--dry-run` prints the counts and the first groups and deletes nothing. Runs as root on
@@ -39,6 +40,14 @@ def norm(text):
     return re.sub(r"^(the|a|an) ", "", " ".join(text.split()))
 
 
+def key(title):
+    """Group key: the normalised title, or the raw title when normalising leaves nothing to compare
+    (non-Latin titles, bare numbers) so a whole author's books cannot collapse into one group. The
+    first --check run (2026-11-04) had '' groups of 150 rows that would have gone."""
+    n = norm(title)
+    return n if re.search(r"[a-z]", n) else " ".join((title or "").lower().split())
+
+
 def has_files(b):
     return bool(b.get("hasFiles")) or (b.get("statistics") or {}).get("bookFileCount", 0) > 0
 
@@ -58,7 +67,9 @@ def main():
     books = api("book")
     groups = {}
     for b in books:
-        groups.setdefault((b.get("authorId"), norm(b.get("title"))), []).append(b)
+        if not key(b.get("title")):
+            continue  # no title to compare on; left alone
+        groups.setdefault((b.get("authorId"), key(b.get("title"))), []).append(b)
     doomed = {g: to_delete(rows) for g, rows in groups.items()}
     doomed = {g: d for g, d in doomed.items() if d}
     total = sum(len(d) for d in doomed.values())
