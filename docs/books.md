@@ -13,7 +13,7 @@ Listenarr for audiobooks, and Listenarr matches against Audible, which fits Audi
 Audible-based matching.
 
 Both are beta software. Image tags are pinned (`chaptarr/chaptarr:0.9.965`,
-`therobbiedavis/listenarr:canary-1.3.11`, the Docker Hub mirror of `ghcr.io/listenarrs/listenarr`;
+`therobbiedavis/listenarr:canary-1.5.12`, the Docker Hub mirror of `ghcr.io/listenarrs/listenarr`;
 Listenarr publishes canary builds only, several a week). Bump the tag deliberately, after reading the
 release notes.
 
@@ -44,8 +44,13 @@ Usenet first, torrents as the fallback, like the rest of the stack (`docs/torren
 
 Chaptarr has Readarr's delay profile: Usenet preferred, torrents only after 1440 minutes, same as
 Sonarr/Radarr. Listenarr has no delay profiles and no RSS worker; it ranks indexers by a per-indexer
-priority (Usenet 1, torrents 50) and searches when a monitored book is added or a "search all" is
-run, so for audiobooks the torrent fallback is "lower priority", not "24 hours later".
+priority (Usenet 1, torrents 50) and searches when a monitored book is added, on "search all", and
+on its own sweep of every monitored book without a file (every 6 hours up to 1.3.x; since 1.5.0 an
+hourly sweep with a 24 h per-book cooldown, Settings → `AutomaticSearchIntervalHours` /
+`AutomaticSearchCooldownHours`), so for audiobooks the torrent fallback is "lower priority", not
+"24 hours later". No separate backlog search is needed for it. Since 1.5.1 a search that finds
+nothing for "title author" is retried with the title alone (Audible titles carry suffixes and
+release names rarely carry the author); that is why the tag was moved from 1.3.11 on 2026-11-04.
 
 Allowed file types (Listenarr → Settings, `AllowedFileExtensions`): `.mp3 .flac .m4a .m4b .ogg .mp4`.
 `.mp4` was added 2026-10-26: some Usenet audiobook releases are AAC in an `.mp4` container (one
@@ -80,6 +85,42 @@ Quality: Listenarr profile prefers M4B (AAC), then MP3; Chaptarr keeps Readarr's
   in Prowlarr, run the import again.
 - The Usenet indexers (NZBgeek, NzbPlanet) carry both categories. Of the public torrent trackers only
   those with an ebook/audiobook category show up (TPB, 1337x via FlareSolverr, LimeTorrents).
+- MyAnonamouse (private, audiobooks and ebooks; the source most audiobooks are only on). Added in
+  Prowlarr, not in each app: Prowlarr's torrent indexers already leave through the gluetun proxy
+  (tag `vpn`), so searches, `.torrent` fetches and qBittorrent's announces all show PIA's IP and one
+  MAM session covers them. Chaptarr gets it from the app sync; Listenarr needs "Import from
+  Prowlarr" run once more. See "MyAnonamouse" below.
+
+## MyAnonamouse (2026-11-04)
+
+Goobs chose to join MAM because the Usenet sites and public trackers find few audiobooks. MAM locks
+every session (`mam_id` cookie) to one IP, and PIA hands out a new IP on each reconnect, so the
+session must follow the VPN: `mam-seedbox` on media (`curlimages/curl`, `network_mode:
+service:gluetun`, script `stacks/media/mam-seedbox/update_seedbox.sh`) calls
+`https://t.myanonamouse.net/json/dynamicSeedbox.php` once an hour with the session cookie; MAM moves
+the session to the caller's IP ("Completed") or answers "No change". The cookie jar lives in
+`/opt/appdata/mam-seedbox/cookies.txt` (MAM may rotate the id; the jar keeps the current one, the
+`MAM_ID` secret only seeds it the first time). `ONCE=true` makes one call and exits.
+
+Setup, in this order (the session must be created for the VPN's IP, not the home IP):
+
+1. Join: https://www.myanonamouse.net/inviteapp.php (interview over their IRC, a few minutes).
+2. Read the VPN's current IP: `sudo docker exec media-gluetun-1 wget -qO- https://ipinfo.io/ip`.
+3. MAM → Preferences → Security → create a session for that IP with "Allow session to set dynamic
+   seedbox IP" ticked (IP-locked is fine, the updater moves it). Copy the `mam_id`.
+4. `sops stacks/media/secrets.sops.env`, add `MAM_ID=<the cookie>`; deploy media
+   (`playbooks/site.yml --limit media --tags stacks`); check
+   `sudo docker logs media-mam-seedbox-1` says Completed or No change.
+5. Prowlarr → Indexers → add **MyAnonamouse** (the same `mam_id`), tag `vpn`, sync to Chaptarr
+   (Readarr app) on; set its seed criteria to what MAM's rules ask (seed time in minutes, no ratio
+   cap) so Chaptarr's grabs are not stopped by qBittorrent's global 1.0 / 3 days rule.
+6. Listenarr → Settings → Indexers → Import from Prowlarr again (adds MAM with priority 50, like
+   the other torrent indexers; raise it above Usenet only if MAM should win ties).
+
+Not handled: Listenarr's grabs (via the Prowlarr-imported indexer) get qBittorrent's global seeding
+rule, not Prowlarr's per-indexer one; if MAM's seeding rules need more, raise the global rule for
+the `audiobooks` category or seed by hand. Listenarr 1.3.11+ also has a native MAM indexer type, but
+it would search from the home IP and need a second session; not used.
 
 ## Monitoring and dashboard
 
@@ -157,4 +198,4 @@ because Chaptarr stored them under another work id than its search returns.
 
 - Readarr-era databases: none existed in this lab, so nothing to migrate.
 - Storyteller sees the same folders; it needs its own import step per book (its UI), unchanged.
-- MyAnonamouse or other private trackers: not configured (Goobs has not asked for private trackers).
+- Other private trackers: none.
