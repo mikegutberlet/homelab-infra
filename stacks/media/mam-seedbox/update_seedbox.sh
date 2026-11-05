@@ -5,10 +5,17 @@
 # "allow session to set dynamic seedbox IP" or has been called again within the hour.
 set -u
 JAR=/data/cookies.txt
-if [ ! -s "$JAR" ]; then # first run: seed the cookie jar from MAM_ID; MAM may rotate it later
-  printf '.myanonamouse.net\tTRUE\t/\tTRUE\t0\tmam_id\t%s\n' "$MAM_ID" > "$JAR"
-fi
 while :; do
+  # Seed the jar from MAM_ID while it holds no mam_id (first run, or the runs before the secret was
+  # set left an empty one behind); afterwards the jar wins, because MAM may rotate the id.
+  if ! grep -q "mam_id	." "$JAR" 2>/dev/null; then
+    if [ -z "${MAM_ID:-}" ]; then
+      echo "$(date '+%F %T') MAM_ID is empty: no MyAnonamouse session yet (docs/books.md)"
+      sleep "${INTERVAL_MIN:-60}m"
+      continue
+    fi
+    printf '.myanonamouse.net\tTRUE\t/\tTRUE\t0\tmam_id\t%s\n' "$MAM_ID" > "$JAR"
+  fi
   out=$(curl -sS -m 30 -b "$JAR" -c "$JAR" https://t.myanonamouse.net/json/dynamicSeedbox.php 2>&1)
   echo "$(date '+%F %T') $out"
   [ "${ONCE:-false}" = "true" ] && exit 0
