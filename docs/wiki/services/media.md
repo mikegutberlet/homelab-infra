@@ -232,14 +232,18 @@ delay profile or RSS) and first-run steps in [`docs/books.md`](../../books.md).
 
 ## RomM
 
-`rommapp/romm:4` with `mariadb:11`, port 8095, https://romm.tail9af84.ts.net (SSO). Retro game
-library: `Media/Games/ROMs` is mounted as `/romm/library/roms`, and `stacks/media/romm/config.yml`
-maps Goobs's console folder names (`GBA`, `GBColor`, `NDS`, `PS2`, `PSP`, ...) to RomM platform slugs,
-so nothing is renamed on the NAS (fixed 2026-10-22; before that the whole `Games` share was the
-library and RomM found no consoles). Folders that match no platform, such as the loose per-game
-folders and `BIOS files`, are skipped. Metadata: Hasheous and the built-in LibretroDB (no key); IGDB
-only if `IGDB_CLIENT_ID/SECRET` are filled in (empty as of 2026-10-22). Data in
-`/opt/appdata/romm/{db,resources,assets}`; the MariaDB is dumped nightly by the backup script.
+`rommapp/romm:5.4.1` (pinned, DB app) with `mariadb:11`, port 8095, https://romm.tail9af84.ts.net
+(SSO). Retro game library: `Media/Games/ROMs` is mounted as `/romm/library/roms`, and
+`stacks/media/romm/config.yml` maps Goobs's console folder names (`GBA`, `GBColor`, `NDS`, `PS2`,
+`PSP`, ...) to RomM platform slugs, so nothing is renamed on the NAS (fixed 2026-10-22; before that
+the whole `Games` share was the library and RomM found no consoles). Firmware: `Media/Games/bios/<slug>/`
+as `/romm/library/bios`. Folders that match no platform (`BIOS files`, `_unpacked`, ...) are skipped.
+Metadata: Hasheous + PlayMatch (hash match), TheGamesDB, HowLongToBeat (no keys); IGDB,
+ScreenScraper, RetroAchievements and SteamGridDB when their keys are in `secrets.sops.env`
+(`docs/romm_keys.sh` fills them). Nightly quick rescan 05:00. `playbooks/rom-organize.yml` tidies
+the library (`--check` first; moves go to `/mnt/nfs/to-delete/<date>-roms/`, never deleted). Data in
+`/opt/appdata/romm/{db,resources,assets}` (saves/states from in-browser play live in `assets`); the
+MariaDB is dumped nightly by the backup script.
 
 ## Not in this stack
 
