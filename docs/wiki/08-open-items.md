@@ -65,7 +65,7 @@ These were handed to Goobs; the wiki assumes they are **not** done until confirm
 - AnythingLLM: first-run wizard (workspace, Gemini model choice).
 - Huginn: change the generated `admin` password in-app.
 - Storyteller: create the first account.
-- RomM: IGDB client credentials for metadata.
+- RomM: metadata keys (`docs/romm_keys.sh`), first Complete scan after `rom-organize.yml`; OIDC with Authentik (single login) later.
 - Open WebUI and AnythingLLM: confirm the Gemini key works after the key file was moved to encrypted storage.
 - Scrutiny: confirm the daily 04:15 collector run on both hosts shows all 9 disks.
 

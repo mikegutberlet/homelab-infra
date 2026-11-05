@@ -1,0 +1,50 @@
+# Tidies Media/Games for RomM (files/rom_organize.py has the rules; audit 2026-11-05). Writes run
+# as the storage user because the NAS export squashes root. Nothing is deleted: files leave the
+# library only into /mnt/nfs/to-delete/<date>-roms/ (manifest.tsv there for undo). Run from the Mac:
+#   ansible-playbook playbooks/rom-organize.yml --check                       # report only
+#   ansible-playbook playbooks/rom-organize.yml                               # safe moves + NDS renames
+#   ansible-playbook playbooks/rom-organize.yml -e extract=true -e bios=true  # unpack rompacks, BIOS
+#   ansible-playbook playbooks/rom-organize.yml -e nds_english=true           # one region per NDS title
+#   ansible-playbook playbooks/rom-organize.yml -e cleanup=true               # rmdir empty leftovers
+# Afterwards: RomM > Scan (Complete) once, then the nightly quick rescan keeps up.
+- name: Organize the ROM library
+  hosts: media
+  become: true
+  vars:
+    extract: false
+    bios: false
+    nds_english: false
+    cleanup: false
+  tasks:
+    - name: 7z for the rompacks and BIOS archives
+      ansible.builtin.apt:
+        name: [p7zip-full, p7zip-rar]
+        state: present
+      when: extract | bool or bios | bool
+
+    - name: Script onto the VM
+      ansible.builtin.file: {path: /usr/local/lib/homelab, state: directory, mode: "0755"}
+      check_mode: false
+    - name: Script onto the VM (copy)
+      ansible.builtin.copy:
+        src: files/rom_organize.py
+        dest: /usr/local/lib/homelab/rom_organize.py
+        mode: "0755"
+      check_mode: false
+
+    - name: Run as storage
+      ansible.builtin.command:
+        argv: >-
+          {{ ['sudo', '-n', '-u', 'storage', '/usr/bin/python3', '/usr/local/lib/homelab/rom_organize.py']
+             + ([] if ansible_check_mode else ['--apply'])
+             + (['--extract'] if extract | bool else [])
+             + (['--bios'] if bios | bool else [])
+             + (['--nds-english'] if nds_english | bool else [])
+             + (['--cleanup'] if cleanup | bool else []) }}
+      register: org
+      check_mode: false
+      changed_when: "'changed: 0' not in org.stdout"
+
+    - name: Result
+      ansible.builtin.debug:
+        msg: "{{ org.stdout_lines }}"

@@ -4,6 +4,7 @@
 # loose per-game folders were moved into these console folders on Goobs's OK; N64 was added then.)
 # Folders that match no platform (the loose per-game folders, "BIOS files", archives) are skipped;
 # to add a console, create a folder here or on the NAS with a slug RomM knows.
+# Firmware lives in NAS/Media/Games/bios/<slug>/ (mounted as /romm/library/bios, RomM's default).
 system:
   platforms:
     GBA: gba
@@ -18,12 +19,19 @@ exclude:
   platforms:
     - BIOS files
     - Paste To Phone
+    - God of War II (Europe, Australia) (En,Fr,De,Es,It,Ru) # empty leftover folder (rom-organize.yml -e cleanup=true removes it)
+    - _unpacked # rom-organize.yml staging
   roms:
     single_file:
       extensions: [part, txt, url, nfo, DS_Store, jpg, png, pdf]
-      names: [".DS_Store", "Thumbs.db"]
+      names: [".DS_Store", "Thumbs.db", "romlistnumbered.txt", "romlistunnumbered.txt"]
     multi_file:
       names: [".DS_Store"]
       parts:
         extensions: [part, txt, url, nfo, DS_Store]
         names: [".DS_Store"]
+# Which copy's metadata and cover win when a title has several regions (Goobs: English first).
+scan:
+  priority:
+    region: [us, wor, eu, jp]
+    language: [en]

@@ -446,7 +446,7 @@ services:
   # romm/config.yml maps each folder name to a RomM platform slug (nothing moves on the NAS).
   romm:
     <<: *common
-    image: rommapp/romm:4
+    image: rommapp/romm:5.4.1 # pinned: DB app (schema migrations), bump by hand
     mem_limit: 1g
     environment:
       DB_HOST: romm-db
@@ -454,17 +454,29 @@ services:
       DB_USER: romm
       DB_PASSWD: ${ROMM_DB_PASSWORD}
       ROMM_AUTH_SECRET_KEY: ${ROMM_AUTH_SECRET_KEY}
-      # Metadata: IGDB needs a Twitch developer client (optional, empty = off); Hasheous and
-      # the built-in LibretroDB need no key.
-      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID}
-      IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET}
+      ROMM_BASE_URL: https://romm.tail9af84.ts.net # invite/share links
+      # Metadata (docs/romm_keys.sh fills the keys into secrets.sops.env; empty = that source off).
+      # Keyless: Hasheous + PlayMatch match by file hash, TheGamesDB and HowLongToBeat by name.
+      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
+      IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}
+      SCREENSCRAPER_USER: ${SCREENSCRAPER_USER:-}
+      SCREENSCRAPER_PASSWORD: ${SCREENSCRAPER_PASSWORD:-}
+      RETROACHIEVEMENTS_API_KEY: ${RETROACHIEVEMENTS_API_KEY:-}
+      STEAMGRIDDB_API_KEY: ${STEAMGRIDDB_API_KEY:-}
       HASHEOUS_API_ENABLED: "true"
+      PLAYMATCH_API_ENABLED: "true"
+      TGDB_API_ENABLED: "true"
+      HLTB_API_ENABLED: "true"
+      # Nightly quick rescan picks up new files (the inotify watcher is unreliable on NFS).
+      ENABLE_SCHEDULED_RESCAN: "true"
+      SCHEDULED_RESCAN_CRON: "0 5 * * *"
     ports: ["8095:8080"]
     volumes:
       - /opt/appdata/romm/resources:/romm/resources
       - /opt/appdata/romm/assets:/romm/assets
       - ./romm/config.yml:/romm/config/config.yml:ro
       - /mnt/nfs/Media/Games/ROMs:/romm/library/roms
+      - /mnt/nfs/Media/Games/bios:/romm/library/bios # firmware, bios/<slug>/ (playbooks/rom-organize.yml -e bios=true)
     depends_on:
       romm-db: {condition: service_healthy}
 
