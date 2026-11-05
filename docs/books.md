@@ -102,6 +102,10 @@ the session to the caller's IP ("Completed") or answers "No change". The cookie 
 `/opt/appdata/mam-seedbox/cookies.txt` (MAM may rotate the id; the jar keeps the current one, the
 `MAM_ID` secret only seeds it the first time). `ONCE=true` makes one call and exits.
 
+qBittorrent is pinned to 5.2.4 (`stacks/media/compose.yaml`) and off the sysadmin's auto-update list:
+MAM only allows listed client versions and 5.3 was not on it (2026-11-05). Move the pin when MAM's
+client list catches up.
+
 Setup, in this order (the session must be created for the VPN's IP, not the home IP):
 
 1. Join: https://www.myanonamouse.net/inviteapp.php (interview over their IRC, a few minutes).
