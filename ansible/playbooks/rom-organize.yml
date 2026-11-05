@@ -18,8 +18,14 @@
   tasks:
     - name: 7z for the rompacks and BIOS archives
       ansible.builtin.apt:
-        name: [p7zip-full, p7zip-rar]
+        name: p7zip-full
         state: present
+      when: extract | bool or bios | bool
+    - name: 7zz reads .rar too (p7zip-rar is non-free); not on every release, so best effort
+      ansible.builtin.apt:
+        name: 7zip
+        state: present
+      failed_when: false
       when: extract | bool or bios | bool
 
     - name: Script onto the VM

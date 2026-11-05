@@ -54,6 +54,8 @@ for f in ("apply", "extract", "bios", "nds-english", "cleanup"):
     ap.add_argument("--" + f, action="store_true")
 A = ap.parse_args()
 n_changes = 0
+planned = set()  # names claimed earlier in this run (in report mode nothing is renamed yet)
+SEVENZ = shutil.which("7zz") or shutil.which("7z")  # 7zz (Debian "7zip") also unpacks .rar
 
 
 def act(what):
@@ -85,9 +87,10 @@ def move(src, dst):
 
 def rename(path, new_name):
     dst = os.path.join(os.path.dirname(path), new_name)
-    if os.path.exists(dst):
-        print(f"skip (name taken): {os.path.relpath(path, GAMES)} -> {new_name}")
+    if os.path.exists(dst) or dst in planned:
+        print(f"skip (name taken, same dump twice): {os.path.relpath(path, GAMES)} -> {new_name}")
         return
+    planned.add(dst)
     act(f"rename {os.path.relpath(path, GAMES)} -> {new_name}")
     if A.apply:
         os.rename(path, dst)
@@ -97,11 +100,15 @@ def unpack(archive, into):
     act(f"unpack {os.path.relpath(archive, GAMES)} -> {os.path.relpath(into, GAMES)}")
     if A.apply:
         os.makedirs(into, exist_ok=True)
-        subprocess.run(["7z", "x", "-y", f"-o{into}", archive], check=True, stdout=subprocess.DEVNULL)
+        r = subprocess.run([SEVENZ, "x", "-y", f"-o{into}", archive], capture_output=True, text=True)
+        if r.returncode:
+            print(f"  could not unpack (left in place): {r.stderr.strip()[-200:]}")
+            return False
     else:
-        r = subprocess.run(["7z", "l", "-ba", archive], capture_output=True, text=True)
+        r = subprocess.run([SEVENZ, "l", "-ba", archive], capture_output=True, text=True)
         files = [l.split(None, 5)[-1] for l in r.stdout.splitlines() if l.strip()]
         print(f"  contents ({len(files)}): " + ", ".join(files[:12]) + (" ..." if len(files) > 12 else ""))
+    return True
 
 
 def ls(d):
@@ -146,13 +153,14 @@ for f in ls(GAMES):
 
 # ---- rompacks -----------------------------------------------------------------------------------
 if A.extract:
-    if not shutil.which("7z"):
-        sys.exit("7z not installed on the VM (apt install p7zip-full p7zip-rar)")
+    if not SEVENZ:
+        sys.exit("7z not installed on the VM (apt install p7zip-full 7zip)")
     for pack in (f"{ROMS}/GBA/165 GBA Rompack.7z", f"{ROMS}/34 Pokemon Games (NDS GBA GBC GB).7z"):
         if not os.path.exists(pack):
             continue
         staging = f"{ROMS}/_unpacked/{os.path.basename(pack)[:-3]}"
-        unpack(pack, staging)
+        if not unpack(pack, staging):
+            continue
         if A.apply:
             sort_loose(staging)
             if not any(os.scandir(staging)):
@@ -161,14 +169,15 @@ if A.extract:
 
 # ---- firmware -----------------------------------------------------------------------------------
 if A.bios:
-    if not shutil.which("7z"):
-        sys.exit("7z not installed on the VM (apt install p7zip-full p7zip-rar)")
+    if not SEVENZ:
+        sys.exit("7z not installed on the VM (apt install p7zip-full 7zip)")
     for archive, rules in BIOS_MAP.items():
         src = f"{ROMS}/BIOS files/{archive}"
         if not os.path.exists(src):
             continue
         staging = f"{BIOS}/_unpacked/{archive}"
-        unpack(src, staging)
+        if not unpack(src, staging):
+            continue
         if A.apply:
             for root, _, files in os.walk(staging):
                 for f in files:
