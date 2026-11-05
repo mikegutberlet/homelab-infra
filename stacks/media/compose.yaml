@@ -147,7 +147,9 @@ services:
   # downloads go to /mnt/nfs/sabnzb/torrents (same export as the libraries, so hardlinks).
   qbittorrent:
     <<: *common
-    image: lscr.io/linuxserver/qbittorrent:latest
+    # Pinned 2026-11-05: MyAnonamouse does not allow the 5.3 client yet (Goobs), so no :latest and
+    # no auto-update (hosts.yml) until MAM's client list includes the newer version.
+    image: lscr.io/linuxserver/qbittorrent:5.2.4
     mem_limit: 1g
     network_mode: service:gluetun
     environment:

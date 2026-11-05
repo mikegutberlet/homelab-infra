@@ -113,7 +113,7 @@ The qBittorrent WebUI is published by the gluetun container (shared network name
 | | |
 | --- | --- |
 | Purpose | Torrents, only ever through Private Internet Access |
-| Images | `qmcgaw/gluetun:v3.40` (OpenVPN to PIA, `NET_ADMIN`, `/dev/net/tun`) and `lscr.io/linuxserver/qbittorrent:latest` with `network_mode: service:gluetun` |
+| Images | `qmcgaw/gluetun:v3.40` (OpenVPN to PIA, `NET_ADMIN`, `/dev/net/tun`) and `lscr.io/linuxserver/qbittorrent:5.2.4` (pinned 2026-11-05, MyAnonamouse does not allow 5.3 yet; off the auto-update list) with `network_mode: service:gluetun` |
 | Port | qBittorrent WebUI 8085, published by gluetun; https://qbittorrent.tail9af84.ts.net (SSO), user `admin`, password on the Mac (`~/.config/homelab/qbittorrent-webui`) |
 | VPN | `PIA_USER`, `PIA_PASSWORD`, `PIA_REGION` in the media secrets (origin: `~/.config/homelab/pia.env` on the Mac). `PORT_FORWARD_ONLY=on` because PIA has no port forwarding in US regions; Vancouver was chosen at build time. `VPN_PORT_FORWARDING_UP_COMMAND` posts the forwarded port into qBittorrent's preferences over localhost |
 | Kill switch | If the tunnel drops, qBittorrent has no network at all (shared namespace). Gluetun's own healthcheck gates qBittorrent's start. Checked 2026-10-26: OUTPUT policy DROP except tun0 and the PIA endpoint, IPv6 blocked, DNS over TLS to Cloudflare with `BLOCK_MALICIOUS` |
