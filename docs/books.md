@@ -112,7 +112,9 @@ the seed limit). Other torrents keep the global rule. `DRY_RUN=true` lists what 
 
 qBittorrent is pinned to 5.2.4 (`stacks/media/compose.yaml`) and off the sysadmin's auto-update list:
 MAM only allows listed client versions and 5.3 was not on it (2026-11-05). Move the pin when MAM's
-client list catches up.
+client list catches up. The 5.3 -> 5.2 step bit once: 5.3 had moved the WebUI keys into a `[WebUI]`
+section 5.2 does not read, so 5.2.4 came up with a temporary password and locked every arr app out;
+`playbooks/qbittorrent-webui-keys.yml` (`--check` first) copies them back under `[Preferences]`.
 
 Setup, in this order (the session must be created for the VPN's IP, not the home IP):
 
