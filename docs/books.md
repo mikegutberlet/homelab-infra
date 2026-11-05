@@ -95,12 +95,20 @@ Quality: Listenarr profile prefers M4B (AAC), then MP3; Chaptarr keeps Readarr's
 
 Goobs chose to join MAM because the Usenet sites and public trackers find few audiobooks. MAM locks
 every session (`mam_id` cookie) to one IP, and PIA hands out a new IP on each reconnect, so the
-session must follow the VPN: `mam-seedbox` on media (`curlimages/curl`, `network_mode:
-service:gluetun`, script `stacks/media/mam-seedbox/update_seedbox.sh`) calls
+session must follow the VPN: `mam-seedbox` on media (`python:3.12-alpine`, `network_mode:
+service:gluetun`, script `stacks/media/mam-seedbox/mam_seedbox.py`, standard library only) calls
 `https://t.myanonamouse.net/json/dynamicSeedbox.php` once an hour with the session cookie; MAM moves
 the session to the caller's IP ("Completed") or answers "No change". The cookie jar lives in
 `/opt/appdata/mam-seedbox/cookies.txt` (MAM may rotate the id; the jar keeps the current one, the
-`MAM_ID` secret only seeds it the first time). `ONCE=true` makes one call and exits.
+`MAM_ID` secret only seeds it while the jar holds none). `ONCE=true` makes one pass and exits.
+
+Seeding (2026-11-05): MAM counts a torrent as satisfied after 72 h of seeding, ratio aside, and the
+stack's global qBittorrent rule (ratio 1.0 or 3 days, or 12 h without an upload, see
+`docs/torrent-fallback.md`) would stop most MAM torrents earlier. So the same hourly pass gives every
+torrent whose tracker is MAM its own share limits in qBittorrent (localhost inside gluetun's
+namespace, no login): no ratio cap, no inactivity cap, `SEED_HOURS` (72) of seeding; qBittorrent
+then pauses it and Chaptarr/Listenarr remove it as they do for any finished torrent (both wait for
+the seed limit). Other torrents keep the global rule. `DRY_RUN=true` lists what it would set.
 
 qBittorrent is pinned to 5.2.4 (`stacks/media/compose.yaml`) and off the sysadmin's auto-update list:
 MAM only allows listed client versions and 5.3 was not on it (2026-11-05). Move the pin when MAM's
@@ -116,15 +124,13 @@ Setup, in this order (the session must be created for the VPN's IP, not the home
    (`playbooks/site.yml --limit media --tags stacks`); check
    `sudo docker logs media-mam-seedbox-1` says Completed or No change.
 5. Prowlarr → Indexers → add **MyAnonamouse** (the same `mam_id`), tag `vpn`, sync to Chaptarr
-   (Readarr app) on; set its seed criteria to what MAM's rules ask (seed time in minutes, no ratio
-   cap) so Chaptarr's grabs are not stopped by qBittorrent's global 1.0 / 3 days rule.
+   (Readarr app) on; seed criteria Seed Time 4320, Seed Ratio empty (belt and braces: the hourly
+   pass above sets the same per torrent).
 6. Listenarr → Settings → Indexers → Import from Prowlarr again (adds MAM with priority 50, like
    the other torrent indexers; raise it above Usenet only if MAM should win ties).
 
-Not handled: Listenarr's grabs (via the Prowlarr-imported indexer) get qBittorrent's global seeding
-rule, not Prowlarr's per-indexer one; if MAM's seeding rules need more, raise the global rule for
-the `audiobooks` category or seed by hand. Listenarr 1.3.11+ also has a native MAM indexer type, but
-it would search from the home IP and need a second session; not used.
+Listenarr 1.3.11+ also has a native MAM indexer type, but it would search from the home IP and
+need a second session; not used.
 
 ## Monitoring and dashboard
 
