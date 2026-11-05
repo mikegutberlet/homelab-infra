@@ -208,6 +208,10 @@ because Chaptarr stored them under another work id than its search returns.
 
 ## Not done / open
 
+- 2026-11-05 leftovers: `playbooks/audiobook-fixups.yml` (`--check` first) adds the four Hardcover titles the sync
+  never matched (Hitchhiker's Guide, 20,000 Leagues, Martian Chronicles, Moon Is a Harsh Mistress) through
+  Listenarr's Audible search and imports Bad Blood by hand from `sabnzb/complete/audiobooks/John Carreyrou - Bad Blood*.1`
+  (hardlink/copy, source folder kept). Run once; a second run reports everything as present.
 - Readarr-era databases: none existed in this lab, so nothing to migrate.
 - Storyteller sees the same folders; it needs its own import step per book (its UI), unchanged.
 - Other private trackers: none.
