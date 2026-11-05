@@ -128,16 +128,20 @@ services:
   # MyAnonamouse (2026-11-04, docs/books.md): the mam_id session is locked to one IP and PIA's IP
   # changes on every reconnect. This shares gluetun's network and once an hour asks MAM to move the
   # session to the current VPN IP, so Prowlarr's searches (gluetun proxy) and qBittorrent's announces
-  # keep working. Cookie jar in /opt/appdata/mam-seedbox (MAM may rotate the id). ONCE=true: one call.
+  # keep working. Cookie jar in /opt/appdata/mam-seedbox (MAM may rotate the id). Since 2026-11-05 it
+  # also gives every MAM torrent in qBittorrent (localhost here, no login) its own share limits:
+  # SEED_HOURS of seeding, no ratio or inactivity cap, so MAM's seeding rule is met before the
+  # global 1.0 / 3 days / 12 h-idle rule can stop it. ONCE=true: one pass; DRY_RUN=true: report only.
   mam-seedbox:
     <<: *common
-    image: curlimages/curl:8.16.0
+    image: python:3.12-alpine
     user: ${PUID}:${PGID}
     network_mode: service:gluetun
-    entrypoint: ["/bin/sh", "/app/update_seedbox.sh"]
+    command: ["python", "-u", "/app/mam_seedbox.py"]
     environment:
       TZ: ${TZ}
       MAM_ID: ${MAM_ID}
+      SEED_HOURS: "72"
     volumes:
       - ./mam-seedbox:/app:ro
       - /opt/appdata/mam-seedbox:/data
