@@ -1,0 +1,50 @@
+# Desktop emulator kit for the consoles RomM cannot run in the browser (PS2, GameCube, Wii, PS3,
+# Xbox, Switch, Wii U, 3DS). files/emulator_kit.py downloads the newest Windows and Mac release of
+# each emulator into NAS/Media/Games/emulators/{windows,mac}/ and the setup guide goes next to them,
+# so a PC or Mac that mounts the Games share has installers, guide, ROMs and BIOS in one place.
+# Writes run as storage (the NAS export squashes root). Nothing is deleted; old installers stay.
+# Run from the Mac:
+#   ansible-playbook playbooks/emulator-kit.yml --check   # list what would be downloaded
+#   ansible-playbook playbooks/emulator-kit.yml           # download (a few GB the first time)
+# Re-run any time to pick up newer releases.
+- name: Desktop emulator kit on the NAS
+  hosts: media
+  become: true
+  tasks:
+    - name: Script onto the VM
+      ansible.builtin.copy:
+        src: files/emulator_kit.py
+        dest: /usr/local/lib/homelab/emulator_kit.py
+        mode: "0755"
+      check_mode: false
+
+    - name: Kit folder as storage
+      ansible.builtin.command:
+        argv: [sudo, -n, -u, storage, mkdir, -p, "/mnt/nfs/Media/Games/emulators/windows", "/mnt/nfs/Media/Games/emulators/mac"]
+      args:
+        creates: /mnt/nfs/Media/Games/emulators/mac
+
+    - name: Setup guide next to the installers
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../docs/emulators.md"
+        dest: /tmp/emulators-README.md
+        mode: "0644"
+      check_mode: false
+      changed_when: false
+    - name: Setup guide as storage
+      ansible.builtin.command:
+        argv: [sudo, -n, -u, storage, cp, /tmp/emulators-README.md, /mnt/nfs/Media/Games/emulators/README.md]
+      changed_when: true
+
+    - name: Download the newest releases as storage
+      ansible.builtin.command:
+        argv: >-
+          {{ ['sudo', '-n', '-u', 'storage', '/usr/bin/python3', '/usr/local/lib/homelab/emulator_kit.py']
+             + ([] if ansible_check_mode else ['--apply']) }}
+      register: kit
+      check_mode: false
+      changed_when: "'changed: 0' not in kit.stdout"
+
+    - name: Result
+      ansible.builtin.debug:
+        msg: "{{ kit.stdout_lines }}"
