@@ -115,15 +115,19 @@ def ls(d):
     return sorted(os.listdir(d)) if os.path.isdir(d) else []
 
 
-def sort_loose(staging):
-    """Files unpacked from a rompack: by extension into the console folders."""
+def sort_loose(staging, platform=None):
+    """Files unpacked from a rompack: by extension into the console folders. A zip per game is the
+    normal No-Intro form, so in a single-console pack nested archives go to that console."""
     for root, _, files in os.walk(staging):
         for f in files:
             ext = os.path.splitext(f)[1].lower()
             if ext in BY_EXT:
                 move(os.path.join(root, f), os.path.join(ROMS, BY_EXT[ext], f))
             elif ext in ARCH or ext == ".gz":
-                print(f"  left in staging (nested archive, look by hand): {f}")
+                if platform:
+                    move(os.path.join(root, f), os.path.join(ROMS, platform, f))
+                else:
+                    print(f"  left in staging (nested archive, look by hand): {f}")
             else:
                 hold(os.path.join(root, f))
 
@@ -155,17 +159,18 @@ for f in ls(GAMES):
 if A.extract:
     if not SEVENZ:
         sys.exit("7z not installed on the VM (apt install p7zip-full 7zip)")
-    for pack in (f"{ROMS}/GBA/165 GBA Rompack.7z", f"{ROMS}/34 Pokemon Games (NDS GBA GBC GB).7z"):
-        if not os.path.exists(pack):
-            continue
+    for pack, platform in ((f"{ROMS}/GBA/165 GBA Rompack.7z", "GBA"),
+                           (f"{ROMS}/34 Pokemon Games (NDS GBA GBC GB).7z", None)):
         staging = f"{ROMS}/_unpacked/{os.path.basename(pack)[:-3]}"
-        if not unpack(pack, staging):
-            continue
-        if A.apply:
-            sort_loose(staging)
-            if not any(os.scandir(staging)):
-                os.rmdir(staging)
-        hold(pack)
+        if os.path.exists(pack):
+            if not unpack(pack, staging):
+                continue
+            hold(pack)
+        if A.apply and os.path.isdir(staging):  # also finishes a staging folder left by an earlier run
+            sort_loose(staging, platform)
+            for root, dirs, files in os.walk(staging, topdown=False):
+                if not dirs and not files:
+                    os.rmdir(root)
 
 # ---- firmware -----------------------------------------------------------------------------------
 if A.bios:
@@ -182,7 +187,9 @@ if A.bios:
             for root, _, files in os.walk(staging):
                 for f in files:
                     slug = next((s for s, rx in rules.items() if re.search(rx, f, re.I)), None)
-                    if slug and not f.lower().endswith(ARCH):
+                    if f.lower().endswith((".url", ".txt", ".nfo")):
+                        hold(os.path.join(root, f))
+                    elif slug and not f.lower().endswith(ARCH):
                         move(os.path.join(root, f), f"{BIOS}/{slug}/{f}")
                     else:
                         print(f"  left in bios/_unpacked (sort by hand): {archive}/{f}")
