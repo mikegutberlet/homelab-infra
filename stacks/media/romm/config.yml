@@ -15,6 +15,14 @@ system:
     PS1: psx
     PS2: ps2
     PSP: psp
+    # desktop-only consoles (docs/emulators.md): RomM lists them for download, no browser play
+    GameCube: ngc
+    Wii: wii
+    WiiU: wiiu
+    PS3: ps3
+    Xbox: xbox
+    Switch: switch
+    3DS: 3ds
 exclude:
   platforms:
     - BIOS files

@@ -241,7 +241,9 @@ as `/romm/library/bios`. Folders that match no platform (`BIOS files`, `_unpacke
 Metadata: Hasheous + PlayMatch (hash match), TheGamesDB, HowLongToBeat (no keys); IGDB,
 ScreenScraper, RetroAchievements and SteamGridDB when their keys are in `secrets.sops.env`
 (`docs/romm_keys.sh` fills them). Nightly quick rescan 05:00. `playbooks/rom-organize.yml` tidies
-the library (`--check` first; moves go to `/mnt/nfs/to-delete/<date>-roms/`, never deleted). Data in
+the library (`--check` first; moves go to `/mnt/nfs/to-delete/<date>-roms/`, never deleted). Consoles with no browser
+core (PS2 and newer) run in desktop emulators; `playbooks/emulator-kit.yml` keeps their installers
+in `Media/Games/emulators/` with the setup guide [`docs/emulators.md`](../../emulators.md). Data in
 `/opt/appdata/romm/{db,resources,assets}` (saves/states from in-browser play live in `assets`); the
 MariaDB is dumped nightly by the backup script.
 
