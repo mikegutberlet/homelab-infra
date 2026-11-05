@@ -13,6 +13,8 @@ holding folder /mnt/nfs/to-delete/<date>-roms/ with a manifest.tsv (src<TAB>dst)
                  extension into GB/GBColor/GBA/NDS (a name that already exists -> holding), then
                  the pack archive -> holding; needs 7z on the VM
   --bios         unpack "BIOS files/*" into Games/bios/<romm slug>/ (RomM's firmware folder)
+  --bios-names   rename firmware files to the names the emulators look for (md5 against RomM's
+                 known_bios_files.json, shipped next to this script); unknown hashes are left
   --nds-english  one region per NDS title: keep US copies, else EU/AU/UK, move the other
                  regions of that title (JP, FR, DE, IT, ES, KS...) -> holding
   --cleanup      rmdir the empty leftovers: "God of War II (...)", "Paste To Phone", the stray
@@ -20,6 +22,8 @@ holding folder /mnt/nfs/to-delete/<date>-roms/ with a manifest.tsv (src<TAB>dst)
 """
 import argparse
 import datetime
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -50,7 +54,7 @@ REGION = re.compile(r"\((US|EU|JP|FR|DE|IT|ES|KS|AU|UK|NL|CN|SE|DK|NO|FI|AS|CA)\
 ENGLISH, PREFERRED = {"US", "EU", "AU", "UK"}, "US"
 
 ap = argparse.ArgumentParser()
-for f in ("apply", "extract", "bios", "nds-english", "cleanup"):
+for f in ("apply", "extract", "bios", "bios-names", "nds-english", "cleanup"):
     ap.add_argument("--" + f, action="store_true")
 A = ap.parse_args()
 n_changes = 0
@@ -101,6 +105,8 @@ def unpack(archive, into):
     if A.apply:
         os.makedirs(into, exist_ok=True)
         r = subprocess.run([SEVENZ, "x", "-y", f"-o{into}", archive], capture_output=True, text=True)
+        if r.returncode and archive.lower().endswith(".rar") and shutil.which("unar"):
+            r = subprocess.run(["unar", "-q", "-f", "-o", into, archive], capture_output=True, text=True)
         if r.returncode:
             print(f"  could not unpack (left in place): {r.stderr.strip()[-200:]}")
             return False
@@ -149,6 +155,9 @@ for plat in ("PS2", "PSP", "GBA", "N64"):
         base, ext = os.path.splitext(f)
         if ext.lower() in ARCH and os.path.isdir(f"{ROMS}/{plat}/{base}"):
             hold(f"{ROMS}/{plat}/{f}")  # archive next to its own extracted folder
+for f in ls(f"{ROMS}/PSP"):  # PS2 mod archives filed under PSP; the unpacked ISOs sit in PS2/
+    if f.startswith("GTASA - A True Definitive") and f.endswith(".7z"):
+        hold(f"{ROMS}/PSP/{f}")
 if os.path.exists(f"{ROMS}/PS2/GoldenEye Compilation Pack (v1.1).7z"):
     hold(f"{ROMS}/PS2/GoldenEye Compilation Pack (v1.1).7z")  # N64 pack, already unpacked in N64/
 for f in ls(GAMES):
@@ -181,6 +190,8 @@ if A.bios:
         if not os.path.exists(src):
             continue
         staging = f"{BIOS}/_unpacked/{archive}"
+        if os.path.isdir(staging) and any(os.scandir(staging)):
+            continue  # done by an earlier run
         if not unpack(src, staging):
             continue
         if A.apply:
@@ -193,6 +204,28 @@ if A.bios:
                         move(os.path.join(root, f), f"{BIOS}/{slug}/{f}")
                     else:
                         print(f"  left in bios/_unpacked (sort by hand): {archive}/{f}")
+
+# ---- firmware file names --------------------------------------------------------------------------
+if A.bios_names:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "romm_known_bios.json")) as fh:
+        known = {}
+        for key, v in json.load(fh).items():
+            slug, name = key.split(":", 1)
+            known.setdefault(slug, {})[v["md5"]] = name
+    for slug in ls(BIOS):
+        if slug.startswith("_") or slug not in known:
+            continue
+        for f in ls(f"{BIOS}/{slug}"):
+            path = f"{BIOS}/{slug}/{f}"
+            if not os.path.isfile(path):
+                continue
+            with open(path, "rb") as fh:
+                md5 = hashlib.md5(fh.read()).hexdigest()
+            name = known[slug].get(md5)
+            if name is None:
+                print(f"  not a known {slug} firmware hash, left alone: {f}")
+            elif name != f:
+                rename(path, name)
 
 # ---- one region per NDS title -------------------------------------------------------------------
 if A.nds_english:

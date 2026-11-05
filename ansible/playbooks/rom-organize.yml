@@ -4,6 +4,7 @@
 #   ansible-playbook playbooks/rom-organize.yml --check                       # report only
 #   ansible-playbook playbooks/rom-organize.yml                               # safe moves + NDS renames
 #   ansible-playbook playbooks/rom-organize.yml -e extract=true -e bios=true  # unpack rompacks, BIOS
+#   ansible-playbook playbooks/rom-organize.yml -e bios_names=true            # emulator file names (md5)
 #   ansible-playbook playbooks/rom-organize.yml -e nds_english=true           # one region per NDS title
 #   ansible-playbook playbooks/rom-organize.yml -e cleanup=true               # rmdir empty leftovers
 # Afterwards: RomM > Scan (Complete) once, then the nightly quick rescan keeps up.
@@ -13,6 +14,7 @@
   vars:
     extract: false
     bios: false
+    bios_names: false
     nds_english: false
     cleanup: false
   tasks:
@@ -23,7 +25,7 @@
       when: extract | bool or bios | bool
     - name: 7zz reads .rar too (p7zip-rar is non-free); not on every release, so best effort
       ansible.builtin.apt:
-        name: 7zip
+        name: [7zip, unar]
         state: present
       failed_when: false
       when: extract | bool or bios | bool
@@ -33,9 +35,10 @@
       check_mode: false
     - name: Script onto the VM (copy)
       ansible.builtin.copy:
-        src: files/rom_organize.py
-        dest: /usr/local/lib/homelab/rom_organize.py
+        src: "files/{{ item }}"
+        dest: "/usr/local/lib/homelab/{{ item }}"
         mode: "0755"
+      loop: [rom_organize.py, romm_known_bios.json]
       check_mode: false
 
     - name: Run as storage
@@ -45,6 +48,7 @@
              + ([] if ansible_check_mode else ['--apply'])
              + (['--extract'] if extract | bool else [])
              + (['--bios'] if bios | bool else [])
+             + (['--bios-names'] if bios_names | bool else [])
              + (['--nds-english'] if nds_english | bool else [])
              + (['--cleanup'] if cleanup | bool else []) }}
       register: org
