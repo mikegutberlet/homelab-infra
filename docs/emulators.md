@@ -20,25 +20,16 @@ Media/Games/
 
 ## 1. Mount the Games share
 
-The NAS is `192.168.1.209` (TrueNAS, LAN only; works from home or over Tailscale when the NAS is
-on the tailnet). It serves `DeepData/NAS` over SMB and NFS. The SMB share name is whatever the
-TrueNAS **Shares > SMB** page shows; on the Mac this lists them:
+The NAS is `192.168.1.209` (TrueNAS, home network only). The SMB share is `NAS` (the whole
+`DeepData/NAS` dataset); log in as the TrueNAS user `storage` (guest is off). Checked 2026-11-05.
 
-```
-smbutil view //guest@192.168.1.209
-```
+**Mac:** Finder > Go > Connect to Server, `smb://storage@192.168.1.209/NAS`, enter the password
+and tick "Remember". Games is then `/Volumes/NAS/Media/Games`. To reconnect at login: System
+Settings > General > Login Items > add the `NAS` volume.
 
-**Mac:** Finder > Go > Connect to Server, `smb://192.168.1.209/<share>`, log in as `storage`
-(TrueNAS user). The share appears under `/Volumes/<share>`; Games is `/Volumes/<share>/Media/Games`.
-To reconnect at login: System Settings > General > Login Items > add the mounted volume.
-
-**Windows:** File Explorer > This PC > Map network drive, `\\192.168.1.209\<share>`, tick
-"Reconnect at sign-in", log in as `storage`. Below, `G:` stands for that drive, so Games is
-`G:\Media\Games`.
-
-If SMB asks for a user that does not exist, or the share is missing, it needs a one-time change in
-the TrueNAS UI (Shares > SMB > Add, path `/mnt/DeepData/NAS`, then enable SMB for the `storage`
-user under Credentials > Users). Nothing on the NAS is changed by this kit.
+**Windows:** File Explorer > This PC > Map network drive, drive `G:`, folder
+`\\192.168.1.209\NAS`, tick "Reconnect at sign-in" and "Connect using different credentials",
+user `storage`. Games is then `G:\Media\Games`.
 
 ## 2. Install the emulator you need
 
