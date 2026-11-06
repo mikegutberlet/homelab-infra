@@ -51,8 +51,11 @@ by Goobs and checked free before use; whether they sit outside the router's DHCP
 - Traefik uses the embedded outpost as a forward-auth middleware
   (`http://authentik-server:9000/outpost.goauthentik.io/auth/traefik`), passing
   `X-authentik-username`, `X-authentik-groups` and `X-authentik-email` to the app.
-- Only `akadmin` exists so far. There is no 2FA configured yet `(unverified)`; adding a TOTP stage
-  is a reasonable next step since one login now guards every admin UI.
+- Only `akadmin` exists so far. MFA: the default flow runs its authenticator-validation stage, and
+  `akadmin` had only a Static Token (backup codes) enrolled, so every login asked for a static code
+  (2026-11-05). `stacks/edge/authentik/setup_sessions.py` sets the login session and the MFA
+  re-check to 30 days; enroll a TOTP app or passkey under Settings > MFA Devices so the static codes
+  are backup only.
 - Apps **behind** Authentik: Sonarr, Radarr, Prowlarr, Bazarr, SABnzbd, qBittorrent, MeTube, RomM,
   ErsatzTV, Tdarr, Unmanic, Paperless, Stirling-PDF, n8n, Huginn, Homepage, Uptime Kuma, Scrutiny,
   OliveTin, Tautulli, Open WebUI, AnythingLLM, wg-easy.
