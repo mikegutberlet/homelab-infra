@@ -41,7 +41,7 @@ flowchart LR
 | Data | `/opt/appdata/authentik/db` (Postgres). Secrets: `AUTHENTIK_SECRET_KEY`, `AUTHENTIK_DB_PASSWORD` in the edge secrets |
 | Integration | Embedded outpost used by Traefik's `forwardAuth` middleware; response headers `X-authentik-username`, `X-authentik-groups`, `X-authentik-email`. Set up by `stacks/edge/authentik/setup_forward_auth.py` |
 | Health | Postgres and Redis have healthchecks; the server depends on them |
-| State | Working for all SSO apps. Only one user. No 2FA stage configured `(unverified)`. Users cannot change their own email (Authentik default); the admin edits it under Directory > Users |
+| State | Working for all SSO apps. Only one user. MFA stage on by default; sessions and MFA re-check set to 30 days by `stacks/edge/authentik/setup_sessions.py` (2026-11-05). Users cannot change their own email (Authentik default); the admin edits it under Directory > Users |
 
 ## TSDProxy
 
