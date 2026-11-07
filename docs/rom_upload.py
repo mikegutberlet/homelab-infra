@@ -10,6 +10,9 @@ place (.7z, .chd, unknown extensions) are listed and left alone. Goobs runs it o
 
     python3 docs/rom_upload.py ~/Downloads            # report only
     python3 docs/rom_upload.py ~/Downloads --apply    # copy + move the local files aside
+    python3 docs/rom_upload.py ~/Downloads --apply --put win=Reborn.zip --put mac=Rejuv-macos.zip
+
+--put places a file by hand; PC fan games (RPG Maker, Java) go to win / mac, download-only in RomM.
 
 Consoles get Goobs's existing folder names (GB, GBColor, GBA, NDS, N64, PS1, PS2, PSP); consoles
 not on the NAS yet get RomM's slug (nes, snes, genesis, ...), which RomM recognises without any
@@ -37,7 +40,14 @@ BY_EXT = {
 }
 DISC = {".iso", ".bin", ".img", ".mdf"}
 
-args = [a for a in sys.argv[1:] if not a.startswith("--")]
+args, forced, argv = [], {}, sys.argv[1:]
+while argv:
+    a = argv.pop(0)
+    if a == "--put":  # --put win=Reborn.zip : place a file by hand (PC fan games, odd extensions)
+        console, _, name = argv.pop(0).partition("=")
+        forced[name] = console
+    elif not a.startswith("--"):
+        args.append(a)
 if len(args) != 1:
     sys.exit(__doc__)
 src, apply = os.path.expanduser(args[0]), "--apply" in sys.argv
@@ -76,15 +86,25 @@ def iso_console(path):
     return None
 
 
+MD_MIN = 128 * 1024  # a .md smaller than this is a README, not a Mega Drive ROM
+
+
+def ext_console(name, size):
+    ext = os.path.splitext(name)[1].lower()
+    if ext == ".md" and size < MD_MIN:
+        return None
+    return BY_EXT.get(ext)
+
+
 def console_of(path):
     ext = os.path.splitext(path)[1].lower()
     if ext in BY_EXT:
-        return BY_EXT[ext]
+        return ext_console(path, os.path.getsize(path))
     if ext in DISC:
         return iso_console(path)
     if ext == ".zip":
         try:
-            inner = {BY_EXT.get(os.path.splitext(n)[1].lower()) for n in zipfile.ZipFile(path).namelist()}
+            inner = {ext_console(i.filename, i.file_size) for i in zipfile.ZipFile(path).infolist()}
         except zipfile.BadZipFile:
             return None
         inner.discard(None)
@@ -100,8 +120,10 @@ for f in sorted(os.listdir(src)):
     ext = os.path.splitext(f)[1].lower()
     if ext == ".cue":
         continue  # handled with its .bin
-    console = console_of(path)
+    console = forced.get(f) or console_of(path)
     if console is None:
+        if ext == ".md" and os.path.getsize(path) < MD_MIN:
+            continue  # a Markdown file
         if ext in BY_EXT or ext in DISC or ext in (".zip", ".7z", ".chd", ".rar"):
             skipped.append(f)
         continue
