@@ -41,7 +41,14 @@ while IFS= read -r -d '' f; do
   mkdir -p "$(dirname "$out")"
   if sqlite3 "$f" ".backup '$out'" 2>/dev/null; then
     # The copy must pass SQLite's own check before it counts (a corrupt source copies cleanly).
-    [ "$(sqlite3 "$out" 'PRAGMA quick_check' 2>/dev/null | head -1)" = ok ] || { log "ERROR: quick_check failed on the copy of $f"; rc=1; }
+    # Plex (ICU collations) and Audiobookshelf (newer SQL in its triggers) cannot be opened by the
+    # VM's sqlite3 at all; that is not corruption, so it is noted and the copy is kept.
+    chk=$(sqlite3 "$out" 'PRAGMA quick_check' 2>&1 | head -1)
+    case "$chk" in
+      ok) ;;
+      *"no such collation sequence"*|*"malformed database schema"*"syntax error"*) log "NOTE: cannot check the copy of $f with this sqlite3 ($chk)" ;;
+      *) log "ERROR: quick_check failed on the copy of $f"; rc=1 ;;
+    esac
     gzip -f "$out"
   else log "WARN: sqlite backup failed for $f"; rc=1; fi
 done < <(find /opt/appdata -xdev -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) \

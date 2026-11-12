@@ -183,7 +183,11 @@ const short = (x) => { let h = 5381; for (const ch of x) h = ((h * 33) ^ ch.char
 for (const app of ['sonarr', 'radarr']) {
   const a = md[app]; if (!a) continue;
   for (const hc of a.health || []) if (hc.type === 'error' && wasError(pmd[app], hc)) add(`${app}-health:${hc.source}`, 'warning', `${app}: ${hc.message}`, hint(hc));
-  const stuck = a.stuck || [];
+  // A Usenet item at 0% is waiting its turn in SABnzbd's queue (SABnzbd shows every slot as
+  // "Downloading"), not stuck: it fails by itself when the articles are gone. 2026-11-11: 46 such
+  // items were blocklisted after the outage aged a 283-item queue past STUCK_BLOCKLIST_H.
+  const waiting = (q) => q.protocol === 'usenet' && q.tdstate === 'downloading' && q.tds === 'ok' && q.size && q.sizeleft === q.size;
+  const stuck = (a.stuck || []).filter((q) => !waiting(q));
   if (stuck.length > S.QUEUE_CRIT) add(`${app}-queue`, 'critical', `${app}: ${stuck.length} queue items stuck or failed`, stuck.slice(0, 5).map((q) => q.title).join('; '));
   const groups = new Map();
   for (const q of stuck) {
@@ -191,7 +195,7 @@ for (const app of ['sonarr', 'radarr']) {
     let kind = null;
     if ((q.tdstate === 'importBlocked' || q.tdstate === 'importPending' || q.status === 'failed' || q.tds === 'error') && (q.age_h || 0) >= S.STUCK_RETRY_H) kind = 'blocked';
     else if (q.tds === 'warning' && (q.age_h || 0) >= S.STUCK_RETRY_H) kind = 'decision';
-    else if (q.tdstate === 'downloading' && (q.age_h || 0) >= S.STUCK_BLOCKLIST_H && q.size && q.sizeleft === q.size)
+    else if (q.tdstate === 'downloading' && (q.age_h || 0) >= S.STUCK_BLOCKLIST_H && q.size && q.sizeleft === q.size && (sys.uptime_s || 0) >= S.STUCK_BLOCKLIST_H * 3600) // the VM must have been up that long too
       add(`${app}-dead:${q.id}`, 'warning', `${app}: "${q.title}" has downloaded nothing in ${q.age_h} h`, `${q.protocol}; blocklist and search again`, S.BLOCKLIST_ENABLED ? { verb: 'arr-blocklist', target: `${app} ${q.id}`, app, id: q.id } : null);
     if (!kind) continue;
     const gk = `${q.ref == null ? q.title : q.ref}|${kind}|${q.tdstate || q.status}|${same(msg)}`;
