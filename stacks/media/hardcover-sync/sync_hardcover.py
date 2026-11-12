@@ -27,6 +27,7 @@ HARDCOVER = "https://api.hardcover.app/v1/graphql"
 CHAPTARR, LISTENARR = "http://chaptarr:8789/api/v1", "http://listenarr:4545/api/v1"
 INTERVAL_MIN = int(os.environ.get("INTERVAL_MIN", "60"))
 RETRY_HOURS = int(os.environ.get("RETRY_HOURS", "24"))
+IDLE_WAIT_MIN = int(os.environ.get("IDLE_WAIT_MIN", "30"))  # longest wait for Chaptarr to go idle
 BOOKS_ROOT = os.environ.get("BOOKS_ROOT", "/mnt/nfs/Media/Books")
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
 # Audible editions Goobs does not want (e.g. a dramatization); a book whose match is one of these is
@@ -43,11 +44,11 @@ query { me { user_books(where: {status_id: {_eq: 1}}, order_by: {date_added: asc
 misses = {}  # (app, hardcover book id) -> time of the last miss; retried after RETRY_HOURS
 
 
-def call(url, headers, body=None, method=None):
+def call(url, headers, body=None, method=None, timeout=120):
     req = urllib.request.Request(url, method=method or ("POST" if body is not None else "GET"),
                                  data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Content-Type": "application/json", "User-Agent": UA, **headers})
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = resp.read()
     return json.loads(data) if data else None
 
@@ -107,7 +108,21 @@ class Chaptarr:
         # (2026-11-03, 10 passes each) although the file was already there.
         self.titles = {norm(b.get("title")) for b in rows}
 
+    def wait_idle(self):
+        # Each add makes Chaptarr load the author's whole catalogue in the background. Sending the next
+        # request before that finishes left SQLite "database is locked", 120 s timeouts and a 500 on
+        # the first live pass (2026-11-03, 21 of 33 failed), so wait until its command queue is empty.
+        deadline = time.time() + IDLE_WAIT_MIN * 60
+        while time.time() < deadline:
+            busy = [c for c in call(f"{CHAPTARR}/command", self.h) or []
+                    if str(c.get("status", "")).lower() in ("queued", "started")]
+            if not busy:
+                return
+            time.sleep(15)
+        raise RuntimeError(f"still busy after {IDLE_WAIT_MIN} min")
+
     def add(self, book):
+        self.wait_idle()
         term = urllib.parse.quote(f"{book['title']} {' '.join(book['authors'][:1])}")
         # goodreads, as its Add New page searches here: the hardcover provider needs a Hardcover token
         # in Chaptarr's own settings and otherwise answers 503 "Hardcover search failed".
@@ -145,7 +160,7 @@ class Chaptarr:
         if not any(e.get("monitored") for e in editions):
             editions[0].update({"monitored": True, "manualAdd": False})
         hit["editions"] = editions
-        call(f"{CHAPTARR}/book", self.h, hit)
+        call(f"{CHAPTARR}/book", self.h, hit, timeout=600)
         self.have.add(str(hit.get("foreignBookId") or fid))
         self.titles.add(norm(hit.get("title")))
         return "added, search started"
