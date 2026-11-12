@@ -1,0 +1,22 @@
+# Two Listenarr leftovers from the 2026-11-05 audiobook pass (files/audiobook_fixups.py has the
+# titles): add the four Hardcover titles the Want to Read sync never matched, and import Bad Blood
+# by hand from the SABnzbd folder its import got blocked on. Run from the Mac:
+#   ansible-playbook playbooks/audiobook-fixups.yml --check   # report only: present / would add / would import
+#   ansible-playbook playbooks/audiobook-fixups.yml           # apply; prints what is left for Goobs
+#   ... -e source='/mnt/nfs/sabnzb/complete/audiobooks/<folder>'   # when more than one Bad Blood folder matches
+- name: Audiobook fixups (Listenarr)
+  hosts: media
+  become: true
+  tasks:
+    - name: Apply (python3 on the VM; the Listenarr API key is read from the stack's .env)
+      ansible.builtin.script:
+        cmd: "files/audiobook_fixups.py {{ '--dry-run' if ansible_check_mode else '' }} {{ ('--source ' ~ (source | quote)) if source is defined else '' }}"
+        executable: /usr/bin/python3
+      register: fixups
+      check_mode: false
+      changed_when: "'changed: 0;' not in fixups.stdout and 'would change: 0;' not in fixups.stdout"
+      failed_when: fixups.rc != 0
+
+    - name: Result
+      ansible.builtin.debug:
+        msg: "{{ fixups.stdout_lines }}"
