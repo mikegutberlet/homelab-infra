@@ -203,7 +203,11 @@ upstream bugs [#111](https://github.com/Chaptarr/chaptarr/issues/111) and
 [#323](https://github.com/Chaptarr/chaptarr/issues/323), no fixed release yet. Only rows: one file
 per book on disk, one grab per book in history. `playbooks/chaptarr-dedupe.yml` (`--check` first)
 keeps every row with files, else one row per author and title, and deletes the rest from the
-database only. Run it again if a later author refresh brings them back. The sync also matches
+database only. **It does not stick on 0.9.965**: the first apply (2026-11-04 02:16Z) removed 2,368
+rows and Chaptarr recreated 2,213 of them within two minutes (48 new "1984" rows at 02:18Z, right
+after the next refresh), as #111 warns. Until upstream fixes row creation, leave the duplicates:
+they cost no files and no downloads (one grab and one file per book in history and on disk).
+Keep the playbook for a fixed release. The sync also matches
 "already there" by title now, after Snow Crash and Starship Troopers were re-added every hour
 because Chaptarr stored them under another work id than its search returns.
 
