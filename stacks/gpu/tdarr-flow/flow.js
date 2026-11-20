@@ -11,7 +11,8 @@
 //   - keep English + the title's original language + und/untagged + forced subs; drop other
 //     dubs and commentary (never drop the last audio track)
 //   - replace only if the result is at least 20% smaller and passes a full decode check
-//   - same file name (extension becomes .mkv), copied to Media/.tdarr-staging and renamed into place;
+//   - same file name (extension becomes .mkv), copied to Media/.tdarr-staging (at 30 MB/s, so the
+//     copy cannot starve Plex's streams) and renamed into place;
 //     every original is moved to the NAS holding folder
 //     (to-delete/tdarr-originals/<date>/...), never deleted here; tdarr-upkeep deletes a day's
 //     originals after 14 days, only where the replacement made it into place (Goobs, 2026-11-02)
@@ -32,6 +33,10 @@ const STAGING = '/mnt/nfs/Media/.tdarr-staging';
 // Fresh maps from tdarr-upkeep (both nodes see this folder); the copies in CFG are the fallback.
 const MAPS = `${STAGING}/maps`;
 const MIN_FREE = 3e12;
+// Copies to the NAS run at this rate, not flat out. A plain cp filled the VM's 1 GbE link for the
+// 10-60 s it took; measured on the gpu VM 2026-11-20: a 2 MB read from the NAS went from 0.1 s to
+// 0.6-1.9 s and the ping to a Roku from 3 ms to 210 ms, and Plex streams froze.
+const COPY_BPS = 30e6;
 const MIN_BPS = 5.5e6;
 const LOG = '/app/logs/hevc-run.tsv';
 const LIBS = {
@@ -53,6 +58,25 @@ const LANGS = {
 
 const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return d; } };
 const log = (row) => fs.appendFileSync(LOG, `${[new Date().toISOString(), ...row].join('\t')}\n`);
+
+// fdatasync after every chunk, or the page cache saves the file up and flushes it in one burst.
+async function copyThrottled(from, to) {
+  const buf = Buffer.allocUnsafe(4 << 20);
+  const src = fs.openSync(from, 'r');
+  const dst = fs.openSync(to, 'w', fs.fstatSync(src).mode);
+  try {
+    const t0 = Date.now();
+    let done = 0;
+    let n;
+    while ((n = fs.readSync(src, buf, 0, buf.length, null)) > 0) {
+      for (let off = 0; off < n;) off += fs.writeSync(dst, buf, off, n - off);
+      fs.fdatasyncSync(dst);
+      done += n;
+      const early = done / COPY_BPS * 1000 - (Date.now() - t0);
+      if (early > 0) await new Promise((r) => setTimeout(r, early));
+    }
+  } finally { fs.closeSync(src); fs.closeSync(dst); }
+}
 
 function rescan(arr, id) {
   const key = fs.readFileSync(`${CFG}/${arr.key}`, 'utf8').trim();
@@ -187,7 +211,8 @@ module.exports = async (args) => {
   const dest = path.join(path.dirname(src), `${base}.mkv`);
   fs.mkdirSync(STAGING, { recursive: true });
   const tmp = path.join(STAGING, `${kind}-${item.id}-${path.basename(dest)}`);
-  if (spawnSync('cp', [work, tmp]).status !== 0 || fs.statSync(tmp).size !== newSize) throw new Error('copy to NAS failed');
+  const copied = await copyThrottled(work, tmp).then(() => true, () => false);
+  if (!copied || fs.statSync(tmp).size !== newSize) throw new Error('copy to NAS failed');
   fs.unlinkSync(work);
   // Retire the original into the holding folder (copy, verify size, then remove the source).
   const day = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
