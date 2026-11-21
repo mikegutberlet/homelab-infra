@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -60,7 +61,9 @@ def qbit(path, data=None):
 
 
 def seed_limits():
-    want = {"ratioLimit": -1, "seedingTimeLimit": SEED_HOURS * 60, "inactiveSeedingTimeLimit": -1}
+    # shareLimitAction: qBittorrent 5.2 answers 400 without it; Default = the global action (stop).
+    want = {"ratioLimit": -1, "seedingTimeLimit": SEED_HOURS * 60, "inactiveSeedingTimeLimit": -1,
+            "shareLimitAction": "Default"}
     todo = [t for t in qbit("torrents/info")
             if "myanonamouse" in (t.get("tracker") or "")
             and (t.get("ratio_limit"), t.get("seeding_time_limit"), t.get("inactive_seeding_time_limit"))
@@ -78,7 +81,9 @@ def main():
             try:
                 job()
             except Exception as exc:  # keep running; next hour retries
-                print(f"{job.__name__}: failed: {exc}", file=sys.stderr, flush=True)
+                # MAM and qBittorrent say why in the body ("Invalid session", a missing parameter).
+                body = exc.read().decode(errors="replace")[:200] if isinstance(exc, urllib.error.HTTPError) else ""
+                print(f"{job.__name__}: failed: {exc} {body}".rstrip(), file=sys.stderr, flush=True)
         if os.environ.get("ONCE", "false").lower() == "true":
             return
         time.sleep(INTERVAL_MIN * 60)
