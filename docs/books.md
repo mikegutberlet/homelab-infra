@@ -106,9 +106,13 @@ Seeding (2026-11-05): MAM counts a torrent as satisfied after 72 h of seeding, r
 stack's global qBittorrent rule (ratio 1.0 or 3 days, or 12 h without an upload, see
 `docs/torrent-fallback.md`) would stop most MAM torrents earlier. So the same hourly pass gives every
 torrent whose tracker is MAM its own share limits in qBittorrent (localhost inside gluetun's
-namespace, no login): no ratio cap, no inactivity cap, `SEED_HOURS` (72) of seeding; qBittorrent
+namespace, no login): no ratio cap, no inactivity cap, `SEED_HOURS` of seeding; qBittorrent
 then pauses it and Chaptarr/Listenarr remove it as they do for any finished torrent (both wait for
 the seed limit). Other torrents keep the global rule. `DRY_RUN=true` lists what it would set.
+`SEED_HOURS` is 144, twice MAM's minimum (Goobs, 2026-11-20, after a demotion: the limits call had
+been failing on qBittorrent 5.2 since 2026-11-05, so the 12 h-idle rule stopped both MAM torrents at
+12 h, and then the VPN was down for 8 days). The pass also starts any MAM torrent it finds stopped
+short of `SEED_HOURS`; to stop one for good, remove it.
 
 qBittorrent is pinned to 5.2.4 (`stacks/media/compose.yaml`) and off the sysadmin's auto-update list:
 MAM only allows listed client versions and 5.3 was not on it (2026-11-05). Move the pin when MAM's

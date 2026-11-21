@@ -7,11 +7,12 @@ without a login. Two jobs:
    GET https://t.myanonamouse.net/json/dynamicSeedbox.php moves the session to the caller's IP
    ("Completed") or answers "No change". The cookie jar /data/cookies.txt keeps the current id
    (MAM may rotate it); MAM_ID only seeds the jar while it holds none.
-2. Seeding: MAM counts a torrent as satisfied after SEED_HOURS of seeding (72 h), ratio aside, and
+2. Seeding: MAM counts a torrent as satisfied after 72 h of seeding, ratio aside, and
    qBittorrent's global rule (ratio 1.0 or 3 days, or 12 h without an upload) would stop earlier.
    Every torrent whose tracker is MAM gets its own share limits: no ratio cap, no inactivity cap,
-   SEED_HOURS of seeding, then qBittorrent pauses it and Chaptarr/Listenarr remove it as usual.
-   Other torrents keep the global rule.
+   SEED_HOURS of seeding (144 in compose: twice the minimum, Goobs 2026-11-20), then qBittorrent
+   pauses it and Chaptarr/Listenarr remove it as usual. A MAM torrent found stopped short of
+   SEED_HOURS is started again. Other torrents keep the global rule.
 
 ONCE=true runs both once and exits. DRY_RUN=true reports the share limits it would set.
 --new-session stores a new mam_id from stdin in the jar and asks MAM once (docs/books.md).
@@ -69,15 +70,23 @@ def seed_limits():
     # shareLimitAction: qBittorrent 5.2 answers 400 without it; Default = the global action (stop).
     want = {"ratioLimit": -1, "seedingTimeLimit": SEED_HOURS * 60, "inactiveSeedingTimeLimit": -1,
             "shareLimitAction": "Default"}
-    todo = [t for t in qbit("torrents/info")
-            if "myanonamouse" in (t.get("tracker") or "")
-            and (t.get("ratio_limit"), t.get("seeding_time_limit"), t.get("inactive_seeding_time_limit"))
+    mam = [t for t in qbit("torrents/info") if "myanonamouse" in (t.get("tracker") or "")]
+    todo = [t for t in mam
+            if (t.get("ratio_limit"), t.get("seeding_time_limit"), t.get("inactive_seeding_time_limit"))
             != (-1, want["seedingTimeLimit"], -1)]
     for t in todo:
         log(f"seeding: {SEED_HOURS} h, no ratio cap: {t['name']}")
     if todo and not DRY_RUN:
         qbit("torrents/setShareLimits", {"hashes": "|".join(t["hash"] for t in todo), **want})
     log(f"seeding: {len(todo)} MAM torrents set{' (dry run)' if DRY_RUN else ''}")
+    # New limits do not restart a torrent. One that stopped short of SEED_HOURS (the global 12 h-idle
+    # rule got there first on 2026-11-05, or the target was raised) is started again; one that
+    # reached it stays stopped. This also undoes a stop by hand: remove the torrent instead.
+    short = [t for t in mam if t.get("state") == "stoppedUP" and t.get("seeding_time", 0) < SEED_HOURS * 3600]
+    for t in short:
+        log(f"seeding: started again at {t.get('seeding_time', 0) // 3600} of {SEED_HOURS} h: {t['name']}")
+    if short and not DRY_RUN:
+        qbit("torrents/start", {"hashes": "|".join(t["hash"] for t in short)})
 
 
 def why(exc):
