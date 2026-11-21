@@ -50,6 +50,12 @@ ssh goobs@192.168.1.50 'sudo docker logs --tail 100 edge-traefik-1 2>&1 | grep -
 # gluetun exit IP and forwarded port
 ssh goobs@192.168.1.51 'sudo docker exec media-gluetun-1 wget -qO- https://ipinfo.io/ip; sudo docker logs --tail 20 media-gluetun-1 | grep -i port'
 
+# VPN cannot connect (gluetun log repeats "UDPv4 link remote: [AF_INET]<ip>:1197" and never
+# reaches "Initialization Sequence Completed"): compare <ip> with `getent hosts
+# ca-vancouver.privacy.network`. If they differ, gluetun's PIA server list is stale (2026-11-13);
+# refresh it, gluetun picks it up on its next start
+ssh goobs@192.168.1.51 'sudo docker stop media-gluetun-1; sudo docker run --rm -v /opt/appdata/gluetun:/gluetun qmcgaw/gluetun:v3.40 update -enduser -providers "private internet access"; sudo docker start media-gluetun-1'
+
 # Host health
 ssh root@192.168.1.137 'pvecm status | grep -e Quorate -e Expected; free -h; qm list'
 ```

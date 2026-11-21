@@ -109,6 +109,12 @@ services:
       SERVER_REGIONS: ${PIA_REGION}
       PORT_FORWARD_ONLY: "on" # PIA has no port forwarding in US regions
       VPN_PORT_FORWARDING: "on"
+      # gluetun dials PIA by IP from a server list, and without this it only knows the list baked
+      # into the image (v3.40: August 2024). PIA moved Vancouver to new addresses and switched the
+      # old ones off on 2026-11-13, and the tunnel stayed down for 8 days dialing dead servers.
+      # Refreshes the list daily while the tunnel is up (/gluetun/servers.json). If it is ever
+      # stale with the tunnel down: docs/wiki/operations/troubleshooting.md "VPN cannot connect".
+      UPDATER_PERIOD: 24h
       # HTTP proxy on gluetun:8888 (compose network only, not published): Prowlarr's torrent
       # indexers are tagged `vpn` and fetch tracker pages and .torrent files through it, so
       # searches leave through PIA too, not the home IP (2026-10-26, docs/torrent-fallback.md).
@@ -146,6 +152,12 @@ services:
       - ./mam-seedbox:/app:ro
       - /opt/appdata/mam-seedbox:/data
     depends_on: [gluetun]
+    # Same reason as qBittorrent's check: after a gluetun restart this container sits in a dead
+    # network namespace, and without a check autoheal never re-attached it (2026-11-20).
+    healthcheck:
+      <<: *arr-health
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('https://api.ipify.org', timeout=10)"]
+      retries: 6
 
   # Fallback to Usenet only (docs/torrent-fallback.md): Sonarr/Radarr reach it at gluetun:8085,
   # downloads go to /mnt/nfs/sabnzb/torrents (same export as the libraries, so hardlinks).
