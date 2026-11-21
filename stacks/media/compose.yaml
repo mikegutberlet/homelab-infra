@@ -155,7 +155,7 @@ services:
     environment:
       TZ: ${TZ}
       MAM_ID: ${MAM_ID}
-      SEED_HOURS: "72"
+      SEED_HOURS: "144" # twice MAM's 72 h minimum (Goobs, 2026-11-20, after a demotion)
     volumes:
       - ./mam-seedbox:/app:ro
       - /opt/appdata/mam-seedbox:/data
