@@ -118,8 +118,11 @@ services:
       # gluetun v3.40 dials PIA on UDP 1197, the old "strong" port. On PIA's new Vancouver servers
       # only 1 of 17 addresses still answers there; 15 of 17 answer on 8080, the port PIA's server
       # list advertises (probe from this VM, 2026-11-20). On 1197 every reconnect was a lottery
-      # that took minutes. Same encryption and certificate; newer gluetun defaults to 8080 too.
+      # that took minutes. On 8080 the servers refuse v3.40's AES-256-CBC ("AUTH_FAILED,Data channel
+      # cipher negotiation failed (no shared cipher)"), so offer AES-256-GCM. Port and cipher are
+      # what newer gluetun uses for PIA by default; drop both lines when the image is upgraded.
       OPENVPN_ENDPOINT_PORT: "8080"
+      OPENVPN_CIPHERS: aes-256-gcm
       # HTTP proxy on gluetun:8888 (compose network only, not published): Prowlarr's torrent
       # indexers are tagged `vpn` and fetch tracker pages and .torrent files through it, so
       # searches leave through PIA too, not the home IP (2026-10-26, docs/torrent-fallback.md).
