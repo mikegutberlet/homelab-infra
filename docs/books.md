@@ -109,10 +109,22 @@ torrent whose tracker is MAM its own share limits in qBittorrent (localhost insi
 namespace, no login): no ratio cap, no inactivity cap, `SEED_HOURS` of seeding; qBittorrent
 then pauses it and Chaptarr/Listenarr remove it as they do for any finished torrent (both wait for
 the seed limit). Other torrents keep the global rule. `DRY_RUN=true` lists what it would set.
-`SEED_HOURS` is 144, twice MAM's minimum (Goobs, 2026-11-20, after a demotion: the limits call had
-been failing on qBittorrent 5.2 since 2026-11-05, so the 12 h-idle rule stopped both MAM torrents at
-12 h, and then the VPN was down for 8 days). The pass also starts any MAM torrent it finds stopped
-short of `SEED_HOURS`; to stop one for good, remove it.
+`SEED_HOURS` is 720 (30 days; Goobs, 2026-11-21). It was 72, then 144 after a demotion: the limits
+call had been failing on qBittorrent 5.2 since 2026-11-05, so the 12 h-idle rule stopped both MAM
+torrents at 12 h, and then the VPN was down for 8 days. The pass also starts any MAM torrent it finds
+stopped short of `SEED_HOURS`; to stop one for good, remove it.
+
+Ratio is a separate rule (2026-11-21). MAM wants a global ratio of 1.0 (rule 2.4) as well as 72 h of
+seeding per torrent within 30 days (rule 2.5). Under 1.0 the account drops to Mouse rank and the
+tracker refuses new downloads: qBittorrent shows the torrent stalled at 0% with the tracker message
+"User currently mouse rank, you need to get your ratio up!". Popular audiobooks have dozens of
+seeders and no leechers, so seeding uploads nothing; the ratio comes from upload credit bought with
+bonus points in MAM's store, and seeding is what earns the points. Hence 30 days. Buying credit is
+Goobs's click on the site: MAM's rule 1.7 forbids automating anything but its documented API, and
+the lab only ever uses the `mam_id` session (this job's dynamicSeedbox call, Prowlarr's searches),
+never a password login. `~/HomeLab/vpn/mam_check.py` on the Mac (run it through
+`sudo docker exec -i media-mam-seedbox-1 python -`) prints each MAM torrent's seeding hours and
+the tracker's message.
 
 qBittorrent is pinned to 5.2.4 (`stacks/media/compose.yaml`) and off the sysadmin's auto-update list:
 MAM only allows listed client versions and 5.3 was not on it (2026-11-05). Move the pin when MAM's
