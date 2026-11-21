@@ -14,6 +14,7 @@ without a login. Two jobs:
    Other torrents keep the global rule.
 
 ONCE=true runs both once and exits. DRY_RUN=true reports the share limits it would set.
+--new-session stores a new mam_id from stdin in the jar and asks MAM once (docs/books.md).
 """
 import http.cookiejar
 import json
@@ -36,6 +37,11 @@ def log(msg):
     print(f"{time.strftime('%F %T')} {msg}", flush=True)
 
 
+def mam_cookie(mam_id):
+    return http.cookiejar.Cookie(0, "mam_id", mam_id, None, False, ".myanonamouse.net", True, True,
+                                 "/", False, True, None, False, None, None, {})
+
+
 def session_ip():
     jar = http.cookiejar.MozillaCookieJar(JAR)
     if os.path.exists(JAR):
@@ -45,8 +51,7 @@ def session_ip():
         if not mam_id:
             log("MAM_ID is empty: no MyAnonamouse session yet (docs/books.md)")
             return
-        jar.set_cookie(http.cookiejar.Cookie(0, "mam_id", mam_id, None, False, ".myanonamouse.net", True, True,
-                                             "/", False, True, None, False, None, None, {}))
+        jar.set_cookie(mam_cookie(mam_id))
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
     with opener.open(MAM, timeout=30) as resp:
         log(f"session: {resp.read().decode()[:200]}")
@@ -75,15 +80,36 @@ def seed_limits():
     log(f"seeding: {len(todo)} MAM torrents set{' (dry run)' if DRY_RUN else ''}")
 
 
+def why(exc):
+    """MAM and qBittorrent say why in the reply body ("Invalid session", a missing parameter)."""
+    body = exc.read().decode(errors="replace")[:200] if isinstance(exc, urllib.error.HTTPError) else ""
+    return f"{exc} {body}".rstrip()
+
+
+def new_session():
+    """Replace the session: the new mam_id comes on stdin, never on a command line or the screen."""
+    mam_id = sys.stdin.read().strip()
+    if not mam_id:
+        sys.exit("No mam_id on stdin; nothing changed.")
+    jar = http.cookiejar.MozillaCookieJar(JAR)
+    jar.set_cookie(mam_cookie(mam_id))
+    jar.save(ignore_discard=True)
+    log(f"jar: new mam_id stored ({len(mam_id)} characters)")
+    try:
+        session_ip()
+    except Exception as exc:
+        sys.exit(f"MAM call failed (the id is stored, the hourly pass retries): {why(exc)}")
+
+
 def main():
+    if "--new-session" in sys.argv:
+        return new_session()
     while True:
         for job in (session_ip, seed_limits):
             try:
                 job()
             except Exception as exc:  # keep running; next hour retries
-                # MAM and qBittorrent say why in the body ("Invalid session", a missing parameter).
-                body = exc.read().decode(errors="replace")[:200] if isinstance(exc, urllib.error.HTTPError) else ""
-                print(f"{job.__name__}: failed: {exc} {body}".rstrip(), file=sys.stderr, flush=True)
+                print(f"{job.__name__}: failed: {why(exc)}", file=sys.stderr, flush=True)
         if os.environ.get("ONCE", "false").lower() == "true":
             return
         time.sleep(INTERVAL_MIN * 60)

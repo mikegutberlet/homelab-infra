@@ -120,11 +120,17 @@ Setup, in this order (the session must be created for the VPN's IP, not the home
 
 1. Join: https://www.myanonamouse.net/inviteapp.php (interview over their IRC, a few minutes).
 2. Read the VPN's current IP: `sudo docker exec media-gluetun-1 wget -qO- https://ipinfo.io/ip`.
-3. MAM → Preferences → Security → create a session for that IP with "Allow session to set dynamic
-   seedbox IP" ticked (IP-locked is fine, the updater moves it). Copy the `mam_id`.
+3. MAM → Preferences → Security → create a session for that IP, **ASN-locked**, with "Allow session
+   to set dynamic seedbox IP" ticked. Copy the `mam_id`. Not IP-locked: PIA's exit IP changes with
+   every reconnect, and MAM answers an IP-locked session from another IP with 403 "Invalid session -
+   IP mismatch" (2026-11-20, after PIA moved Vancouver; the updater cannot move such a session).
 4. `sops stacks/media/secrets.sops.env`, add `MAM_ID=<the cookie>`; deploy media
    (`playbooks/site.yml --limit media --tags stacks`); check
    `sudo docker logs media-mam-seedbox-1` says Completed or No change.
+   Replacing a session later: the jar wins over `MAM_ID`, so hand the new id to the job on stdin
+   (zsh on the Mac; nothing is shown or stored there), then paste the same id into Prowlarr's
+   MyAnonamouse indexer:
+   `read -s "ID?mam_id: " && printf %s "$ID" | ssh goobs@192.168.1.51 'sudo docker exec -i media-mam-seedbox-1 python /app/mam_seedbox.py --new-session'; unset ID`
 5. Prowlarr → Indexers → add **MyAnonamouse** (the same `mam_id`), tag `vpn`, sync to Chaptarr
    (Readarr app) on; seed criteria Seed Time 4320, Seed Ratio empty (belt and braces: the hourly
    pass above sets the same per torrent).
