@@ -3,7 +3,7 @@
 // hourly trend points). Rules live here; the decision about emails and fixes is in Decide.
 const sd = $getWorkflowStaticData('global');
 sd.last = sd.last || {}; sd.rs = sd.rs || {}; sd.trends = sd.trends || {}; sd.tdarr = sd.tdarr || {};
-sd.held = sd.held || {}; sd.rsTotal = sd.rsTotal || {};
+sd.held = sd.held || {}; sd.rsTotal = sd.rsTotal || {}; sd.vpnDown = sd.vpnDown || {};
 const r = $input.first().json.body || $input.first().json;
 const host = r.host;
 if (!host) return [{ json: { host: 'unknown', issues: [], ignored: true } }];
@@ -239,6 +239,15 @@ if (md.sabnzbd) {
 if (md.qbittorrent) {
   const q = md.qbittorrent;
   if (q.exit_ip && q.vpn_ok === false) add('qb-vpn', 'critical', 'qBittorrent is NOT behind the VPN', `exit IP ${q.exit_ip} equals the home IP`, { verb: 'restart', target: 'gluetun', then: 'qbittorrent' });
+  // No exit IP. Short drops are normal (PIA reconnects, gluetun restarts) and heal on their own, so
+  // the first VPN_DOWN_CRIT_MIN are a warning. Longer than that while the VM itself is online is the
+  // 2026-11-13 case: PIA replaced its Vancouver servers and the tunnel stayed down for 8 days as a
+  // warning in the digest. The timer runs only while the home IP is known, so an internet outage
+  // (or ipify being down) does not count as a VPN fault.
+  if (q.exit_ip || !q.home_ip) delete sd.vpnDown[host];
+  else if (!sd.vpnDown[host]) sd.vpnDown[host] = now;
+  const vpnDownMs = sd.vpnDown[host] ? now - sd.vpnDown[host] : 0;
+  if (!q.exit_ip && vpnDownMs >= S.VPN_DOWN_CRIT_MIN * 60e3) add('qb-vpn', 'critical', `The torrent VPN has been down for over ${dur(S.VPN_DOWN_CRIT_MIN * 60e3)}`, `gluetun has had no exit through PIA since ${fmtT(sd.vpnDown[host])} while the VM itself is online. Torrents and the MAM seeding job are stopped, and restarts have not helped. Usual cause: PIA changed its servers, port or cipher (docs/wiki/operations/troubleshooting.md, "VPN cannot connect")`, { verb: 'restart', target: 'gluetun', then: 'qbittorrent' });
   else if (!q.exit_ip) add('qb-vpn', 'warning', 'gluetun has no internet through PIA', 'tunnel down or reconnecting', { verb: 'restart', target: 'gluetun', then: 'qbittorrent' });
   // Agent v3: forwarded_port is the port PIA forwarded (gluetun's file), listen_port qBittorrent's
   // own setting, qb_api whether qBittorrent answered at all. Older agents sent no listen_port.
