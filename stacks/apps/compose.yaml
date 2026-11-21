@@ -125,7 +125,7 @@ services:
     image: stirlingtools/stirling-pdf:latest
     mem_limit: 2g
     environment:
-      DOCKER_ENABLE_SECURITY: "false" # Authentik handles login
+      SECURITY_ENABLELOGIN: "false" # Authentik handles login (3.x ignores DOCKER_ENABLE_SECURITY)
     ports: ["8070:8080"]
     volumes:
       - /opt/appdata/stirling-pdf:/configs
