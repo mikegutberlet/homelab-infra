@@ -10,7 +10,7 @@ without a login. Two jobs:
 2. Seeding: MAM counts a torrent as satisfied after 72 h of seeding, ratio aside, and
    qBittorrent's global rule (ratio 1.0 or 3 days, or 12 h without an upload) would stop earlier.
    Every torrent whose tracker is MAM gets its own share limits: no ratio cap, no inactivity cap,
-   SEED_HOURS of seeding (144 in compose: twice the minimum, Goobs 2026-11-20), then qBittorrent
+   SEED_HOURS of seeding (720 in compose: 30 days, for bonus points; Goobs 2026-11-21), then qBittorrent
    pauses it and Chaptarr/Listenarr remove it as usual. A MAM torrent found stopped short of
    SEED_HOURS is started again. Other torrents keep the global rule.
 

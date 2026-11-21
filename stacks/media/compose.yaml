@@ -155,7 +155,10 @@ services:
     environment:
       TZ: ${TZ}
       MAM_ID: ${MAM_ID}
-      SEED_HOURS: "144" # twice MAM's 72 h minimum (Goobs, 2026-11-20, after a demotion)
+      # 30 days (Goobs, 2026-11-21). MAM's rule is 72 h within 30 days (rule 2.5), but the demotion was
+      # Mouse rank: global ratio under 1.0 (rule 2.4) with nobody to upload to. Seeding earns the bonus
+      # points that buy upload credit, so MAM torrents seed long, not just past the minimum.
+      SEED_HOURS: "720"
     volumes:
       - ./mam-seedbox:/app:ro
       - /opt/appdata/mam-seedbox:/data
