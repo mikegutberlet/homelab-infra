@@ -206,10 +206,15 @@ services:
   # rest of the torrent path, and Prowlarr reaches it at http://gluetun:8191 (set in Prowlarr's
   # FlareSolverr indexer proxy by playbooks/torrent-hardening.yml). No published port. Headless
   # Chromium, so 300-500 MB RAM. Added 2026-10-22 on Goobs's OK.
+  # 2026-11-21 trial: the image is Byparr, a drop-in replacement with the same /v1 API on 8191,
+  # because FlareSolverr 3.5.2 timed out on 1337x's challenge on every domain since 2026-11-02.
+  # The service keeps its name so Prowlarr, autoheal and the update lists need no change. Undo:
+  # image ghcr.io/flaresolverr/flaresolverr:latest, mem_limit 1g, no shm_size, python3 healthcheck.
   flaresolverr:
     <<: *common
-    image: ghcr.io/flaresolverr/flaresolverr:latest
-    mem_limit: 1g
+    image: ghcr.io/thephaseless/byparr:latest
+    mem_limit: 2g
+    shm_size: 1gb # its Firefox build needs more than Docker's 64 MB default
     network_mode: service:gluetun
     environment:
       TZ: ${TZ}
@@ -220,7 +225,7 @@ services:
     # network namespace until autoheal restarts it, and only a check through the tunnel notices.
     healthcheck:
       <<: *arr-health
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('https://api.ipify.org', timeout=10)"]
+      test: ["CMD", "curl", "-fsS", "-m", "8", "-o", "/dev/null", "https://api.ipify.org"]
       retries: 6
 
   recyclarr:
