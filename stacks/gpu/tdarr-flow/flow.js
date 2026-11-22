@@ -18,6 +18,8 @@
 //     originals after 14 days, only where the replacement made it into place (Goobs, 2026-11-02)
 //   - stops encoding while the NAS has less than 3 TB free (originals pile up until emptied)
 //   - Radarr rescans the movie / Sonarr rescans the series afterwards
+//   - frames out of order (2026-11-22): a file whose container shows the frames in storage order is
+//     rebuilt first with the same video and audio bits and correct timestamps (see frameOrderBroken)
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -97,6 +99,51 @@ function probe(file) {
   return JSON.parse(r.stdout || '{}');
 }
 
+// One ffprobe csv line per packet or frame of one stream.
+function rows(file, stream, entries, head) {
+  const r = spawnSync('ffprobe', ['-v', 'error', '-select_streams', `${stream}`, ...(head ? ['-read_intervals', '%+#300'] : []),
+    '-show_entries', entries, '-of', 'csv=p=0', file], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+  return (r.stdout || '').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('N/A'));
+}
+
+// Frames out of order. "Master and Commander" (2026-11-22) stuttered on every player: an old MP4
+// remux had given every video packet pts == dts although the stream reorders frames (B-frames),
+// so players showed the frames in storage order. A file has the defect when none of its first 300
+// video packets has pts != dts and a tenth or more of the frames decoded from them carry a
+// timestamp lower than the frame before. Encoding such a file would bake the stutter in.
+function frameOrderBroken(file, stream) {
+  const pk = rows(file, stream, 'packet=pts,dts', true).map((l) => l.split(','));
+  if (pk.length < 100 || pk.some((p) => p[0] !== p[1])) return false;
+  const fr = rows(file, stream, 'frame=pts', true).map((l) => Number(l.split(',')[0]));
+  return fr.length >= 100 && fr.filter((t, i) => i && t < fr[i - 1]).length * 10 > fr.length;
+}
+
+// Rebuilds src as work (MKV) without re-encoding: the bare video stream goes through mkvmerge, which
+// works the timestamps out from the stream itself; every other track is copied from src.
+// Returns '' when work is good, or why not.
+const RATES = ['24000/1001', '24/1', '25/1', '30000/1001', '30/1', '50/1', '60000/1001', '60/1'];
+function repairFrameOrder(src, v, dur, work) {
+  const fmt = { hevc: 'hevc', h264: 'h264' }[v.codec_name];
+  if (!fmt) return `no lossless repair for ${v.codec_name}`;
+  if (!RATES.includes(v.r_frame_rate)) return `frame rate ${v.r_frame_rate}`;
+  const n = rows(src, v.index, 'packet=pts').length;
+  const fps = v.r_frame_rate.split('/').reduce((a, b) => a / b);
+  if (Math.abs(n / fps - dur) > 2) return `${n} frames at ${v.r_frame_rate} do not make ${dur} s`;
+  const es = `${work}.${fmt}`;
+  const run = (cmd, a) => spawnSync('nice', ['-n', '10', cmd, ...a], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  try {
+    let r = run('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-v', 'error', '-i', src, '-map', `0:${v.index}`,
+      '-c', 'copy', '-bsf:v', `${fmt}_mp4toannexb`, '-f', fmt, es]);
+    if (r.status !== 0) return `extract failed: ${(r.stderr || '').slice(-300)}`;
+    r = run('mkvmerge', ['-q', '-o', work, '--default-duration', `0:${v.r_frame_rate}p`, es, '--no-video', src]);
+    if (r.status > 1 || !fs.existsSync(work)) return `mkvmerge failed: ${(r.stdout || '').slice(-300)}`; // 1 = warnings
+  } finally { fs.rmSync(es, { force: true }); }
+  const pts = rows(work, 'v:0', 'packet=pts');
+  if (pts.length !== n || new Set(pts).size !== n) return `${pts.length} frames, ${new Set(pts).size} timestamps for ${n} frames`;
+  if (frameOrderBroken(work, 'v:0')) return 'frames still out of order';
+  return '';
+}
+
 module.exports = async (args) => {
   const src = args.inputFileObj._id;
   const skip = (why) => { args.jobLog(`skip: ${why}`); log([src, '', '', '', `skip: ${why}`]); return { outputFileObj: args.inputFileObj, outputNumber: 2, variables: args.variables }; };
@@ -131,6 +178,55 @@ module.exports = async (args) => {
   const dur = parseFloat((info.format || {}).duration || 0);
   const size = fs.statSync(src).size;
   if (!dur) return skip('no duration');
+  const base = path.basename(src, path.extname(src));
+  const work = path.join(args.workDir, `${base}.mkv`);
+
+  // Replace: copy to the staging folder, then retire the original, then rename into place.
+  const replace = async (newSize, secs, what) => {
+    const dest = path.join(path.dirname(src), `${base}.mkv`);
+    fs.mkdirSync(STAGING, { recursive: true });
+    const tmp = path.join(STAGING, `${kind}-${item.id}-${path.basename(dest)}`);
+    const copied = await copyThrottled(work, tmp).then(() => true, () => false);
+    if (!copied || fs.statSync(tmp).size !== newSize) throw new Error('copy to NAS failed');
+    fs.unlinkSync(work);
+    // Retire the original into the holding folder (copy, verify size, then remove the source).
+    const day = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+    const held = path.join(HOLD_ROOT, day, lib.hold, path.relative(lib.root, src));
+    fs.mkdirSync(path.dirname(held), { recursive: true });
+    if (spawnSync('cp', ['-p', src, held]).status !== 0 || fs.statSync(held).size !== size) {
+      fs.unlinkSync(tmp); throw new Error('holding copy failed');
+    }
+    fs.unlinkSync(src);
+    fs.appendFileSync(path.join(HOLD_ROOT, day, 'MANIFEST.tsv'), `${size}\t${src}\t${dest}\n`);
+    const fate = `original held at ${held}`;
+    fs.renameSync(tmp, dest);
+    const rs = await rescan(lib.arr, item.id);
+    log([src, size, newSize, secs, `ok (${what}); ${fate}; ${kind === 'tv' ? 'sonarr' : 'radarr'} rescan ${rs}; dest ${dest}`]);
+    args.jobLog(`done: ${size} -> ${newSize} bytes in ${secs}s; ${fate}`);
+    return { outputFileObj: { _id: dest }, outputNumber: 1, variables: args.variables };
+  };
+
+  if (frameOrderBroken(src, v.index)) {
+    const t0 = Date.now();
+    let why = repairFrameOrder(src, v, dur, work);
+    const secs = Math.round((Date.now() - t0) / 1000);
+    if (!why) {
+      const out = probe(work);
+      const count = (i, type) => (i.streams || []).filter((s) => s.codec_type === type).length;
+      const oDur = parseFloat((out.format || {}).duration || 0);
+      const lost = ['audio', 'subtitle'].find((t) => count(out, t) !== count(info, t));
+      why = Math.abs(oDur - dur) > 2 ? `duration ${oDur} vs ${dur}` : lost ? `${lost} tracks differ` : '';
+    }
+    if (why) {
+      fs.rmSync(work, { force: true });
+      log([src, size, '', secs, `FRAMES OUT OF ORDER, not repaired: ${why}`]);
+      return skip(`frames out of order, not repaired: ${why}`);
+    }
+    const newSize = fs.statSync(work).size;
+    if (args.dryRun) { log([src, size, newSize, secs, `dry run ok (frame order repaired); output left at ${work}`]); return { outputFileObj: { _id: work }, outputNumber: 3, variables: args.variables }; }
+    return replace(newSize, secs, 'frame order repaired');
+  }
+
   const mbMin = size / 1e6 / (dur / 60);
   // Fast path: 8-bit H.264 decoded on the iGPU. Everything else is decoded in software (the Skylake
   // iGPU has no 10-bit HEVC or AV1 decoder) and only worth it above the grab cap.
@@ -168,8 +264,6 @@ module.exports = async (args) => {
   enc.push('-c:t', 'copy', '-map_metadata', '0', '-map_chapters', '0', '-max_muxing_queue_size', '4096',
     '-disposition:a:0', 'default');
 
-  const base = path.basename(src, path.extname(src));
-  const work = path.join(args.workDir, `${base}.mkv`);
   const hw = ['-init_hw_device', 'qsv=hw', '-filter_hw_device', 'hw'];
   const runs = [
     [...hw, '-i', src, '-vf', 'format=nv12,hwupload=extra_hw_frames=64', ...enc], // software decode (also 10 -> 8 bit)
@@ -207,26 +301,5 @@ module.exports = async (args) => {
 
   if (args.dryRun) { log([src, size, newSize, secs, `dry run ok; output left at ${work}`]); return { outputFileObj: { _id: work }, outputNumber: 3, variables: args.variables }; }
 
-  // Replace: copy to the staging folder, then retire the original, then rename into place.
-  const dest = path.join(path.dirname(src), `${base}.mkv`);
-  fs.mkdirSync(STAGING, { recursive: true });
-  const tmp = path.join(STAGING, `${kind}-${item.id}-${path.basename(dest)}`);
-  const copied = await copyThrottled(work, tmp).then(() => true, () => false);
-  if (!copied || fs.statSync(tmp).size !== newSize) throw new Error('copy to NAS failed');
-  fs.unlinkSync(work);
-  // Retire the original into the holding folder (copy, verify size, then remove the source).
-  const day = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-  const held = path.join(HOLD_ROOT, day, lib.hold, path.relative(lib.root, src));
-  fs.mkdirSync(path.dirname(held), { recursive: true });
-  if (spawnSync('cp', ['-p', src, held]).status !== 0 || fs.statSync(held).size !== size) {
-    fs.unlinkSync(tmp); throw new Error('holding copy failed');
-  }
-  fs.unlinkSync(src);
-  fs.appendFileSync(path.join(HOLD_ROOT, day, 'MANIFEST.tsv'), `${size}\t${src}\t${dest}\n`);
-  const fate = `original held at ${held}`;
-  fs.renameSync(tmp, dest);
-  const rs = await rescan(lib.arr, item.id);
-  log([src, size, newSize, secs, `ok (${Math.round(100 - newSize * 100 / size)}% smaller); ${fate}; ${kind === 'tv' ? 'sonarr' : 'radarr'} rescan ${rs}; dest ${dest}`]);
-  args.jobLog(`done: ${size} -> ${newSize} bytes in ${secs}s; ${fate}`);
-  return { outputFileObj: { _id: dest }, outputNumber: 1, variables: args.variables };
+  return replace(newSize, secs, `${Math.round(100 - newSize * 100 / size)}% smaller`);
 };

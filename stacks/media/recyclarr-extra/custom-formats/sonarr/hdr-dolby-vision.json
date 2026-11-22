@@ -1,0 +1,20 @@
+{
+  "trash_id": "c7a34bf5c17cca9b870c48ef4dacbd71",
+  "trash_scores": {
+    "default": -10000
+  },
+  "trash_description": "Title says HDR, HDR10, HDR10+ (HDR10P), HLG, DV, DoVi or Dolby Vision. Those are 10-bit by definition but rarely say '10bit', so the 10bit format lets them through: 'Resident Evil Welcome to Raccoon City 2021 1080p BluRay DoVi HDR10P x265-GeneMige' was grabbed 2026-11-03 and would not play (2026-11-22). The gpu VM's iGPU cannot decode 10-bit HEVC, so any client that needs a transcode (browser, or a Roku with picture subtitles on) gets a software decode plus HDR tone mapping that the VM cannot do in real time. SDR and HDRip do not match.",
+  "name": "Homelab: HDR or Dolby Vision",
+  "includeCustomFormatWhenRenaming": false,
+  "specifications": [
+    {
+      "name": "HDR or Dolby Vision in title",
+      "implementation": "ReleaseTitleSpecification",
+      "negate": false,
+      "required": true,
+      "fields": {
+        "value": "\\b(dv|dovi|dolby[ ._-]?vision|hlg|hdr(10)?(p(lus)?)?)(\\b|\\+)"
+      }
+    }
+  ]
+}
