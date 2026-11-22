@@ -144,6 +144,13 @@ sonarr:
         assign_scores_to:
           - name: *sonarr_main
           - name: *sonarr_foreign
+      # HDR and Dolby Vision (2026-11-22): 10-bit by definition, but the titles rarely say "10bit", so
+      # the 10bit format below let "1080p BluRay DoVi HDR10P x265" through and it would not play.
+      - trash_ids:
+          - c7a34bf5c17cca9b870c48ef4dacbd71 # Homelab: HDR or Dolby Vision (-10000)
+        assign_scores_to:
+          - name: *sonarr_main
+          - name: *sonarr_foreign
       # Smaller files (2026-10-23): x265 is welcome (the guide's Golden Rule group would score it -10000),
       # 10-bit is not (the target is 8-bit HEVC; the iGPU can't decode 10-bit when a client transcodes).
       # 2026-11-02 (Goobs): +2000 in the main profile, above the best H.264 WEB-DL (WEB Tier 01 1700
@@ -333,6 +340,13 @@ radarr:
       # above only reads CAM/TS words, so a telesync titled "1080p WEB-DL" passed with score 0.
       - trash_ids:
           - 2aae72e20159f2c4a1d28c853ab74a45 # Homelab: Fake or Watermarked (-10000)
+        assign_scores_to:
+          - name: *radarr_main
+          - name: *radarr_foreign
+      # HDR and Dolby Vision (2026-11-22): 10-bit by definition, but the titles rarely say "10bit", so
+      # the 10bit format below let "1080p BluRay DoVi HDR10P x265" through and it would not play.
+      - trash_ids:
+          - e118f743fbd5fdae214120166dff4564 # Homelab: HDR or Dolby Vision (-10000)
         assign_scores_to:
           - name: *radarr_main
           - name: *radarr_foreign
