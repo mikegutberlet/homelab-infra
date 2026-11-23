@@ -73,7 +73,8 @@ flowchart TB
 ## Stirling-PDF
 
 `stirlingtools/stirling-pdf:latest`, port 8070, https://pdf.tail9af84.ts.net (SSO),
-`DOCKER_ENABLE_SECURITY=false` because Authentik handles login. Config in `/opt/appdata/stirling-pdf`.
+`SECURITY_ENABLELOGIN=false` because Authentik handles login (3.x ignores the older
+`DOCKER_ENABLE_SECURITY`, which left Stirling's own login on). Config in `/opt/appdata/stirling-pdf`.
 
 ## Tackle Box archive
 
