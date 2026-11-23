@@ -3,7 +3,8 @@
 // Rules agreed with Goobs 2026-10-21 (movies), extended to TV 2026-10-23:
 //   - only Radarr's / Sonarr's current file (radarr_map.json / sonarr_map.json, written daily to
 //     Media/.tdarr-staging/maps by the tdarr-upkeep service on the media VM since 2026-11-02),
-//     not the review/multi-video folders
+//     not the review/multi-video folders; a file that arrived after the map was written is looked
+//     up in Radarr / Sonarr directly (lookupLive)
 //   - 8-bit H.264 above ~5.5 Mbps; any other codec (10-bit HEVC, AV1, VC-1, ...) only when it is over
 //     the grab caps from PR #45 (movies 70 MB/min, episodes 65 MB/min); 4K and HDR are left alone
 //   - video: hevc_qsv Main, global_quality 22, preset faster (2026-10-23: 3x the speed of slow on the
@@ -93,6 +94,41 @@ function rescan(arr, id) {
   });
 }
 
+function arrGet(arr, apiPath) {
+  const key = fs.readFileSync(`${CFG}/${arr.key}`, 'utf8').trim();
+  return new Promise((resolve) => {
+    const req = http.request({
+      host: '192.168.1.51', port: arr.port, path: `/api/v3/${apiPath}`, timeout: 120000, headers: { 'X-Api-Key': key },
+    }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => { try { resolve(res.statusCode === 200 ? JSON.parse(body) : null); } catch (e) { resolve(null); } });
+    });
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
+
+// The maps are a day old at worst. A file imported since then is not in them, and a file this flow
+// skips is never looked at again by Tdarr, so such a file would never be shrunk or repaired
+// (2026-11-22: two new downloads with frames out of order were skipped as "not Radarr's current
+// file"). Same answer the map would give: {id, lang, title}, or null when it is not the current file.
+const langOf = (x) => (x.originalLanguage || {}).name || 'Unknown';
+async function lookupLive(kind, arr, src) {
+  // No answer is an error, not a skip: a skip would be final.
+  const get = async (p) => { const r = await arrGet(arr, p); if (!Array.isArray(r)) throw new Error(`no answer from ${kind === 'tv' ? 'Sonarr' : 'Radarr'} (${p})`); return r; };
+  if (kind === 'movie') {
+    const m = (await get('movie')).find((x) => x.hasFile && x.movieFile && `${x.path}/${x.movieFile.relativePath}` === src);
+    return m ? { id: m.id, lang: langOf(m), title: `${m.title} (${m.year})` } : null;
+  }
+  const s = (await get('series')).find((x) => src.startsWith(`${x.path}/`));
+  if (!s) return null;
+  const f = (await get(`episodefile?seriesId=${s.id}`)).find((x) => x.path === src);
+  return f ? { id: s.id, lang: langOf(s), title: s.title } : null;
+}
+
 function probe(file) {
   const r = spawnSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file],
     { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -153,7 +189,16 @@ module.exports = async (args) => {
   const lib = LIBS[kind];
   const map = readJson(`${MAPS}/${lib.map}`, null) || readJson(`${CFG}/${lib.map}`, {});
   const excluded = readJson(`${CFG}/excluded_folders.json`, []);
-  const item = map[src]; // {id, lang, title}: the movie, or the episode's series
+  let item = map[src]; // {id, lang, title}: the movie, or the episode's series
+  if (!item) {
+    const mtime = (f) => { try { return fs.statSync(f).mtimeMs; } catch (e) { return 0; } };
+    const mapTime = mtime(`${MAPS}/${lib.map}`) || mtime(`${CFG}/${lib.map}`);
+    let changed = 0;
+    try { changed = fs.statSync(src).ctimeMs; } catch (e) { /* gone: the skip below says so */ }
+    if (changed > mapTime) {
+      try { item = await lookupLive(kind, lib.arr, src); } catch (e) { log([src, '', '', '', `FAILED: ${e.message}`]); throw e; }
+    }
+  }
   if (!item) return skip(`not ${kind === 'tv' ? 'Sonarr' : 'Radarr'}'s current file`);
   if (excluded.some((d) => src.startsWith(`${d}/`))) return skip('excluded folder');
 
